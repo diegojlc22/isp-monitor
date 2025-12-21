@@ -168,7 +168,7 @@ export function Equipments() {
                 setIsScanning(false);
             });
 
-            evtSource.onerror = (err) => {
+            evtSource.onerror = () => {
                 // Check readyState to differentiate between actual errors and normal close
                 if (evtSource.readyState !== EventSource.CLOSED) {
                     evtSource.close();

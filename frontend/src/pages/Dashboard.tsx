@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getTowers, getEquipments, getLatencyConfig, getLatencyHistory } from '../services/api';
-import { Activity, ShieldCheck, AlertTriangle, Radio, Search } from 'lucide-react';
+import { Activity, ShieldCheck, AlertTriangle, Radio } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import clsx from 'clsx';
 
 export function Dashboard() {
     const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0 });
