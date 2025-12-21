@@ -17,15 +17,19 @@ export function Dashboard() {
             try {
                 const [towers, equips, latConfig] = await Promise.all([getTowers(), getEquipments(), getLatencyConfig()]);
                 const allDevices = [...towers, ...equips];
-                const online = allDevices.filter((x: any) => x.is_online).length;
-                const offline = allDevices.length - online;
-
-                setStats({
-                    towers: towers.length,
-                    equipments: equips.length,
-                    online: online,
-                    offline: offline
-                });
+                // Only count real devices
+                if (allDevices.length === 0) {
+                    setStats({ towers: 0, equipments: 0, online: 0, offline: 0 });
+                } else {
+                    const online = allDevices.filter((x: any) => x.is_online).length;
+                    const offline = allDevices.length - online;
+                    setStats({
+                        towers: towers.length,
+                        equipments: equips.length,
+                        online: online,
+                        offline: offline
+                    });
+                }
 
                 // Only equipments for now for chart
                 setDevices(equips);
