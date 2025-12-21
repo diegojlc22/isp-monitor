@@ -8,8 +8,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./monitor.db")
 
 # Connection Args adjustments
 connect_args = {}
-if "sqlite" in DATABASE_URL:
-    connect_args = {"check_same_thread": False} 
+# Note: aiosqlite doesn't need check_same_thread like sync sqlite
 
 engine = create_async_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
