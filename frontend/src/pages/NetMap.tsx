@@ -1,8 +1,8 @@
-import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap, Polyline } from 'react-leaflet';
 import { useEffect, useState } from 'react';
-import { getTowers } from '../services/api';
+import { getTowers, getLinks, createLink, deleteLink } from '../services/api';
 import L from 'leaflet';
-import { Search } from 'lucide-react';
+import { Search, Network, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
@@ -53,13 +53,27 @@ function MapController({ center }: { center: [number, number] | null }) {
 
 export function NetMap() {
     const [towers, setTowers] = useState<any[]>([]);
+    const [links, setLinks] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredTowers, setFilteredTowers] = useState<any[]>([]);
     const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(null);
 
+    // Topology State
+    const [showLinks, setShowLinks] = useState(true);
+    const [showLinkModal, setShowLinkModal] = useState(false);
+    const [newLinkData, setNewLinkData] = useState({ source: '', target: '' });
+
+    async function loadData() {
+        try {
+            const [tData, lData] = await Promise.all([getTowers(), getLinks()]);
+            setTowers(tData);
+            setLinks(lData);
+        } catch (e) { console.error(e); }
+    }
+
     useEffect(() => {
-        getTowers().then(setTowers).catch(console.error);
-        const interval = setInterval(() => getTowers().then(setTowers), 30000);
+        loadData();
+        const interval = setInterval(loadData, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -80,12 +94,54 @@ export function NetMap() {
         }
     };
 
+    const handleAddLink = async () => {
+        if (!newLinkData.source || !newLinkData.target || newLinkData.source === newLinkData.target) {
+            alert("Selecione origem e destino diferentes.");
+            return;
+        }
+        try {
+            await createLink({
+                source_tower_id: parseInt(newLinkData.source),
+                target_tower_id: parseInt(newLinkData.target),
+                type: 'wireless'
+            });
+            setNewLinkData({ source: '', target: '' });
+            loadData();
+        } catch (e) { alert("Erro ao criar link"); }
+    };
+
+    const handleDeleteLink = async (id: number) => {
+        if (confirm("Remover conexão?")) {
+            await deleteLink(id);
+            loadData();
+        }
+    };
+
     return (
         <div className="h-full flex flex-col relative">
-            <h2 className="text-2xl font-bold mb-4 text-white">Mapa em Tempo Real</h2>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">Mapa em Tempo Real</h2>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowLinks(!showLinks)}
+                        className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg flex items-center gap-2 text-sm"
+                        title={showLinks ? "Ocultar Linhas" : "Mostrar Linhas"}
+                    >
+                        {showLinks ? <Eye size={18} /> : <EyeOff size={18} />}
+                        <span className="hidden md:inline">{showLinks ? "Ocultar Conexões" : "Mostrar Conexões"}</span>
+                    </button>
+                    <button
+                        onClick={() => setShowLinkModal(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg flex items-center gap-2 text-sm"
+                    >
+                        <Network size={18} />
+                        <span className="hidden md:inline">Gerenciar Links</span>
+                    </button>
+                </div>
+            </div>
 
             {/* Search Bar Overlay */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-72">
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] w-72">
                 <div className="relative">
                     <input
                         type="text"
@@ -142,6 +198,26 @@ export function NetMap() {
 
                     <MapController center={selectedPosition} />
 
+                    {/* Render Links */}
+                    {showLinks && links.map(link => {
+                        const source = towers.find(t => t.id === link.source_tower_id);
+                        const target = towers.find(t => t.id === link.target_tower_id);
+                        if (source && target && source.latitude && target.latitude) {
+                            const isLinkDown = !source.is_online || !target.is_online;
+                            return (
+                                <Polyline
+                                    key={link.id}
+                                    positions={[
+                                        [source.latitude, source.longitude],
+                                        [target.latitude, target.longitude]
+                                    ]}
+                                    pathOptions={{ color: isLinkDown ? '#f43f5e' : '#22c55e', weight: 4, opacity: 0.7 }}
+                                />
+                            );
+                        }
+                        return null;
+                    })}
+
                     {towers.map(tower => (
                         <Marker
                             key={tower.id}
@@ -157,6 +233,85 @@ export function NetMap() {
                     ))}
                 </MapContainer>
             </div>
+
+            {/* Link Manager Modal */}
+            {showLinkModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Network className="text-blue-500" />
+                                Gerenciar Topologia
+                            </h3>
+                            <button onClick={() => setShowLinkModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                        </div>
+
+                        {/* Create New Link */}
+                        <div className="bg-slate-950 p-4 rounded-lg mb-6 border border-slate-800">
+                            <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase">Nova Conexão</h4>
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <label className="block text-xs text-slate-500 mb-1">Origem</label>
+                                    <select
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                                        value={newLinkData.source}
+                                        onChange={e => setNewLinkData({ ...newLinkData, source: e.target.value })}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs text-slate-500 mb-1">Destino</label>
+                                    <select
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                                        value={newLinkData.target}
+                                        onChange={e => setNewLinkData({ ...newLinkData, target: e.target.value })}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </select>
+                                </div>
+                                <button
+                                    onClick={handleAddLink}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg flex items-center justify-center"
+                                    title="Adicionar"
+                                >
+                                    <Plus size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Existing Links List */}
+                        <div>
+                            <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase">Conexões Atuais ({links.length})</h4>
+                            <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                                {links.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nenhuma conexão criada.</p>}
+                                {links.map(link => {
+                                    const source = towers.find(t => t.id === link.source_tower_id);
+                                    const target = towers.find(t => t.id === link.target_tower_id);
+                                    return (
+                                        <div key={link.id} className="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg border border-slate-800">
+                                            <div className="flex items-center gap-3 text-sm text-slate-300">
+                                                <span className="font-medium text-white">{source?.name || '?'}</span>
+                                                <span className="text-slate-600">→</span>
+                                                <span className="font-medium text-white">{target?.name || '?'}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteLink(link.id)}
+                                                className="text-slate-500 hover:text-rose-500 p-1"
+                                                title="Remover"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

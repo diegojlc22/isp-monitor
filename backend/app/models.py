@@ -62,3 +62,12 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="tech") # 'admin' or 'tech'
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
+
+class NetworkLink(Base):
+    __tablename__ = "network_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_tower_id = Column(Integer, ForeignKey("towers.id"))
+    target_tower_id = Column(Integer, ForeignKey("towers.id"))
+    type = Column(String, default="wireless") # wireless, fiber
+

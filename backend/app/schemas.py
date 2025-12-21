@@ -85,3 +85,17 @@ class SystemNameUpdate(BaseModel):
 class LatencyThresholds(BaseModel):
     good: int # ms, e.g. 50
     critical: int # ms, e.g. 200
+
+class NetworkLinkBase(BaseModel):
+    source_tower_id: int
+    target_tower_id: int
+    type: str = "wireless"
+
+class NetworkLinkCreate(NetworkLinkBase):
+    pass
+
+class NetworkLink(NetworkLinkBase):
+    id: int
+    
+    class Config:
+        from_attributes = True

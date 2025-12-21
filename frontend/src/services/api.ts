@@ -46,3 +46,8 @@ export const updateSystemName = (name: string) => api.post('/settings/system-nam
 export const getLatencyConfig = () => api.get('/settings/latency').then(res => res.data);
 export const updateLatencyConfig = (data: any) => api.post('/settings/latency', data).then(res => res.data);
 export const getLatencyHistory = (id: number, period: string) => api.get(`/equipments/${id}/latency-history?period=${period}`).then(res => res.data);
+
+// Network Links
+export const getLinks = () => api.get('/towers/links').then(res => res.data);
+export const createLink = (data: any) => api.post('/towers/links', data).then(res => res.data);
+export const deleteLink = (id: number) => api.delete(`/towers/links/${id}`).then(res => res.data);

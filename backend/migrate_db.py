@@ -33,6 +33,22 @@ def migrate():
         else:
             print(f"Error adding latency_ms: {e}")
 
+    # Create network_links table
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS network_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_tower_id INTEGER,
+                target_tower_id INTEGER,
+                type VARCHAR,
+                FOREIGN KEY(source_tower_id) REFERENCES towers(id),
+                FOREIGN KEY(target_tower_id) REFERENCES towers(id)
+            )
+        """)
+        print("Ensured network_links table exists.")
+    except Exception as e:
+        print(f"Error creating network_links: {e}")
+
     conn.commit()
     conn.close()
     print("Migration complete.")
