@@ -32,8 +32,17 @@ async def lifespan(app: FastAPI):
             print("Admin User Seeded.")
         
     scheduler = AsyncIOScheduler()
-    # Run every 30 seconds
+    # Monitor: Run every 30 seconds
     scheduler.add_job(monitor_job, 'interval', seconds=30)
+    
+    # Maintenance (Cleanup): Run every 24 hours
+    from backend.app.services.maintenance import cleanup_logs
+    scheduler.add_job(cleanup_logs, 'interval', hours=24) # Run once a day
+    
+    # Run cleanup once on startup just to be sure
+    import asyncio
+    asyncio.create_task(cleanup_logs(7))
+
     scheduler.start()
     
     yield
