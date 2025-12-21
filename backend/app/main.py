@@ -90,7 +90,7 @@ app = FastAPI(title="ISP Monitor API", lifespan=lifespan)
 
 # CORS Configuration (from environment or defaults)
 import os
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173").split(",")
 
 # In production, set CORS_ORIGINS to specific domains
 # Example: CORS_ORIGINS=https://monitor.yourcompany.com,https://app.yourcompany.com

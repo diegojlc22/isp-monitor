@@ -132,7 +132,7 @@ async def check_and_alert(session, device, device_type: str, token: str, chat_id
     log_entry = PingLog(
         device_type=device_type,
         device_id=device.id,
-        status="online" if is_online else "offline",
+        status=is_online,
         latency_ms=latency_ms,
         timestamp=datetime.now(timezone.utc)
     )
@@ -206,7 +206,7 @@ async def monitor_job_fast():
                         log_entry = PingLog(
                             device_type=device_type,
                             device_id=device.id,
-                            status="online" if is_online else "offline",
+                            status=is_online,
                             latency_ms=latency_ms,
                             timestamp=datetime.now(timezone.utc)
                         )

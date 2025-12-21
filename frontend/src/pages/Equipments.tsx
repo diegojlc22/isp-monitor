@@ -152,7 +152,7 @@ export function Equipments() {
         setProgress(0);
 
         try {
-            const evtSource = new EventSource(`http://localhost:8000/equipments/scan/stream/?ip_range=${encodeURIComponent(scanRange)}`);
+            const evtSource = new EventSource(`/api/equipments/scan/stream/?ip_range=${encodeURIComponent(scanRange)}`);
 
             evtSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);

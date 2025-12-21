@@ -67,7 +67,7 @@ def start_backend():
     try:
         if system == "Windows":
             # Windows - abre em nova janela do CMD (mais confiável que PowerShell)
-            cmd = f'start "ISP Monitor - Backend" cmd /k "cd /d {project_root} && {python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"'
+            cmd = f'start "ISP Monitor - Backend" cmd /k "cd /d {project_root} && {python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8080"'
             subprocess.run(cmd, shell=True, check=True)
             print(f"{Colors.GREEN}  ✓ Janela do Backend aberta{Colors.END}")
         else:
@@ -89,8 +89,8 @@ def start_backend():
                     f'tell app "Terminal" to do script "cd {project_root} && {python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"'
                 ])
         
-        print(f"{Colors.BLUE}📡 Backend: http://localhost:8000{Colors.END}")
-        print(f"{Colors.BLUE}📚 API Docs: http://localhost:8000/docs{Colors.END}")
+        print(f"{Colors.BLUE}📡 Backend: http://localhost:8080{Colors.END}")
+        print(f"{Colors.BLUE}📚 API Docs: http://localhost:8080/docs{Colors.END}")
         return True
     except Exception as e:
         print(f"{Colors.RED}❌ Erro ao abrir Backend: {e}{Colors.END}")
@@ -142,8 +142,8 @@ def wait_for_backend(max_wait=30):
     
     for i in range(max_wait):
         try:
-            # Tenta conectar em 127.0.0.1 (mais confiável que localhost no Windows)
-            response = requests.get('http://127.0.0.1:8000/', timeout=2)
+            # Tenta conectar em 127.0.0.1:8080
+            response = requests.get('http://127.0.0.1:8080/', timeout=2)
             if response.status_code in [200, 404]:  # 404 é ok, significa que está respondendo
                 print(f" {Colors.GREEN}✓ Backend pronto!{Colors.END}")
                 return True
@@ -175,33 +175,35 @@ def main():
             # Aguarda backend estar pronto
             backend_ready = wait_for_backend(30)
             
-            if backend_ready:
-                frontend_ok = start_frontend()
-            else:
-                print(f"\n{Colors.RED}❌ Backend não respondeu a tempo. Verifique a janela do Backend.{Colors.END}")
-                frontend_ok = False
+            if not backend_ready:
+                print(f"\n{Colors.YELLOW}⚠️  Backend demorou para responder, mas vamos abrir o Frontend mesmo assim...{Colors.END}")
+            
+            # Abre o frontend independente do health check
+            frontend_ok = start_frontend()
         else:
             frontend_ok = False
         
         print(f"\n{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
         
         if backend_ok and frontend_ok:
-            print(f"{Colors.GREEN}✅ Ambos os serviços iniciados com sucesso!{Colors.END}")
+            print(f"{Colors.GREEN}✅ Janelas iniciadas!{Colors.END}")
             print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
             print(f"\n{Colors.YELLOW}💡 Dica: Duas janelas CMD foram abertas:{Colors.END}")
-            print(f"{Colors.YELLOW}   • ISP Monitor - Backend (porta 8000){Colors.END}")
+            print(f"{Colors.YELLOW}   • ISP Monitor - Backend (porta 8080){Colors.END}")
             print(f"{Colors.YELLOW}   • ISP Monitor - Frontend (porta 5173){Colors.END}")
             print(f"\n{Colors.YELLOW}💡 Acesse a aplicação: {Colors.BOLD}http://localhost:5173{Colors.END}")
+            
+            if not backend_ready:
+                 print(f"\n{Colors.YELLOW}⚠️  Nota: Se a página der erro de conexão, aguarde alguns segundos e recarregue.{Colors.END}")
+
         elif backend_ok:
-            print(f"{Colors.YELLOW}⚠️  Backend iniciado, mas Frontend falhou{Colors.END}")
-            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
+            print(f"{Colors.YELLOW}⚠️  Backend iniciado, mas Frontend falhou na abertura{Colors.END}")
         elif frontend_ok:
-            print(f"{Colors.YELLOW}⚠️  Frontend iniciado, mas Backend falhou{Colors.END}")
-            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
+            print(f"{Colors.YELLOW}⚠️  Frontend iniciado, mas Backend falhou na abertura{Colors.END}")
         else:
             print(f"{Colors.RED}❌ Ambos os serviços falharam ao iniciar{Colors.END}")
-            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
             
+        print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
         print(f"\n{Colors.YELLOW}Para parar os serviços, feche as janelas CMD ou pressione CTRL+C{Colors.END}\n")
         
     except Exception as e:
