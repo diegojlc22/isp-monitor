@@ -85,7 +85,7 @@ export function NetMap() {
             <h2 className="text-2xl font-bold mb-4 text-white">Mapa em Tempo Real</h2>
 
             {/* Search Bar Overlay */}
-            <div className="absolute top-4 left-16 z-[1000] w-72">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-72">
                 <div className="relative">
                     <input
                         type="text"
