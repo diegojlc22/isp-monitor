@@ -7,4 +7,4 @@ Start-Process -NoNewWindow -FilePath "python" -ArgumentList "-m uvicorn backend.
 # Start Frontend
 Write-Host "Starting Frontend..."
 Set-Location frontend
-Start-Process -NoNewWindow -FilePath "npm" -ArgumentList "run dev"
+Start-Process -NoNewWindow -FilePath "npm" -ArgumentList "run dev -- --host"
