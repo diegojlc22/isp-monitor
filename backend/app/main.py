@@ -1,0 +1,64 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from backend.app.routers import towers, equipments, settings, auth, users
+from backend.app.database import engine, Base, AsyncSessionLocal
+from backend.app.services.pinger import monitor_job
+from backend.app import models, auth_utils
+from sqlalchemy import select
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting up...")
+    async with engine.begin() as conn:
+        # Create Tables
+        await conn.run_sync(Base.metadata.create_all)
+        
+    # Seed Admin User
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(models.User).where(models.User.email == "diegojlc22@gmail.com"))
+        user = res.scalar_one_or_none()
+        if not user:
+            print("Seeding Admin User...")
+            admin_user = models.User(
+                name="Admin",
+                email="diegojlc22@gmail.com",
+                hashed_password=auth_utils.get_password_hash("110812"),
+                role="admin"
+            )
+            db.add(admin_user)
+            await db.commit()
+            print("Admin User Seeded.")
+        
+    scheduler = AsyncIOScheduler()
+    # Run every 30 seconds
+    scheduler.add_job(monitor_job, 'interval', seconds=30)
+    scheduler.start()
+    
+    yield
+    print("Shutting down...")
+    try:
+        scheduler.shutdown()
+    except:
+        pass
+
+app = FastAPI(title="ISP Monitor API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(towers.router)
+app.include_router(equipments.router)
+app.include_router(settings.router)
+app.include_router(auth.router)
+app.include_router(users.router)
+
+@app.get("/")
+def read_root():
+    return {"status": "ok", "service": "ISP Monitor Backend"}

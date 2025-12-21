@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-telegram-bot
+apscheduler
+aiosqlite
+python-multipart
+ping3
+httpx

@@ -1,0 +1,43 @@
+import axios from 'axios';
+
+export const api = axios.create({
+    baseURL: 'http://localhost:8000',
+    timeout: 10000,
+});
+
+api.interceptors.request.use(config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+export const getTowers = () => api.get('/towers/').then(res => res.data);
+export const createTower = (data: any) => api.post('/towers/', data).then(res => res.data);
+export const deleteTower = (id: number) => api.delete(`/towers/${id}`).then(res => res.data);
+
+export const getEquipments = () => api.get('/equipments/').then(res => res.data);
+export const createEquipment = (data: any) => api.post('/equipments/', data).then(res => res.data);
+export const updateEquipment = (id: number, data: any) => api.put(`/equipments/${id}`, data).then(res => res.data);
+export const deleteEquipment = (id: number) => api.delete(`/equipments/${id}`).then(res => res.data);
+// Note: scanNetwork uses EventSource in component, so simple POST here might be legacy or unused, but keeping just in case
+export const scanNetwork = (range: string) => api.post('/equipments/scan/', { ip_range: range }).then(res => res.data);
+
+export const getTelegramConfig = () => api.get('/settings/telegram').then(res => res.data);
+export const updateTelegramConfig = (data: any) => api.post('/settings/telegram', data).then(res => res.data);
+
+// Auth
+export const login = (data: any) => api.post('/auth/login', data).then(res => res.data);
+export const getMe = () => api.get('/auth/me').then(res => res.data);
+export const updateMe = (data: any) => api.put('/auth/me', data).then(res => res.data);
+
+// Users (Admin)
+export const getUsers = () => api.get('/users/').then(res => res.data);
+export const createUser = (data: any) => api.post('/users/', data).then(res => res.data);
+export const updateUser = (id: number, data: any) => api.put(`/users/${id}`, data).then(res => res.data);
+export const deleteUser = (id: number) => api.delete(`/users/${id}`).then(res => res.data);
+
+// System Settings
+export const getSystemName = () => api.get('/settings/system-name').then(res => res.data);
+export const updateSystemName = (name: string) => api.post('/settings/system-name', { name }).then(res => res.data);
