@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { getTowers, getEquipments } from '../services/api';
-import { Activity, ShieldCheck, AlertTriangle, Radio } from 'lucide-react';
+import { getTowers, getEquipments, getLatencyConfig, getLatencyHistory } from '../services/api';
+import { Activity, ShieldCheck, AlertTriangle, Radio, Search } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import clsx from 'clsx';
 
 export function Dashboard() {
     const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0 });
+    // Widget State
+    const [devices, setDevices] = useState<any[]>([]);
+    const [selectedDevice, setSelectedDevice] = useState<any>(null);
+    const [historyData, setHistoryData] = useState<any[]>([]);
+    const [historyConfig, setHistoryConfig] = useState({ good: 50, critical: 200 });
 
     useEffect(() => {
         async function load() {
             try {
-                const [towers, equips] = await Promise.all([getTowers(), getEquipments()]);
+                const [towers, equips, latConfig] = await Promise.all([getTowers(), getEquipments(), getLatencyConfig()]);
                 const allDevices = [...towers, ...equips];
                 const online = allDevices.filter((x: any) => x.is_online).length;
                 const offline = allDevices.length - online;
@@ -19,6 +26,15 @@ export function Dashboard() {
                     online: online,
                     offline: offline
                 });
+
+                // Only equipments for now for chart
+                setDevices(equips);
+                setHistoryConfig(latConfig);
+
+                if (equips.length > 0 && !selectedDevice) {
+                    setSelectedDevice(equips[0]);
+                }
+
             } catch (e) {
                 console.error(e);
             }
@@ -27,6 +43,18 @@ export function Dashboard() {
         const interval = setInterval(load, 30000);
         return () => clearInterval(interval);
     }, []);
+
+    // Load History when selection changes
+    useEffect(() => {
+        if (selectedDevice) {
+            getLatencyHistory(selectedDevice.id, '24h').then(data => {
+                setHistoryData(data.map((d: any) => ({
+                    ...d,
+                    timeStr: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                })));
+            });
+        }
+    }, [selectedDevice]);
 
     return (
         <div>
@@ -67,9 +95,67 @@ export function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 h-64 flex items-center justify-center text-slate-500">
-                    <p>Gráfico de Disponibilidade (Em Breve)</p>
+                <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 h-96 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-white">Disponibilidade e Latência (24h)</h3>
+                        <select
+                            className="bg-slate-950 border border-slate-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
+                            onChange={(e) => {
+                                const dev = devices.find(d => d.id === parseInt(e.target.value));
+                                setSelectedDevice(dev);
+                            }}
+                            value={selectedDevice?.id || ''}
+                        >
+                            <option value="">Selecione um equipamento</option>
+                            {devices.map(d => (
+                                <option key={d.id} value={d.id}>{d.name} ({d.ip})</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex-1 min-h-0">
+                        {selectedDevice && historyData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={historyData}>
+                                    <defs>
+                                        <linearGradient id="dashboardSplitColor" x1="0" y1="0" x2="0" y2="1">
+                                            {(() => {
+                                                const dataMax = Math.max(...historyData.map((d: any) => d.latency));
+                                                const max = Math.max(dataMax, historyConfig.critical * 1.1);
+                                                const critOff = (max - historyConfig.critical) / max;
+                                                const goodOff = (max - historyConfig.good) / max;
+                                                return (
+                                                    <>
+                                                        <stop offset={critOff} stopColor="#fb7185" stopOpacity={0.8} />
+                                                        <stop offset={critOff} stopColor="#facc15" stopOpacity={0.8} />
+                                                        <stop offset={goodOff} stopColor="#facc15" stopOpacity={0.8} />
+                                                        <stop offset={goodOff} stopColor="#4ade80" stopOpacity={0.8} />
+                                                        <stop offset={1} stopColor="#4ade80" stopOpacity={0.8} />
+                                                    </>
+                                                );
+                                            })()}
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                    <XAxis dataKey="timeStr" stroke="#64748b" tick={{ fontSize: 10 }} minTickGap={30} />
+                                    <YAxis stroke="#64748b" tick={{ fontSize: 10 }} label={{ value: 'ms', angle: -90, position: 'insideLeft', fill: '#64748b' }} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc', fontSize: '12px' }}
+                                        labelStyle={{ color: '#94a3b8' }}
+                                    />
+                                    <ReferenceLine y={historyConfig.critical} stroke="#fb7185" strokeDasharray="3 3" />
+                                    <ReferenceLine y={historyConfig.good} stroke="#4ade80" strokeDasharray="3 3" />
+                                    <Area type="monotone" dataKey="latency" stroke="url(#dashboardSplitColor)" fill="url(#dashboardSplitColor)" strokeWidth={2} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+                                {selectedDevice ? 'Sem dados para este período.' : 'Selecione um dispositivo para ver o histórico.'}
+                            </div>
+                        )}
+                    </div>
                 </div>
+
                 <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
                     <h3 className="text-lg font-semibold text-white mb-4">Alertas Recentes</h3>
                     <div className="space-y-4">
