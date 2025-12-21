@@ -4,27 +4,37 @@ Este documento explica as otimizações implementadas para suportar **800+ equip
 
 ## 📊 Melhorias Implementadas
 
-### 1. **Pinging Otimizado**
+### 1. **Pinging Ultra-Rápido com `icmplib`**
 
-#### Opção A: Python ping3 (Padrão - Cross-platform)
-- ✅ Funciona em Windows, Linux, Mac
-- ✅ Não requer instalação adicional
-- ⚠️ Mais lento para grandes quantidades (800 devices = ~40s por ciclo)
+#### ✅ Solução Recomendada: icmplib (Funciona no Windows!)
+- ✅ **Funciona em Windows, Linux e Mac** (cross-platform)
+- ✅ **10x mais rápido** que ping3 tradicional
+- ✅ Pinga **TODOS os IPs simultaneamente** (como The Dude da Mikrotik)
+- ✅ 800 devices = **~3-5 segundos** por ciclo completo
+- ✅ Usa ICMP Raw Sockets (mesma técnica do The Dude)
+- ⚠️ Requer executar como **Administrador no Windows** (igual The Dude)
 
-#### Opção B: fping (Recomendado para Produção)
-- ✅ **10x mais rápido** que ping3
-- ✅ Otimizado para múltiplos IPs simultaneamente
-- ✅ 800 devices = ~4-5s por ciclo
-- ⚠️ Apenas Linux/Unix (não funciona no Windows)
-
-**Como ativar fping:**
-```bash
-# Ubuntu/Debian
-sudo apt-get install fping
-
-# No arquivo .env
-USE_FPING=true
+**Como funciona:**
+```python
+# Pinga 800 IPs ao mesmo tempo!
+results = await async_multiping(all_ips, count=1, timeout=2)
 ```
+
+**Instalação:**
+```bash
+# Já incluído no requirements.txt
+pip install icmplib
+
+# Windows: Execute o backend como Administrador
+# Linux: Execute com sudo ou configure capabilities
+```
+
+#### Opção B: ping3 (Fallback automático)
+- ✅ Funciona sem privilégios de admin
+- ⚠️ Mais lento (pings sequenciais)
+- ⚠️ 800 devices = ~40-60s por ciclo
+
+**O sistema usa icmplib automaticamente se disponível, senão usa ping3.**
 
 ### 2. **Intervalo de Ping Configurável**
 

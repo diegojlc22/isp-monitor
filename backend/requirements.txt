@@ -8,3 +8,7 @@ aiosqlite
 python-multipart
 ping3
 httpx
+icmplib
+paramiko
+asyncpg
+psycopg2-binary
