@@ -96,3 +96,59 @@ async def update_latency_config(config: LatencyThresholds, db: AsyncSession = De
         
     await db.commit()
     return {"message": "Latency thresholds updated"}
+
+from pydantic import BaseModel
+import os
+
+class DatabaseConfig(BaseModel):
+    db_type: str = "sqlite" # sqlite, postgresql
+    postgres_url: str = "" # postgresql+asyncpg://user:pass@localhost/dbname
+
+@router.get("/database", response_model=DatabaseConfig)
+async def get_database_config(current_user = Depends(get_current_admin_user)):
+    # Read from env var or .env file manually if needed, but for now just check os.environ
+    # In a real app we might read specific .env file content
+    current_url = os.getenv("DATABASE_URL", "")
+    
+    if "postgresql" in current_url:
+        return DatabaseConfig(db_type="postgresql", postgres_url=current_url)
+    else:
+        return DatabaseConfig(db_type="sqlite", postgres_url="")
+
+@router.post("/database")
+async def update_database_config(config: DatabaseConfig, current_user = Depends(get_current_admin_user)):
+    # Create or update .env file
+    env_path = ".env"
+    
+    new_url = ""
+    if config.db_type == "postgresql":
+        # Validate minimal structure
+        if "postgresql" not in config.postgres_url:
+             return {"error": "URL inválida. Deve começar com postgresql..."}
+        new_url = config.postgres_url
+    
+    # Write to .env
+    # We read existing lines to preserve other keys if any (though we don't have many yet)
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+            
+    # Remove existing DATABASE_URL
+    lines = [line for line in lines if not line.startswith("DATABASE_URL=")]
+    
+    # Add new if not sqlite (sqlite is default when missing)
+    if new_url:
+        lines.append(f"DATABASE_URL={new_url}\n")
+        
+    with open(env_path, "w") as f:
+        f.writelines(lines)
+        
+    # Update current os.environ so it affects current process if we were to re-init (though restart is best)
+    # The user should restart the backend for this to fully take effect usually
+    if new_url:
+        os.environ["DATABASE_URL"] = new_url
+    else:
+         os.environ.pop("DATABASE_URL", None)
+         
+    return {"message": "Configuração salva. Por favor, reinicie o backend para aplicar as mudanças."}

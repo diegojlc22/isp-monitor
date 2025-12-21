@@ -52,3 +52,7 @@ export const getLatencyHistory = (id: number, period: string) => api.get(`/equip
 export const getLinks = () => api.get('/towers/links').then(res => res.data);
 export const createLink = (data: any) => api.post('/towers/links', data).then(res => res.data);
 export const deleteLink = (id: number) => api.delete(`/towers/links/${id}`).then(res => res.data);
+
+// Database Config
+export const getDatabaseConfig = () => api.get('/settings/database').then(res => res.data);
+export const updateDatabaseConfig = (data: any) => api.post('/settings/database', data).then(res => res.data);
