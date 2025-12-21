@@ -1,7 +1,9 @@
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap } from 'react-leaflet';
 import { useEffect, useState } from 'react';
 import { getTowers } from '../services/api';
 import L from 'leaflet';
+import { Search } from 'lucide-react';
+import clsx from 'clsx';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
@@ -38,8 +40,22 @@ const createTowerIcon = (name: string, isOnline: boolean) => new L.DivIcon({
     popupAnchor: [0, -60]
 });
 
+// Map Controller to handle Pan/Zoom
+function MapController({ center }: { center: [number, number] | null }) {
+    const map = useMap();
+    useEffect(() => {
+        if (center) {
+            map.flyTo(center, 14);
+        }
+    }, [center, map]);
+    return null;
+}
+
 export function NetMap() {
     const [towers, setTowers] = useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filteredTowers, setFilteredTowers] = useState<any[]>([]);
+    const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(null);
 
     useEffect(() => {
         getTowers().then(setTowers).catch(console.error);
@@ -47,15 +63,85 @@ export function NetMap() {
         return () => clearInterval(interval);
     }, []);
 
+    // Filter towers based on search
+    useEffect(() => {
+        if (searchQuery.trim() === '') {
+            setFilteredTowers([]);
+        } else {
+            const lower = searchQuery.toLowerCase();
+            setFilteredTowers(towers.filter(t => t.name.toLowerCase().includes(lower) || t.ip?.includes(lower)));
+        }
+    }, [searchQuery, towers]);
+
+    const handleSelectTower = (tower: any) => {
+        if (tower.latitude && tower.longitude) {
+            setSelectedPosition([tower.latitude, tower.longitude]);
+            setSearchQuery(''); // Close dropdown
+        }
+    };
+
     return (
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col relative">
             <h2 className="text-2xl font-bold mb-4 text-white">Mapa em Tempo Real</h2>
+
+            {/* Search Bar Overlay */}
+            <div className="absolute top-16 right-4 z-[1000] w-72">
+                <div className="relative">
+                    <input
+                        type="text"
+                        placeholder="Buscar torre..."
+                        className="w-full bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:border-blue-500 shadow-xl"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                </div>
+                {/* Search Results Dropdown */}
+                {filteredTowers.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        {filteredTowers.map(tower => (
+                            <button
+                                key={tower.id}
+                                onClick={() => handleSelectTower(tower)}
+                                className="w-full text-left px-4 py-2 hover:bg-slate-800 text-white border-b border-slate-800 last:border-0 flex justify-between items-center"
+                            >
+                                <span>{tower.name}</span>
+                                <span className={clsx("text-xs px-2 py-0.5 rounded", tower.is_online ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400")}>
+                                    {tower.is_online ? 'ON' : 'OFF'}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             <div className="flex-1 rounded-xl overflow-hidden border border-slate-800 relative z-0">
                 <MapContainer center={[-19.51, -54.04]} zoom={6} style={{ height: '100%', width: '100%' }}>
-                    <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
+                    <LayersControl position="topright">
+                        <LayersControl.BaseLayer checked name="OpenStreetMap (Padrão)">
+                            <TileLayer
+                                attribution='&copy; OpenStreetMap contributors'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            />
+                        </LayersControl.BaseLayer>
+
+                        <LayersControl.BaseLayer name="Satélite (Esri)">
+                            <TileLayer
+                                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            />
+                        </LayersControl.BaseLayer>
+
+                        <LayersControl.BaseLayer name="Relevo (OpenTopoMap)">
+                            <TileLayer
+                                attribution='Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+                                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                            />
+                        </LayersControl.BaseLayer>
+                    </LayersControl>
+
+                    <MapController center={selectedPosition} />
+
                     {towers.map(tower => (
                         <Marker
                             key={tower.id}
