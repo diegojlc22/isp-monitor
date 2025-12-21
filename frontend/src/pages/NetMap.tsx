@@ -218,19 +218,22 @@ export function NetMap() {
                         return null;
                     })}
 
-                    {towers.map(tower => (
-                        <Marker
-                            key={tower.id}
-                            position={[tower.latitude || 0, tower.longitude || 0]}
-                            icon={createTowerIcon(tower.name, tower.is_online)}
-                        >
-                            <Popup>
-                                <strong>{tower.name}</strong><br />
-                                IP: {tower.ip || 'Sem IP'}<br />
-                                Status: {tower.is_online ? "Online" : "Offline"}
-                            </Popup>
-                        </Marker>
-                    ))}
+                    {towers
+                        .filter(tower => tower.latitude && tower.longitude)
+                        .map(tower => (
+                            <Marker
+                                key={tower.id}
+                                position={[tower.latitude, tower.longitude]}
+                                icon={createTowerIcon(tower.name, tower.is_online)}
+                            >
+                                <Popup>
+                                    <strong>{tower.name}</strong><br />
+                                    IP: {tower.ip || 'Sem IP'}<br />
+                                    Status: {tower.is_online ? "Online" : "Offline"}
+                                </Popup>
+                            </Marker>
+                        ))
+                    }
                 </MapContainer>
             </div>
 
