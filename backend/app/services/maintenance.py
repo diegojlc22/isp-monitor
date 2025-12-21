@@ -3,26 +3,27 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete
 from backend.app.database import async_session_factory
 from backend.app.models import PingLog
+from backend.app.config import LOG_RETENTION_DAYS
 
-async def cleanup_logs(retention_days=7):
+async def cleanup_logs(retention_days=None):
     """Deletes ping logs older than retention_days."""
+    if retention_days is None:
+        retention_days = LOG_RETENTION_DAYS
+    
     try:
         async with async_session_factory() as db:
             cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-            # print(f"Running maintenance: Cleanup logs older than {cutoff}...")
             stmt = delete(PingLog).where(PingLog.timestamp < cutoff)
             result = await db.execute(stmt)
             await db.commit()
             if result.rowcount > 0:
-                print(f"Maintenance: Deleted {result.rowcount} old ping logs.")
+                print(f"Maintenance: Deleted {result.rowcount} old ping logs (retention: {retention_days} days).")
     except Exception as e:
         print(f"Maintenance Error: {e}")
 
 async def maintenance_loop():
     """Runs maintenance tasks perpetually."""
     while True:
-        await cleanup_logs(7) # Keep 7 days of logs
+        await cleanup_logs()
         # Run every 24 hours (86400 seconds)
-        # We start with a sleep to avoiding hitting DB immediately on restart if not needed, 
-        # but for now let's run immediately then sleep.
         await asyncio.sleep(24 * 60 * 60)
