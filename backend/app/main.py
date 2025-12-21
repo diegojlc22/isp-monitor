@@ -2,11 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.routers import towers, equipments, settings, auth, users
 from backend.app.database import engine, Base, AsyncSessionLocal
-from backend.app.services.pinger import monitor_job
 from backend.app import models, auth_utils
 from sqlalchemy import select
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
+
+# Try to import fast pinger (icmplib), fallback to standard pinger
+try:
+    from backend.app.services.pinger_fast import monitor_job_fast as monitor_job
+    print("✅ Using ULTRA-FAST pinger (icmplib) - like The Dude!")
+except ImportError:
+    from backend.app.services.pinger import monitor_job
+    print("⚠️ Using standard pinger (ping3) - slower but works")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,17 +38,21 @@ async def lifespan(app: FastAPI):
             await db.commit()
             print("Admin User Seeded.")
         
+    # Get ping interval from config
+    from backend.app.config import PING_INTERVAL_SECONDS
+    
     scheduler = AsyncIOScheduler()
-    # Monitor: Run every 30 seconds
-    scheduler.add_job(monitor_job, 'interval', seconds=30)
+    # Monitor: Run with configurable interval (default 30s)
+    scheduler.add_job(monitor_job, 'interval', seconds=PING_INTERVAL_SECONDS)
+    print(f"📡 Ping interval: {PING_INTERVAL_SECONDS}s")
     
     # Maintenance (Cleanup): Run every 24 hours
     from backend.app.services.maintenance import cleanup_logs
     scheduler.add_job(cleanup_logs, 'interval', hours=24) # Run once a day
     
-    # Run cleanup once on startup just to be sure
+    # Run cleanup once on startup
     import asyncio
-    asyncio.create_task(cleanup_logs(7))
+    asyncio.create_task(cleanup_logs())
 
     scheduler.start()
     
