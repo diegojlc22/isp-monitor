@@ -24,20 +24,26 @@ class EquipmentBase(BaseModel):
     name: str
     ip: str
     tower_id: Optional[int] = None
+    ssh_user: str = "admin"
+    ssh_port: int = 22
 
 class EquipmentCreate(EquipmentBase):
-    pass
+    ssh_password: Optional[str] = None
 
 class EquipmentUpdate(BaseModel):
     name: Optional[str] = None
     ip: Optional[str] = None
     tower_id: Optional[int] = None
+    ssh_user: Optional[str] = None
+    ssh_password: Optional[str] = None
+    ssh_port: Optional[int] = None
 
 class Equipment(EquipmentBase):
     id: int
     is_online: bool
     last_checked: Optional[datetime]
-
+    # We do NOT return ssh_password for security, only user/port
+    
     class Config:
         from_attributes = True
 

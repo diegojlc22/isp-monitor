@@ -32,6 +32,11 @@ class Equipment(Base):
     last_checked = Column(DateTime, default=datetime.now(timezone.utc))
     last_latency = Column(Integer, nullable=True) # ms
     
+    # SSH Credentials
+    ssh_user = Column(String, nullable=True, default="admin")
+    ssh_password = Column(String, nullable=True)
+    ssh_port = Column(Integer, default=22)
+    
     tower = relationship("Tower", back_populates="equipments")
 
 class PingLog(Base):

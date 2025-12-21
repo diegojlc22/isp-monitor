@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig } from '../services/api';
-import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity } from 'lucide-react';
+import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig, rebootEquipment } from '../services/api';
+import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
@@ -26,7 +26,14 @@ export function Equipments() {
     const [selectedEqHistory, setSelectedEqHistory] = useState<any>(null);
     const [historyPeriod, setHistoryPeriod] = useState('24h');
 
-    const [formData, setFormData] = useState({ name: '', ip: '', tower_id: '' });
+    const [formData, setFormData] = useState({
+        name: '',
+        ip: '',
+        tower_id: '',
+        ssh_user: 'admin',
+        ssh_password: '',
+        ssh_port: 22
+    });
 
     async function load() {
         try {
@@ -68,10 +75,18 @@ export function Equipments() {
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         try {
-            const payload = {
-                ...formData,
-                tower_id: formData.tower_id ? parseInt(formData.tower_id) : null
+            const payload: any = {
+                name: formData.name,
+                ip: formData.ip,
+                tower_id: formData.tower_id ? parseInt(formData.tower_id) : null,
+                ssh_user: formData.ssh_user,
+                ssh_port: Number(formData.ssh_port)
             };
+
+            // Only send password if provided (for updates)
+            if (formData.ssh_password) {
+                payload.ssh_password = formData.ssh_password;
+            }
 
             if (editingEquipment) {
                 await updateEquipment(editingEquipment.id, payload);
@@ -81,10 +96,21 @@ export function Equipments() {
 
             setShowModal(false);
             setEditingEquipment(null);
-            setFormData({ name: '', ip: '', tower_id: '' });
+            resetFormState();
             load();
         } catch (error) {
             alert('Erro ao salvar equipamento.');
+        }
+    }
+
+    async function handleReboot(eq: any) {
+        if (!confirm(`Tem certeza que deseja REINICIAR o equipamento ${eq.name}? Isso pode causar queda temporária.`)) return;
+
+        try {
+            await rebootEquipment(eq.id);
+            alert("Comando de reboot enviado com sucesso!");
+        } catch (e: any) {
+            alert("Erro ao enviar comando: " + (e.response?.data?.detail || e.message));
         }
     }
 
@@ -93,14 +119,28 @@ export function Equipments() {
         setFormData({
             name: eq.name,
             ip: eq.ip,
-            tower_id: eq.tower_id ? String(eq.tower_id) : ''
+            tower_id: eq.tower_id ? String(eq.tower_id) : '',
+            ssh_user: eq.ssh_user || 'admin',
+            ssh_password: '', // Password is never returned for security
+            ssh_port: eq.ssh_port || 22
         });
         setShowModal(true);
     }
 
-    function resetForm() {
+    function resetFormState() {
+        setFormData({
+            name: '',
+            ip: '',
+            tower_id: '',
+            ssh_user: 'admin',
+            ssh_password: '',
+            ssh_port: 22
+        });
+    }
+
+    function openNewModal() {
         setEditingEquipment(null);
-        setFormData({ name: '', ip: '', tower_id: '' });
+        resetFormState();
         setShowModal(true);
     }
 
@@ -188,7 +228,7 @@ export function Equipments() {
                         <MonitorPlay size={20} />
                         Scan Rede
                     </button>
-                    <button onClick={resetForm} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    <button onClick={openNewModal} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
                         <Plus size={20} />
                         Novo Equipamento
                     </button>
@@ -238,6 +278,9 @@ export function Equipments() {
                                         {tower ? <span className="text-blue-400">{tower.name}</span> : <span className="text-slate-600">-</span>}
                                     </td>
                                     <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                        <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2" title="Reiniciar Equipamento (SSH)">
+                                            <Power size={18} />
+                                        </button>
                                         <button onClick={() => handleShowHistory(eq)} className="text-slate-500 hover:text-amber-400 p-2" title="Histórico de Latência">
                                             <Activity size={18} />
                                         </button>
@@ -261,16 +304,19 @@ export function Equipments() {
                     <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl p-6">
                         <h3 className="text-xl font-bold text-white mb-4">{editingEquipment ? 'Editar Equipamento' : 'Novo Equipamento'}</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Nome</label>
-                                <input required type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                    value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Nome</label>
+                                    <input required type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                        value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">IP</label>
+                                    <input required type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                        value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">IP</label>
-                                <input required type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                    value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} />
-                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-1">Associar à Torre (Opcional)</label>
                                 <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
@@ -281,6 +327,31 @@ export function Equipments() {
                                     ))}
                                 </select>
                             </div>
+
+                            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                                <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase flex items-center gap-2">
+                                    <Server size={14} className="text-orange-500" />
+                                    Acesso SSH (Para Reboot)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Usuário</label>
+                                        <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Porta</label>
+                                        <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.ssh_port} onChange={e => setFormData({ ...formData, ssh_port: Number(e.target.value) })} />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Senha {editingEquipment && '(Deixe em branco para não alterar)'}</label>
+                                        <input type="password" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.ssh_password} onChange={e => setFormData({ ...formData, ssh_password: e.target.value })} />
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="flex justify-end gap-3 mt-6">
                                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-300 hover:text-white">Cancelar</button>
                                 <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium">

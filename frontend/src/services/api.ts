@@ -21,6 +21,7 @@ export const getEquipments = () => api.get('/equipments/').then(res => res.data)
 export const createEquipment = (data: any) => api.post('/equipments/', data).then(res => res.data);
 export const updateEquipment = (id: number, data: any) => api.put(`/equipments/${id}`, data).then(res => res.data);
 export const deleteEquipment = (id: number) => api.delete(`/equipments/${id}`).then(res => res.data);
+export const rebootEquipment = (id: number) => api.post(`/equipments/${id}/reboot`).then(res => res.data);
 // Note: scanNetwork uses EventSource in component, so simple POST here might be legacy or unused, but keeping just in case
 export const scanNetwork = (range: string) => api.post('/equipments/scan/', { ip_range: range }).then(res => res.data);
 

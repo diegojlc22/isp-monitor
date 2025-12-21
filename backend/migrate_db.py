@@ -49,6 +49,15 @@ def migrate():
     except Exception as e:
         print(f"Error creating network_links: {e}")
 
+    # Add SSH cols to equipments
+    try:
+        cursor.execute("ALTER TABLE equipments ADD COLUMN ssh_user VARCHAR DEFAULT 'admin'")
+        cursor.execute("ALTER TABLE equipments ADD COLUMN ssh_password VARCHAR")
+        cursor.execute("ALTER TABLE equipments ADD COLUMN ssh_port INTEGER DEFAULT 22")
+        print("Added SSH columns to equipments.")
+    except sqlite3.OperationalError:
+        pass # Already exists
+
     conn.commit()
     conn.close()
     print("Migration complete.")

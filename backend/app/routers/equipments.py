@@ -45,7 +45,35 @@ async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Equipment not found")
     await db.delete(db_eq)
     await db.commit()
+    await db.delete(db_eq)
+    await db.commit()
     return {"message": "Equipment deleted"}
+
+from backend.app.services.ssh_commander import reboot_device
+
+@router.post("/{eq_id}/reboot")
+async def reboot_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
+    db_eq = await db.get(Equipment, eq_id)
+    if not db_eq:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+        
+    if not db_eq.ip:
+        raise HTTPException(status_code=400, detail="Equipamento sem IP configurado")
+
+    # Use stored credentials or defaults
+    user = db_eq.ssh_user or "admin"
+    password = db_eq.ssh_password
+    port = db_eq.ssh_port or 22
+    
+    if not password:
+         raise HTTPException(status_code=400, detail="Senha SSH não configurada para este equipamento")
+
+    success, msg = await reboot_device(db_eq.ip, user, password, port)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f"Falha no comando de reboot: {msg}")
+        
+    return {"message": "Comando de reboot enviado com sucesso"}
 
 from pydantic import BaseModel
 class ScanRequest(BaseModel):
