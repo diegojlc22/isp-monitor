@@ -1,0 +1,302 @@
+{
+    "api_documentation": {
+        "base_url": "http://localhost:8000",
+        "authentication": "Bearer Token (JWT)",
+        "endpoints": {
+            "auth": {
+                "login": {
+                    "method": "POST",
+                    "url": "/auth/login",
+                    "body": {
+                        "email": "tecnico@empresa.com",
+                        "password": "senha123"
+                    },
+                    "response": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZWNuaWNvQGVtcHJlc2EuY29tIiwiZXhwIjoxNzM0ODEyNDAwfQ.xyz",
+                        "token_type": "bearer",
+                        "user": {
+                            "id": 2,
+                            "name": "João Técnico",
+                            "email": "tecnico@empresa.com",
+                            "role": "tecnico"
+                        }
+                    }
+                },
+                "me": {
+                    "method": "GET",
+                    "url": "/auth/me",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": {
+                        "id": 2,
+                        "name": "João Técnico",
+                        "email": "tecnico@empresa.com",
+                        "role": "tecnico"
+                    }
+                }
+            },
+            "towers": {
+                "list": {
+                    "method": "GET",
+                    "url": "/towers/",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": [
+                        {
+                            "id": 1,
+                            "name": "Torre Centro",
+                            "ip": "192.168.1.1",
+                            "latitude": -23.550520,
+                            "longitude": -46.633308,
+                            "observations": "Torre principal do centro da cidade",
+                            "is_online": true,
+                            "last_checked": "2024-12-21T17:30:00Z",
+                            "last_latency": 15
+                        },
+                        {
+                            "id": 2,
+                            "name": "Torre Bairro Norte",
+                            "ip": "192.168.2.1",
+                            "latitude": -23.540520,
+                            "longitude": -46.623308,
+                            "observations": "Torre secundária",
+                            "is_online": false,
+                            "last_checked": "2024-12-21T17:25:00Z",
+                            "last_latency": null
+                        }
+                    ]
+                },
+                "get": {
+                    "method": "GET",
+                    "url": "/towers/{tower_id}",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": {
+                        "id": 1,
+                        "name": "Torre Centro",
+                        "ip": "192.168.1.1",
+                        "latitude": -23.550520,
+                        "longitude": -46.633308,
+                        "observations": "Torre principal do centro da cidade",
+                        "is_online": true,
+                        "last_checked": "2024-12-21T17:30:00Z",
+                        "last_latency": 15
+                    }
+                }
+            },
+            "equipments": {
+                "list": {
+                    "method": "GET",
+                    "url": "/equipments/",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": [
+                        {
+                            "id": 1,
+                            "name": "AP Setor A",
+                            "ip": "192.168.1.10",
+                            "tower_id": 1,
+                            "is_online": true,
+                            "last_checked": "2024-12-21T17:30:00Z",
+                            "last_latency": 25,
+                            "ssh_user": "admin",
+                            "ssh_port": 22
+                        },
+                        {
+                            "id": 2,
+                            "name": "Switch Principal",
+                            "ip": "192.168.1.20",
+                            "tower_id": 1,
+                            "is_online": true,
+                            "last_checked": "2024-12-21T17:30:00Z",
+                            "last_latency": 12,
+                            "ssh_user": "admin",
+                            "ssh_port": 22
+                        },
+                        {
+                            "id": 3,
+                            "name": "Router Borda",
+                            "ip": "192.168.2.10",
+                            "tower_id": 2,
+                            "is_online": false,
+                            "last_checked": "2024-12-21T17:25:00Z",
+                            "last_latency": null,
+                            "ssh_user": "admin",
+                            "ssh_port": 22
+                        }
+                    ]
+                },
+                "get": {
+                    "method": "GET",
+                    "url": "/equipments/{equipment_id}",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": {
+                        "id": 1,
+                        "name": "AP Setor A",
+                        "ip": "192.168.1.10",
+                        "tower_id": 1,
+                        "is_online": true,
+                        "last_checked": "2024-12-21T17:30:00Z",
+                        "last_latency": 25,
+                        "ssh_user": "admin",
+                        "ssh_port": 22
+                    }
+                },
+                "latency_history": {
+                    "method": "GET",
+                    "url": "/equipments/{equipment_id}/latency-history?hours=24",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": [
+                        {
+                            "timestamp": "2024-12-21T16:00:00Z",
+                            "latency_ms": 20,
+                            "status": "online"
+                        },
+                        {
+                            "timestamp": "2024-12-21T16:30:00Z",
+                            "latency_ms": 25,
+                            "status": "online"
+                        },
+                        {
+                            "timestamp": "2024-12-21T17:00:00Z",
+                            "latency_ms": 22,
+                            "status": "online"
+                        },
+                        {
+                            "timestamp": "2024-12-21T17:30:00Z",
+                            "latency_ms": 25,
+                            "status": "online"
+                        }
+                    ]
+                },
+                "reboot": {
+                    "method": "POST",
+                    "url": "/equipments/{equipment_id}/reboot",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    },
+                    "response": {
+                        "success": true,
+                        "message": "✅ Reboot command sent successfully (attempt 1)"
+                    }
+                }
+            }
+        }
+    },
+    "example_flows": {
+        "login_and_get_equipments": {
+            "step1": {
+                "description": "Login",
+                "request": {
+                    "method": "POST",
+                    "url": "http://localhost:8000/auth/login",
+                    "body": {
+                        "email": "tecnico@empresa.com",
+                        "password": "senha123"
+                    }
+                },
+                "response": {
+                    "access_token": "eyJhbGc...",
+                    "token_type": "bearer"
+                }
+            },
+            "step2": {
+                "description": "Get equipments",
+                "request": {
+                    "method": "GET",
+                    "url": "http://localhost:8000/equipments/",
+                    "headers": {
+                        "Authorization": "Bearer eyJhbGc..."
+                    }
+                },
+                "response": "Array of equipments"
+            }
+        },
+        "reboot_equipment": {
+            "step1": {
+                "description": "Get equipment details",
+                "request": {
+                    "method": "GET",
+                    "url": "http://localhost:8000/equipments/1",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    }
+                }
+            },
+            "step2": {
+                "description": "Send reboot command",
+                "request": {
+                    "method": "POST",
+                    "url": "http://localhost:8000/equipments/1/reboot",
+                    "headers": {
+                        "Authorization": "Bearer {token}"
+                    }
+                },
+                "response": {
+                    "success": true,
+                    "message": "✅ Reboot command sent successfully"
+                }
+            }
+        }
+    },
+    "error_responses": {
+        "401_unauthorized": {
+            "status": 401,
+            "detail": "Could not validate credentials"
+        },
+        "404_not_found": {
+            "status": 404,
+            "detail": "Equipment not found"
+        },
+        "500_server_error": {
+            "status": 500,
+            "detail": "Internal server error"
+        }
+    },
+    "models": {
+        "User": {
+            "id": "integer",
+            "name": "string",
+            "email": "string",
+            "role": "string (admin|tecnico)"
+        },
+        "Tower": {
+            "id": "integer",
+            "name": "string",
+            "ip": "string (nullable)",
+            "latitude": "float (nullable)",
+            "longitude": "float (nullable)",
+            "observations": "string (nullable)",
+            "is_online": "boolean",
+            "last_checked": "datetime (nullable)",
+            "last_latency": "integer (nullable)"
+        },
+        "Equipment": {
+            "id": "integer",
+            "name": "string",
+            "ip": "string",
+            "tower_id": "integer (nullable)",
+            "is_online": "boolean",
+            "last_checked": "datetime (nullable)",
+            "last_latency": "integer (nullable)",
+            "ssh_user": "string (nullable)",
+            "ssh_port": "integer"
+        },
+        "PingLog": {
+            "id": "integer",
+            "device_type": "string (tower|equipment)",
+            "device_id": "integer",
+            "status": "string (online|offline)",
+            "latency_ms": "integer (nullable)",
+            "timestamp": "datetime"
+        }
+    }
+}
