@@ -116,26 +116,26 @@ export function NetMap() {
             </div>
 
             <div className="flex-1 rounded-xl overflow-hidden border border-slate-800 relative z-0">
-                <MapContainer center={[-19.51, -54.04]} zoom={6} style={{ height: '100%', width: '100%' }}>
+                <MapContainer center={[-19.51, -54.04]} zoom={12} style={{ height: '100%', width: '100%' }}>
                     <LayersControl position="topright">
-                        <LayersControl.BaseLayer checked name="OpenStreetMap (Padrão)">
+                        <LayersControl.BaseLayer checked name="Mapa (Google)">
+                            <TileLayer
+                                attribution='&copy; Google'
+                                url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                            />
+                        </LayersControl.BaseLayer>
+
+                        <LayersControl.BaseLayer name="Satélite Híbrido (Google)">
+                            <TileLayer
+                                attribution='&copy; Google'
+                                url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                            />
+                        </LayersControl.BaseLayer>
+
+                        <LayersControl.BaseLayer name="OpenStreetMap">
                             <TileLayer
                                 attribution='&copy; OpenStreetMap contributors'
                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            />
-                        </LayersControl.BaseLayer>
-
-                        <LayersControl.BaseLayer name="Satélite (Esri)">
-                            <TileLayer
-                                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                            />
-                        </LayersControl.BaseLayer>
-
-                        <LayersControl.BaseLayer name="Relevo (OpenTopoMap)">
-                            <TileLayer
-                                attribution='Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
-                                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                             />
                         </LayersControl.BaseLayer>
                     </LayersControl>
