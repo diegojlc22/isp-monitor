@@ -22,21 +22,25 @@ async def lifespan(app: FastAPI):
         # Create Tables
         await conn.run_sync(Base.metadata.create_all)
         
-    # Seed Admin User
+    # Seed Admin User (from environment variables)
+    import os
+    admin_email = os.getenv("ADMIN_EMAIL", "diegojlc22@gmail.com")
+    admin_password = os.getenv("ADMIN_PASSWORD", "110812")
+    
     async with AsyncSessionLocal() as db:
-        res = await db.execute(select(models.User).where(models.User.email == "diegojlc22@gmail.com"))
+        res = await db.execute(select(models.User).where(models.User.email == admin_email))
         user = res.scalar_one_or_none()
         if not user:
-            print("Seeding Admin User...")
+            print(f"Seeding Admin User: {admin_email}")
             admin_user = models.User(
                 name="Admin",
-                email="diegojlc22@gmail.com",
-                hashed_password=auth_utils.get_password_hash("110812"),
+                email=admin_email,
+                hashed_password=auth_utils.get_password_hash(admin_password),
                 role="admin"
             )
             db.add(admin_user)
             await db.commit()
-            print("Admin User Seeded.")
+            print("✅ Admin User Seeded.")
         
     # Optimize SQLite database (like The Dude)
     from backend.app.services.sqlite_optimizer import (
@@ -84,9 +88,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ISP Monitor API", lifespan=lifespan)
 
+# CORS Configuration (from environment or defaults)
+import os
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+
+# In production, set CORS_ORIGINS to specific domains
+# Example: CORS_ORIGINS=https://monitor.yourcompany.com,https://app.yourcompany.com
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins if cors_origins != ["*"] else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
