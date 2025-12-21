@@ -187,20 +187,46 @@ export function Equipments() {
     async function saveScanned() {
         if (selectedIps.length === 0) return;
 
-        try {
-            for (const ip of selectedIps) {
+        const results = {
+            success: [] as string[],
+            failed: [] as { ip: string, reason: string }[]
+        };
+
+        for (const ip of selectedIps) {
+            try {
                 const name = ipNames[ip] || `Dispositivo ${ip}`;
                 await createEquipment({
                     name: name,
                     ip: ip,
-                    tower_id: null
+                    tower_id: null,
+                    ssh_user: 'admin',
+                    ssh_port: 22
                 });
+                results.success.push(ip);
+            } catch (e: any) {
+                const errorMsg = e.response?.data?.detail || e.message || 'Erro desconhecido';
+                results.failed.push({ ip, reason: errorMsg });
             }
-            alert(`${selectedIps.length} dispositivos adicionados!`);
+        }
+
+        // Show detailed results
+        let message = '';
+        if (results.success.length > 0) {
+            message += `✅ ${results.success.length} dispositivo(s) adicionado(s) com sucesso!\n`;
+        }
+        if (results.failed.length > 0) {
+            message += `\n❌ ${results.failed.length} falhou(ram):\n`;
+            results.failed.forEach(f => {
+                message += `• ${f.ip}: ${f.reason}\n`;
+            });
+        }
+
+        alert(message);
+
+        // Only close and reload if at least one succeeded
+        if (results.success.length > 0) {
             setShowScanner(false);
             load();
-        } catch (e) {
-            alert('Erro ao salvar alguns dispositivos.');
         }
     }
 

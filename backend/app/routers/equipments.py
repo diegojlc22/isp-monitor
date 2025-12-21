@@ -15,11 +15,25 @@ async def read_equipments(skip: int = 0, limit: int = 100, db: AsyncSession = De
 
 @router.post("/", response_model=EquipmentSchema)
 async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db)):
-    db_eq = Equipment(**equipment.model_dump())
-    db.add(db_eq)
-    await db.commit()
-    await db.refresh(db_eq)
-    return db_eq
+    try:
+        # Check if IP already exists
+        existing = await db.execute(select(Equipment).where(Equipment.ip == equipment.ip))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já está cadastrado")
+        
+        db_eq = Equipment(**equipment.model_dump())
+        db.add(db_eq)
+        await db.commit()
+        await db.refresh(db_eq)
+        return db_eq
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        error_msg = str(e)
+        if "UNIQUE constraint failed" in error_msg or "duplicate key" in error_msg:
+            raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe no sistema")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar equipamento: {error_msg}")
 
 @router.put("/{eq_id}", response_model=EquipmentSchema)
 async def update_equipment(eq_id: int, equipment: EquipmentSchema, db: AsyncSession = Depends(get_db)):
