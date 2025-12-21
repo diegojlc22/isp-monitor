@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers } from '../services/api';
-import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2 } from 'lucide-react';
+import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig } from '../services/api';
+import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
 export function Equipments() {
@@ -18,6 +19,13 @@ export function Equipments() {
     const [ipNames, setIpNames] = useState<Record<string, string>>({});
     const [progress, setProgress] = useState(0);
 
+    // History State
+    const [historyData, setHistoryData] = useState<any[]>([]);
+    const [historyConfig, setHistoryConfig] = useState({ good: 50, critical: 200 });
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [selectedEqHistory, setSelectedEqHistory] = useState<any>(null);
+    const [historyPeriod, setHistoryPeriod] = useState('24h');
+
     const [formData, setFormData] = useState({ name: '', ip: '', tower_id: '' });
 
     async function load() {
@@ -33,6 +41,29 @@ export function Equipments() {
         const interval = setInterval(load, 15000);
         return () => clearInterval(interval);
     }, []);
+
+    async function handleShowHistory(eq: any) {
+        setSelectedEqHistory(eq);
+        try {
+            const config = await getLatencyConfig();
+            setHistoryConfig(config);
+            await loadHistory(eq.id, '24h');
+            setShowHistoryModal(true);
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao carregar histórico.');
+        }
+    }
+
+    async function loadHistory(id: number, period: string) {
+        setHistoryPeriod(period);
+        const data = await getLatencyHistory(id, period);
+        // Format timestamp for easier reading
+        setHistoryData(data.map((d: any) => ({
+            ...d,
+            timeStr: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        })));
+    }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -207,6 +238,9 @@ export function Equipments() {
                                         {tower ? <span className="text-blue-400">{tower.name}</span> : <span className="text-slate-600">-</span>}
                                     </td>
                                     <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                        <button onClick={() => handleShowHistory(eq)} className="text-slate-500 hover:text-amber-400 p-2" title="Histórico de Latência">
+                                            <Activity size={18} />
+                                        </button>
                                         <button onClick={() => handleEdit(eq)} className="text-slate-500 hover:text-blue-400 p-2">
                                             <Edit2 size={18} />
                                         </button>
@@ -353,6 +387,72 @@ export function Equipments() {
                                 <Save size={18} />
                                 Salvar Selecionados ({selectedIps.length})
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Histórico de Latência */}
+            {showHistoryModal && selectedEqHistory && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl shadow-2xl flex flex-col h-[80vh]">
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950 rounded-t-xl">
+                            <div>
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <Activity className="text-amber-500" />
+                                    Histórico de Latência: {selectedEqHistory.name}
+                                </h3>
+                                <p className="text-sm text-slate-400 font-mono mt-1">{selectedEqHistory.ip}</p>
+                            </div>
+                            <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+                                <button onClick={() => loadHistory(selectedEqHistory.id, '24h')} className={clsx("px-3 py-1 rounded text-sm transition-colors", historyPeriod === '24h' ? "bg-slate-800 text-white" : "text-slate-400 hover:text-white")}>24h</button>
+                                <button onClick={() => loadHistory(selectedEqHistory.id, '7d')} className={clsx("px-3 py-1 rounded text-sm transition-colors", historyPeriod === '7d' ? "bg-slate-800 text-white" : "text-slate-400 hover:text-white")}>7 Dias</button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 p-6 min-h-0">
+                            {historyData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={historyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="splitColor" x1="0" y1="0" x2="0" y2="1">
+                                                {(() => {
+                                                    const dataMax = Math.max(...historyData.map((d: any) => d.latency));
+                                                    const max = Math.max(dataMax, historyConfig.critical * 1.1);
+                                                    const critOff = (max - historyConfig.critical) / max;
+                                                    const goodOff = (max - historyConfig.good) / max;
+                                                    return (
+                                                        <>
+                                                            <stop offset={critOff} stopColor="#fb7185" stopOpacity={0.8} />
+                                                            <stop offset={critOff} stopColor="#facc15" stopOpacity={0.8} />
+                                                            <stop offset={goodOff} stopColor="#facc15" stopOpacity={0.8} />
+                                                            <stop offset={goodOff} stopColor="#4ade80" stopOpacity={0.8} />
+                                                            <stop offset={1} stopColor="#4ade80" stopOpacity={0.8} />
+                                                        </>
+                                                    );
+                                                })()}
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                        <XAxis dataKey="timeStr" stroke="#64748b" tick={{ fontSize: 12 }} minTickGap={30} />
+                                        <YAxis stroke="#64748b" tick={{ fontSize: 12 }} label={{ value: 'ms', angle: -90, position: 'insideLeft', fill: '#64748b' }} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
+                                            labelStyle={{ color: '#94a3b8' }}
+                                        />
+                                        <ReferenceLine y={historyConfig.critical} label={{ value: 'Crítico', fill: '#fb7185', fontSize: 10 }} stroke="#fb7185" strokeDasharray="3 3" />
+                                        <ReferenceLine y={historyConfig.good} label={{ value: 'Bom', fill: '#4ade80', fontSize: 10 }} stroke="#4ade80" strokeDasharray="3 3" />
+                                        <Area type="monotone" dataKey="latency" stroke="url(#splitColor)" fill="url(#splitColor)" strokeWidth={2} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-slate-500">
+                                    Sem dados de histórico para este período.
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-slate-800 flex justify-end bg-slate-900 rounded-b-xl">
+                            <button onClick={() => setShowHistoryModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">Fechar</button>
                         </div>
                     </div>
                 </div>

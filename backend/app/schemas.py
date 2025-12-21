@@ -81,3 +81,7 @@ class LoginRequest(BaseModel):
 
 class SystemNameUpdate(BaseModel):
     name: str
+
+class LatencyThresholds(BaseModel):
+    good: int # ms, e.g. 50
+    critical: int # ms, e.g. 200

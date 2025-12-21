@@ -6,16 +6,20 @@ from backend.app.database import AsyncSessionLocal
 from backend.app.models import Tower, Equipment, Parameters, PingLog
 from backend.app.services.telegram import send_telegram_alert
 
-async def ping_ip(ip: str) -> bool:
+async def ping_ip(ip: str) -> float | None:
     if not ip:
-        return False
+        return None
     try:
         loop = asyncio.get_running_loop()
         # Run synchronous ping in thread pool
+        # ping3.ping returns seconds (float) or None/False
         response = await loop.run_in_executor(None, lambda: ping(ip, timeout=1))
-        return response is not None and response is not False
+        
+        if response is False or response is None:
+            return None
+        return response # seconds
     except Exception:
-        return False
+        return None
 
 async def scan_range_generator(ip_range: list[str]):
     sem = asyncio.Semaphore(50)
@@ -24,8 +28,8 @@ async def scan_range_generator(ip_range: list[str]):
     
     async def safe_ping(ip):
         async with sem:
-            is_online = await ping_ip(ip)
-            return ip, is_online
+            resp = await ping_ip(ip)
+            return ip, (resp is not None)
 
     # Create tasks
     tasks = [asyncio.create_task(safe_ping(ip)) for ip in ip_range]
@@ -43,29 +47,33 @@ async def scan_range_generator(ip_range: list[str]):
         }
 
 async def check_and_alert(session, device, device_type: str, token: str, chat_id: str):
-    current_status = await ping_ip(device.ip)
+    latency_sec = await ping_ip(device.ip)
+    is_online = latency_sec is not None
+    latency_ms = int(latency_sec * 1000) if is_online else None
     
-    # If status changed (or first run check if None, but defaults to False)
-    # Actually DB default is False. If it was really online but we think it is offline, we send alert "Online".
-    # That's acceptable for first run (system coming up).
+    # Status Change Logic
+    status_changed = device.is_online != is_online
     
-    if device.is_online != current_status:
-        # Status changed
-        device.is_online = current_status
-        device.last_checked = datetime.now(timezone.utc)
-        
-        status_str = "ONLINE" if current_status else "OFFLINE"
-        emoji = "🟢" if current_status else "🔴"
-        
-        # Create Log
-        log = PingLog(
-            device_type=device_type,
-            device_id=device.id,
-            status=current_status,
-            timestamp=datetime.now(timezone.utc)
-        )
-        session.add(log)
-        session.add(device)
+    # Update Device State
+    device.is_online = is_online
+    device.last_checked = datetime.now(timezone.utc)
+    device.last_latency = latency_ms
+    session.add(device)
+    
+    # Always Log for Latency History (or at least if online)
+    # To support the graph, we need continuous data points.
+    log = PingLog(
+        device_type=device_type,
+        device_id=device.id,
+        status=is_online,
+        latency_ms=latency_ms,
+        timestamp=datetime.now(timezone.utc)
+    )
+    session.add(log) # We add every check to build history
+
+    if status_changed:
+        status_str = "ONLINE" if is_online else "OFFLINE"
+        emoji = "🟢" if is_online else "🔴"
         
         # Send Alert
         if token and chat_id:
@@ -77,10 +85,6 @@ async def check_and_alert(session, device, device_type: str, token: str, chat_id
                 f"*Status:* *{status_str}*"
             )
             await send_telegram_alert(token, chat_id, msg)
-    else:
-        # Just update last checked
-        device.last_checked = datetime.now(timezone.utc)
-        session.add(device)
 
 async def monitor_job():
     async with AsyncSessionLocal() as session:
@@ -98,7 +102,9 @@ async def monitor_job():
         towers_res = await session.execute(select(Tower))
         towers = towers_res.scalars().all()
         for tower in towers:
-            await check_and_alert(session, tower, "Torre", token, chat_id)
+            # Skip towers without IP
+            if tower.ip:
+                await check_and_alert(session, tower, "Torre", token, chat_id)
 
         # Check Equipment
         equips_res = await session.execute(select(Equipment))

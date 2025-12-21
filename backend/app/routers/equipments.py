@@ -91,3 +91,38 @@ async def scan_network_stream(ip_range: str):
         print(f"Scan Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+from backend.app.models import PingLog
+from datetime import datetime, timedelta, timezone
+
+@router.get("/{eq_id}/latency-history")
+async def get_latency_history(eq_id: int, period: str = "24h", db: AsyncSession = Depends(get_db)):
+    # Determine lookback
+    now = datetime.now(timezone.utc)
+    if period == "7d":
+        start_time = now - timedelta(days=7)
+    else: # default 24h
+        start_time = now - timedelta(hours=24)
+        
+    query = select(PingLog).where(
+        PingLog.device_type == "Equipamento",
+        PingLog.device_id == eq_id,
+        PingLog.timestamp >= start_time
+    ).order_by(PingLog.timestamp.asc())
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    # Return simplified list
+    # frontend will handle visualization
+    data = []
+    for log in logs:
+        # Only include logs with latency
+        if log.latency_ms is not None:
+             data.append({
+                 "timestamp": log.timestamp.isoformat(),
+                 "latency": log.latency_ms
+             })
+             
+    return data
+

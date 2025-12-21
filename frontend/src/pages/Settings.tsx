@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
-import { getTelegramConfig, updateTelegramConfig, getSystemName, updateSystemName } from '../services/api';
-import { Save, Bell, Smartphone, Settings as SettingsIcon } from 'lucide-react';
+import { getTelegramConfig, updateTelegramConfig, getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig } from '../services/api';
+import { Save, Bell, Smartphone, Settings as SettingsIcon, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function Settings() {
     const { user, refreshSystemName } = useAuth();
     const [config, setConfig] = useState({ bot_token: '', chat_id: '' });
     const [sysName, setSysName] = useState('');
+    const [thresholds, setThresholds] = useState({ good: 50, critical: 200 });
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
     useEffect(() => {
         getTelegramConfig().then(setConfig).catch(console.error);
         getSystemName().then(res => setSysName(res.name)).catch(console.error);
+        getLatencyConfig().then(setThresholds).catch(console.error);
     }, []);
 
     async function handleSave(e: React.FormEvent) {
@@ -21,6 +23,7 @@ export function Settings() {
         try {
             await updateTelegramConfig(config);
             await updateSystemName(sysName);
+            await updateLatencyConfig(thresholds);
             await refreshSystemName();
             setMsg('Configurações salvas com sucesso!');
             setTimeout(() => setMsg(''), 3000);
@@ -85,6 +88,33 @@ export function Settings() {
                             <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
                                 value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })} placeholder="-100..." />
                             <p className="mt-1 text-xs text-slate-500">O ID do grupo ou usuário para onde enviar alertas.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                        <div className="p-2 bg-amber-500/10 rounded-lg">
+                            <Activity className="text-amber-500" size={24} />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold text-white">Latência (Ping)</h3>
+                            <p className="text-sm text-slate-400">Limiares para classificação de latência nos gráficos.</p>
+                        </div>
+                    </div>
+
+                    <div className="p-6 grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Limiar Bom (ms)</label>
+                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-green-400 font-bold focus:border-green-500 focus:outline-none"
+                                value={thresholds.good} onChange={e => setThresholds({ ...thresholds, good: parseInt(e.target.value) })} />
+                            <p className="mt-1 text-xs text-slate-500">Abaixo disso é Verde.</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Limiar Crítico (ms)</label>
+                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-rose-400 font-bold focus:border-rose-500 focus:outline-none"
+                                value={thresholds.critical} onChange={e => setThresholds({ ...thresholds, critical: parseInt(e.target.value) })} />
+                            <p className="mt-1 text-xs text-slate-500">Acima disso é Vermelho.</p>
                         </div>
                     </div>
                 </div>

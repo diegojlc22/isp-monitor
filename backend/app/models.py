@@ -30,6 +30,7 @@ class Equipment(Base):
     # Status
     is_online = Column(Boolean, default=False)
     last_checked = Column(DateTime, default=datetime.now(timezone.utc))
+    last_latency = Column(Integer, nullable=True) # ms
     
     tower = relationship("Tower", back_populates="equipments")
 
@@ -40,7 +41,9 @@ class PingLog(Base):
     device_type = Column(String) # 'tower' or 'equipment'
     device_id = Column(Integer)
     status = Column(Boolean) # True=Online, False=Offline
+    latency_ms = Column(Integer, nullable=True)
     timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+
 
 class Parameters(Base):
     __tablename__ = "parameters"

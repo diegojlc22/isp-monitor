@@ -41,3 +41,8 @@ export const deleteUser = (id: number) => api.delete(`/users/${id}`).then(res =>
 // System Settings
 export const getSystemName = () => api.get('/settings/system-name').then(res => res.data);
 export const updateSystemName = (name: string) => api.post('/settings/system-name', { name }).then(res => res.data);
+
+// Latency
+export const getLatencyConfig = () => api.get('/settings/latency').then(res => res.data);
+export const updateLatencyConfig = (data: any) => api.post('/settings/latency', data).then(res => res.data);
+export const getLatencyHistory = (id: number, period: string) => api.get(`/equipments/${id}/latency-history?period=${period}`).then(res => res.data);
