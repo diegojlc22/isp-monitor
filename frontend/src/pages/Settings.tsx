@@ -51,6 +51,27 @@ export function Settings() {
         }
     }
 
+    async function handleMigrate() {
+        if (!dbConfig.postgres_url || !dbConfig.postgres_url.startsWith('postgresql')) {
+            alert("URL do Postgres inválida.");
+            return;
+        }
+
+        if (!confirm("Isso irá migrar TODOS os dados do banco atual (SQLite) para o PostgreSQL configurado. Dados existentes no destino podem ser sobrescritos. Continuar?")) return;
+
+        try {
+            setLoading(true);
+            const { migrateData } = await import('../services/api');
+            const res = await migrateData(dbConfig.postgres_url);
+            alert(res.message || "Migração concluída!");
+        } catch (e: any) {
+            console.error(e);
+            alert("Erro na migração: " + (e.response?.data?.error || e.message));
+        } finally {
+            setLoading(false);
+        }
+    }
+
     if (user?.role !== 'admin') {
         return (
             <div className="p-8 text-center text-slate-500">
@@ -120,10 +141,18 @@ export function Settings() {
                             </div>
                         )}
 
-                        <div className="flex justify-end pt-2">
-                            <button type="button" onClick={handleSaveDb} className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded transition-colors">
+                            </div>
+                        )}
+                        
+                        <div className="flex justify-end pt-2 gap-3 items-center">
+                             {dbConfig.db_type === 'postgresql' && dbConfig.postgres_url.length > 10 && (
+                                <button type="button" onClick={handleMigrate} className="text-sm bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded transition-colors border border-slate-600">
+                                   Copiar Dados (SQLite → Postgres)
+                                </button>
+                             )}
+                             <button type="button" onClick={handleSaveDb} className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded transition-colors">
                                 Salvar Config Banco
-                            </button>
+                             </button>
                         </div>
                     </div>
                 </div>
@@ -183,34 +212,36 @@ export function Settings() {
                     </div>
                 </div>
 
-                {msg && (
-                    <div className={`p-3 rounded-lg text-sm ${msg.includes('Erro') ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                        {msg}
-                    </div>
-                )}
-
-                <div className="flex justify-end">
-                    <button type="submit" disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                        <Save size={18} />
-                        {loading ? 'Salvando...' : 'Salvar Tudo'}
-                    </button>
-                </div>
-            </form>
-
-            <div className="mt-8 bg-slate-900 rounded-xl border border-slate-800 p-6 opacity-75">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-slate-800 rounded-lg">
-                        <Smartphone className="text-slate-400" size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-white">App Técnico (Em Breve)</h3>
-                        <p className="text-sm text-slate-400">Acesso via API para aplicativo móvel.</p>
-                    </div>
-                </div>
-                <p className="text-sm text-slate-500">
-                    A API já está preparada para integração. A chave de API poderá ser gerada aqui futuramente.
-                </p>
+                {
+        msg && (
+            <div className={`p-3 rounded-lg text-sm ${msg.includes('Erro') ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                {msg}
             </div>
+        )
+    }
+
+    <div className="flex justify-end">
+        <button type="submit" disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+            <Save size={18} />
+            {loading ? 'Salvando...' : 'Salvar Tudo'}
+        </button>
+    </div>
+            </form >
+
+        <div className="mt-8 bg-slate-900 rounded-xl border border-slate-800 p-6 opacity-75">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-slate-800 rounded-lg">
+                    <Smartphone className="text-slate-400" size={24} />
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold text-white">App Técnico (Em Breve)</h3>
+                    <p className="text-sm text-slate-400">Acesso via API para aplicativo móvel.</p>
+                </div>
+            </div>
+            <p className="text-sm text-slate-500">
+                A API já está preparada para integração. A chave de API poderá ser gerada aqui futuramente.
+            </p>
         </div>
+        </div >
     )
 }

@@ -56,3 +56,4 @@ export const deleteLink = (id: number) => api.delete(`/towers/links/${id}`).then
 // Database Config
 export const getDatabaseConfig = () => api.get('/settings/database').then(res => res.data);
 export const updateDatabaseConfig = (data: any) => api.post('/settings/database', data).then(res => res.data);
+export const migrateData = (postgres_url: string) => api.post('/settings/migrate-data', { postgres_url }).then(res => res.data);
