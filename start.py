@@ -142,11 +142,12 @@ def wait_for_backend(max_wait=30):
     
     for i in range(max_wait):
         try:
-            response = requests.get('http://localhost:8000/docs', timeout=2)
-            if response.status_code == 200:
+            # Tenta conectar em 127.0.0.1 (mais confiável que localhost no Windows)
+            response = requests.get('http://127.0.0.1:8000/', timeout=2)
+            if response.status_code in [200, 404]:  # 404 é ok, significa que está respondendo
                 print(f" {Colors.GREEN}✓ Backend pronto!{Colors.END}")
                 return True
-        except:
+        except requests.exceptions.RequestException:
             pass
         
         time.sleep(1)
