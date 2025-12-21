@@ -38,6 +38,22 @@ async def lifespan(app: FastAPI):
             await db.commit()
             print("Admin User Seeded.")
         
+    # Optimize SQLite database (like The Dude)
+    from backend.app.services.sqlite_optimizer import (
+        optimize_sqlite, 
+        create_performance_indexes,
+        maintenance_job,
+        get_database_stats
+    )
+    
+    # Apply optimizations on startup
+    await optimize_sqlite()
+    await create_performance_indexes()
+    
+    # Get initial stats
+    stats = await get_database_stats()
+    print(f"📊 Database: {stats['database_size_mb']} MB")
+    
     # Get ping interval from config
     from backend.app.config import PING_INTERVAL_SECONDS
     
@@ -53,6 +69,9 @@ async def lifespan(app: FastAPI):
     # Run cleanup once on startup
     import asyncio
     asyncio.create_task(cleanup_logs())
+    
+    # Weekly database maintenance (vacuum, analyze)
+    asyncio.create_task(maintenance_job())
 
     scheduler.start()
     
