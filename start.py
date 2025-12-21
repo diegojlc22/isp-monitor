@@ -9,6 +9,7 @@ import sys
 import os
 import time
 import platform
+import requests
 from pathlib import Path
 
 # Cores para terminal
@@ -57,76 +58,103 @@ def start_backend():
     """Inicia o servidor backend"""
     print(f"\n{Colors.GREEN}🚀 Iniciando Backend (FastAPI)...{Colors.END}")
     
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).parent.absolute()
     os.environ['PYTHONPATH'] = str(project_root)
     
     system = platform.system()
+    python_exe = sys.executable  # Usa o mesmo Python que está executando este script
     
-    if system == "Windows":
-        # Windows - abre em nova janela do PowerShell
-        cmd = [
-            'powershell', '-NoExit', '-Command',
-            f"cd '{project_root}'; python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"
-        ]
-        subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-    else:
-        # Linux/Mac - abre em novo terminal
-        if system == "Linux":
-            terminals = ['gnome-terminal', 'konsole', 'xterm']
-            for term in terminals:
-                try:
-                    subprocess.Popen([
-                        term, '--', 'bash', '-c',
-                        f"cd '{project_root}' && python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000; exec bash"
-                    ])
-                    break
-                except FileNotFoundError:
-                    continue
-        elif system == "Darwin":  # macOS
-            subprocess.Popen([
-                'osascript', '-e',
-                f'tell app "Terminal" to do script "cd {project_root} && python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"'
-            ])
-    
-    print(f"{Colors.BLUE}📡 Backend: http://localhost:8000{Colors.END}")
-    print(f"{Colors.BLUE}📚 API Docs: http://localhost:8000/docs{Colors.END}")
+    try:
+        if system == "Windows":
+            # Windows - abre em nova janela do CMD (mais confiável que PowerShell)
+            cmd = f'start "ISP Monitor - Backend" cmd /k "cd /d {project_root} && {python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"'
+            subprocess.run(cmd, shell=True, check=True)
+            print(f"{Colors.GREEN}  ✓ Janela do Backend aberta{Colors.END}")
+        else:
+            # Linux/Mac - abre em novo terminal
+            if system == "Linux":
+                terminals = ['gnome-terminal', 'konsole', 'xterm']
+                for term in terminals:
+                    try:
+                        subprocess.Popen([
+                            term, '--', 'bash', '-c',
+                            f"cd '{project_root}' && {python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000; exec bash"
+                        ])
+                        break
+                    except FileNotFoundError:
+                        continue
+            elif system == "Darwin":  # macOS
+                subprocess.Popen([
+                    'osascript', '-e',
+                    f'tell app "Terminal" to do script "cd {project_root} && {python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"'
+                ])
+        
+        print(f"{Colors.BLUE}📡 Backend: http://localhost:8000{Colors.END}")
+        print(f"{Colors.BLUE}📚 API Docs: http://localhost:8000/docs{Colors.END}")
+        return True
+    except Exception as e:
+        print(f"{Colors.RED}❌ Erro ao abrir Backend: {e}{Colors.END}")
+        return False
 
 def start_frontend():
     """Inicia o servidor frontend"""
     print(f"\n{Colors.GREEN}🚀 Iniciando Frontend (Vite)...{Colors.END}")
     
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).parent.absolute()
     frontend_path = project_root / 'frontend'
     
     system = platform.system()
     
-    if system == "Windows":
-        # Windows - abre em nova janela do PowerShell
-        cmd = [
-            'powershell', '-NoExit', '-Command',
-            f"cd '{frontend_path}'; npm run dev -- --host"
-        ]
-        subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
-    else:
-        # Linux/Mac - abre em novo terminal
-        if system == "Linux":
-            terminals = ['gnome-terminal', 'konsole', 'xterm']
-            for term in terminals:
-                try:
-                    subprocess.Popen([
-                        term, '--', 'bash', '-c',
-                        f"cd '{frontend_path}' && npm run dev -- --host; exec bash"
-                    ])
-                    break
-                except FileNotFoundError:
-                    continue
-        elif system == "Darwin":  # macOS
-            subprocess.Popen([
-                'osascript', '-e',
-                f'tell app "Terminal" to do script "cd {frontend_path} && npm run dev -- --host"'
-            ])
+    try:
+        if system == "Windows":
+            # Windows - abre em nova janela do CMD (mais confiável que PowerShell)
+            cmd = f'start "ISP Monitor - Frontend" cmd /k "cd /d {frontend_path} && npm run dev -- --host"'
+            subprocess.run(cmd, shell=True, check=True)
+            print(f"{Colors.GREEN}  ✓ Janela do Frontend aberta{Colors.END}")
+        else:
+            # Linux/Mac - abre em novo terminal
+            if system == "Linux":
+                terminals = ['gnome-terminal', 'konsole', 'xterm']
+                for term in terminals:
+                    try:
+                        subprocess.Popen([
+                            term, '--', 'bash', '-c',
+                            f"cd '{frontend_path}' && npm run dev -- --host; exec bash"
+                        ])
+                        break
+                    except FileNotFoundError:
+                        continue
+            elif system == "Darwin":  # macOS
+                subprocess.Popen([
+                    'osascript', '-e',
+                    f'tell app "Terminal" to do script "cd {frontend_path} && npm run dev -- --host"'
+                ])
+        
+        print(f"{Colors.BLUE}🌐 Frontend: http://localhost:5173{Colors.END}")
+        return True
+    except Exception as e:
+        print(f"{Colors.RED}❌ Erro ao abrir Frontend: {e}{Colors.END}")
+        return False
+
+def wait_for_backend(max_wait=30):
+    """Aguarda o backend estar pronto"""
+    print(f"\n{Colors.YELLOW}⏳ Aguardando backend iniciar...{Colors.END}", end="", flush=True)
     
-    print(f"{Colors.BLUE}🌐 Frontend: http://localhost:5173{Colors.END}")
+    for i in range(max_wait):
+        try:
+            response = requests.get('http://localhost:8000/docs', timeout=2)
+            if response.status_code == 200:
+                print(f" {Colors.GREEN}✓ Backend pronto!{Colors.END}")
+                return True
+        except:
+            pass
+        
+        time.sleep(1)
+        if i % 3 == 0:
+            print(".", end="", flush=True)
+    
+    print(f" {Colors.RED}✗ Timeout{Colors.END}")
+    return False
 
 def main():
     """Função principal"""
@@ -140,17 +168,40 @@ def main():
     
     # Inicia os serviços
     try:
-        start_backend()
-        time.sleep(2)  # Aguarda backend iniciar
-        start_frontend()
+        backend_ok = start_backend()
+        
+        if backend_ok:
+            # Aguarda backend estar pronto
+            backend_ready = wait_for_backend(30)
+            
+            if backend_ready:
+                frontend_ok = start_frontend()
+            else:
+                print(f"\n{Colors.RED}❌ Backend não respondeu a tempo. Verifique a janela do Backend.{Colors.END}")
+                frontend_ok = False
+        else:
+            frontend_ok = False
         
         print(f"\n{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
-        print(f"{Colors.GREEN}✅ Serviços iniciados com sucesso!{Colors.END}")
-        print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
         
-        print(f"\n{Colors.YELLOW}💡 Dica: Duas janelas foram abertas (Backend e Frontend){Colors.END}")
-        print(f"{Colors.YELLOW}💡 Acesse: http://localhost:5173{Colors.END}")
-        print(f"\n{Colors.YELLOW}Para parar os serviços, feche as janelas ou pressione CTRL+C{Colors.END}\n")
+        if backend_ok and frontend_ok:
+            print(f"{Colors.GREEN}✅ Ambos os serviços iniciados com sucesso!{Colors.END}")
+            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
+            print(f"\n{Colors.YELLOW}💡 Dica: Duas janelas CMD foram abertas:{Colors.END}")
+            print(f"{Colors.YELLOW}   • ISP Monitor - Backend (porta 8000){Colors.END}")
+            print(f"{Colors.YELLOW}   • ISP Monitor - Frontend (porta 5173){Colors.END}")
+            print(f"\n{Colors.YELLOW}💡 Acesse a aplicação: {Colors.BOLD}http://localhost:5173{Colors.END}")
+        elif backend_ok:
+            print(f"{Colors.YELLOW}⚠️  Backend iniciado, mas Frontend falhou{Colors.END}")
+            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
+        elif frontend_ok:
+            print(f"{Colors.YELLOW}⚠️  Frontend iniciado, mas Backend falhou{Colors.END}")
+            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
+        else:
+            print(f"{Colors.RED}❌ Ambos os serviços falharam ao iniciar{Colors.END}")
+            print(f"{Colors.CYAN}{Colors.BOLD}{'='*60}{Colors.END}")
+            
+        print(f"\n{Colors.YELLOW}Para parar os serviços, feche as janelas CMD ou pressione CTRL+C{Colors.END}\n")
         
     except Exception as e:
         print(f"\n{Colors.RED}❌ Erro ao iniciar serviços: {e}{Colors.END}")

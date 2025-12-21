@@ -58,7 +58,7 @@ npm run dev -- --host
 
 ## Requisitos
 
-- **Python 3.9+**
+- **Python 3.9+** (com `requests` instalado: `pip install requests`)
 - **Node.js 16+**
 - Dependências instaladas:
   - Backend: `pip install -r backend/requirements.txt`
