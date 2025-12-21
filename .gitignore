@@ -5,6 +5,8 @@ __pycache__/
 venv/
 .env
 monitor.db
+monitor.db-shm
+monitor.db-wal
 
 # Node.js
 node_modules/
