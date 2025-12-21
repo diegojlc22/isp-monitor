@@ -16,22 +16,26 @@ L.Icon.Default.mergeOptions({
 });
 
 // Custom Icons for Status
-const greenIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
-
-const redIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+const createTowerIcon = (name: string, isOnline: boolean) => new L.DivIcon({
+    className: 'custom-div-icon',
+    html: `
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <div style="background-color: ${isOnline ? '#22c55e' : '#f43f5e'}; padding: 8px; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); border: 2px solid white;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2c0 20 0 20 0 20"></path>
+                    <path d="M8 8.5c0 0 2.5-3 8-1.5"></path>
+                    <path d="M5 14c0 0 4-4 14-2.5"></path>
+                    <path d="M2.5 19.5c0 0 6.5-5.5 19-3.5"></path>
+                </svg>
+            </div>
+            <span style="margin-top: 4px; background-color: rgba(15, 23, 42, 0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; white-space: nowrap;">
+                ${name}
+            </span>
+        </div>
+    `,
+    iconSize: [40, 60],
+    iconAnchor: [20, 60],
+    popupAnchor: [0, -60]
 });
 
 export function NetMap() {
@@ -47,7 +51,7 @@ export function NetMap() {
         <div className="h-full flex flex-col">
             <h2 className="text-2xl font-bold mb-4 text-white">Mapa em Tempo Real</h2>
             <div className="flex-1 rounded-xl overflow-hidden border border-slate-800 relative z-0">
-                <MapContainer center={[-23.550520, -46.633308]} zoom={10} style={{ height: '100%', width: '100%' }}>
+                <MapContainer center={[-19.51, -54.04]} zoom={6} style={{ height: '100%', width: '100%' }}>
                     <TileLayer
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -56,11 +60,11 @@ export function NetMap() {
                         <Marker
                             key={tower.id}
                             position={[tower.latitude || 0, tower.longitude || 0]}
-                            icon={tower.is_online ? greenIcon : redIcon}
+                            icon={createTowerIcon(tower.name, tower.is_online)}
                         >
                             <Popup>
                                 <strong>{tower.name}</strong><br />
-                                IP: {tower.ip}<br />
+                                IP: {tower.ip || 'Sem IP'}<br />
                                 Status: {tower.is_online ? "Online" : "Offline"}
                             </Popup>
                         </Marker>
