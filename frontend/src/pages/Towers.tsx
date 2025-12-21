@@ -24,7 +24,12 @@ export function Towers() {
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         try {
-            await createTower(formData);
+            // sanitize data: if ip is empty string, send undefined/null to avoid unique constraint if backend treats "" as distinct
+            const payload = {
+                ...formData,
+                ip: formData.ip.trim() === '' ? undefined : formData.ip
+            };
+            await createTower(payload);
             setShowModal(false);
             setFormData({ name: '', ip: '', latitude: 0, longitude: 0, observations: '' });
             load();
