@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 ISP Monitor - Startup Script
 Inicia o backend (FastAPI) e frontend (Vite) em janelas separadas
@@ -52,6 +52,89 @@ def check_requirements():
         print(f"{Colors.RED}❌ Node.js não encontrado. Instale em https://nodejs.org{Colors.END}")
         return False
     
+    return True
+
+def check_dependencies():
+    """Verifica se as dependências do Python estão instaladas"""
+    print(f"{Colors.YELLOW}🔍 Verificando dependências do Python...{Colors.END}")
+    
+    required_packages = [
+        'fastapi', 'uvicorn', 'sqlalchemy', 'aiosqlite', 
+        'pydantic', 'apscheduler'
+    ]
+    
+    missing = []
+    import importlib.util
+    
+    for package in required_packages:
+        if importlib.util.find_spec(package) is None:
+            missing.append(package)
+            
+    if missing:
+        print(f"{Colors.YELLOW}⚠️  Dependências faltando: {', '.join(missing)}{Colors.END}")
+        print(f"{Colors.BLUE}🔄 Instalando dependências automaticamente...{Colors.END}")
+        
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "backend/requirements.txt"])
+            print(f"{Colors.GREEN}✅ Dependências instaladas com sucesso!{Colors.END}")
+            return True
+        except subprocess.CalledProcessError:
+            print(f"{Colors.RED}❌ Falha ao instalar dependências.{Colors.END}")
+            print(f"{Colors.YELLOW}💡 Tente rodar manualmente: pip install -r backend/requirements.txt{Colors.END}")
+            return False
+            
+    print(f"{Colors.GREEN}✅ Dependências instaladas{Colors.END}")
+    return True
+
+def check_frontend_dependencies():
+    """Verifica se as dependências do Frontend estão instaladas"""
+    print(f"{Colors.YELLOW}🔍 Verificando dependências do Frontend...{Colors.END}")
+    
+    project_root = Path(__file__).parent.absolute()
+    node_modules = project_root / 'frontend' / 'node_modules'
+    
+    if not node_modules.exists():
+        print(f"{Colors.YELLOW}⚠️  Dependências do Frontend faltando (node_modules ausente){Colors.END}")
+        print(f"{Colors.BLUE}🔄 Instalando dependências do Frontend automaticamente... (isso pode demorar){Colors.END}")
+        
+        frontend_path = project_root / 'frontend'
+        
+        try:
+            # npm install no Windows precisa de shell=True
+            is_windows = platform.system() == "Windows"
+            subprocess.check_call(["npm", "install"], cwd=frontend_path, shell=is_windows)
+            
+            print(f"{Colors.GREEN}✅ Dependências do Frontend instaladas com sucesso!{Colors.END}")
+            return True
+        except subprocess.CalledProcessError:
+            print(f"{Colors.RED}❌ Falha ao instalar dependências do Frontend.{Colors.END}")
+            print(f"{Colors.YELLOW}💡 Tente rodar manualmente: cd frontend && npm install{Colors.END}")
+            return False
+            
+    print(f"{Colors.GREEN}✅ Dependências do Frontend instaladas{Colors.END}")
+    return True
+
+def check_configuration():
+    """Verifica e cria arquivos de configuração se necessário"""
+    print(f"{Colors.YELLOW}🔍 Verificando configuração...{Colors.END}")
+    
+    project_root = Path(__file__).parent.absolute()
+    env_file = project_root / '.env'
+    env_example = project_root / '.env.example'
+    
+    if not env_file.exists():
+        if env_example.exists():
+            print(f"{Colors.BLUE}📝 Criando arquivo .env a partir do exemplo...{Colors.END}")
+            import shutil
+            try:
+                shutil.copy(env_example, env_file)
+                print(f"{Colors.GREEN}✅ Arquivo .env criado{Colors.END}")
+            except Exception as e:
+                print(f"{Colors.RED}❌ Erro ao criar .env: {e}{Colors.END}")
+                return False
+        else:
+            print(f"{Colors.YELLOW}⚠️  Arquivo .env.example não encontrado. Pulei a criação do .env.{Colors.END}")
+            
     return True
 
 def start_backend():
@@ -164,6 +247,21 @@ def main():
     # Verifica requisitos
     if not check_requirements():
         print(f"\n{Colors.RED}❌ Requisitos não atendidos. Corrija os erros acima.{Colors.END}")
+        input("\nPressione ENTER para sair...")
+        sys.exit(1)
+
+    if not check_dependencies():
+        print(f"\n{Colors.RED}❌ Dependências não instaladas. Execute o comando sugerido acima.{Colors.END}")
+        input("\nPressione ENTER para sair...")
+        sys.exit(1)
+
+    if not check_frontend_dependencies():
+        print(f"\n{Colors.RED}❌ Dependências do Frontend não instaladas. Execute o comando sugerido acima.{Colors.END}")
+        input("\nPressione ENTER para sair...")
+        sys.exit(1)
+
+    if not check_configuration():
+        print(f"\n{Colors.RED}❌ Erro na configuração.{Colors.END}")
         input("\nPressione ENTER para sair...")
         sys.exit(1)
     

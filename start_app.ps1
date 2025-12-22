@@ -1,4 +1,4 @@
-$env:PYTHONPATH = "C:\Users\DiegoLima\.gemini\antigravity\scratch\isp_monitor"
+$env:PYTHONPATH = $PSScriptRoot
 
 # Start Backend
 Write-Host "Starting Backend..." -ForegroundColor Green
