@@ -37,6 +37,28 @@ async def lifespan(app: FastAPI):
             db.add(admin_user)
             await db.commit()
             print("✅ Admin User Seeded.")
+
+        # Seed Telegram Config (if user requested hardcoded)
+        from backend.app.models import Parameters
+        telegram_token = os.getenv("TELEGRAM_TOKEN", "8158269697:AAGJGljtEFYy3pvouZrhs1QobIaXYzvrImc")
+        telegram_chat = os.getenv("TELEGRAM_CHAT_ID", "-1003601324129")
+        
+        # Upsert Token
+        token_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_token"))).scalar_one_or_none()
+        if not token_obj:
+            db.add(Parameters(key="telegram_token", value=telegram_token))
+        elif token_obj.value != telegram_token: # Force update if hardcoded implies overwrite preference
+             # Comment this elif out if you prefer DB value to persist over code default unless missing
+             # For now, let's respect what's in DB unless missing, or update if you want to enforce these values
+             pass 
+        
+        # Upsert Chat ID
+        chat_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))).scalar_one_or_none()
+        if not chat_obj:
+            db.add(Parameters(key="telegram_chat_id", value=telegram_chat))
+            
+        await db.commit()
+        print("✅ Telegram Config Seeded (if missing).")
         
     # Optimize SQLite database (like The Dude)
     from backend.app.services.sqlite_optimizer import (
