@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routers import towers, equipments, settings, auth, users
+from backend.app.routers import towers, equipments, settings, auth, users, alerts
+
 from backend.app.database import engine, Base, AsyncSessionLocal
 from backend.app import models, auth_utils
 from sqlalchemy import select
@@ -102,6 +103,7 @@ app.include_router(equipments.router)
 app.include_router(settings.router)
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(alerts.router)
 
 @app.get("/")
 def read_root():

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User, Bell } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,9 @@ export function Sidebar() {
                 </NavLink>
                 <NavLink to="/equipments" className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-colors", isActive ? "bg-blue-600 text-white" : "hover:bg-slate-800")}>
                     <Server className="w-5 h-5" /> <span className="font-medium">Equipamentos</span>
+                </NavLink>
+                <NavLink to="/alerts" className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-colors", isActive ? "bg-blue-600 text-white" : "hover:bg-slate-800")}>
+                    <Bell className="w-5 h-5" /> <span className="font-medium">Alertas</span>
                 </NavLink>
 
                 {user?.role === 'admin' && (

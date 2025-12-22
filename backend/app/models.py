@@ -76,3 +76,12 @@ class NetworkLink(Base):
     target_tower_id = Column(Integer, ForeignKey("towers.id"))
     type = Column(String, default="wireless") # wireless, fiber
 
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_type = Column(String) # 'tower' or 'equipment'
+    device_name = Column(String)
+    device_ip = Column(String)
+    message = Column(String)
+    timestamp = Column(DateTime, default=datetime.now(timezone.utc))

@@ -6,7 +6,9 @@ import asyncio
 from datetime import datetime, timezone
 from sqlalchemy import select
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import Tower, Equipment, Parameters, PingLog
+from backend.app.models import Tower, Equipment, Parameters, PingLog, Alert
+
+
 from backend.app.services.telegram import send_telegram_alert
 from backend.app.config import PING_TIMEOUT_SECONDS, PING_CONCURRENT_LIMIT
 
@@ -154,12 +156,36 @@ async def monitor_job_fast():
                         session.add(log_entry)
                         
                         # Alert on status change
+                        # Alert on status change
                         if not is_online and was_online:
-                            name = "Torre" if device_type == "tower" else "Equipamento"
-                            await send_telegram_alert(token_val, chat_val, f"🔴 {name} OFFLINE: {device.name} ({device.ip})")
+                            # DOWN
+                            msg = f"🔴 O servico Ping no dispositivo {device.name} passou para o status down - IP={device.ip}"
+                            await send_telegram_alert(token_val, chat_val, msg)
+                            
+                            # Save Alert
+                            alert = Alert(
+                                device_type=device_type,
+                                device_name=device.name,
+                                device_ip=device.ip,
+                                message=msg,
+                                timestamp=datetime.now(timezone.utc)
+                            )
+                            session.add(alert)
+                            
                         elif is_online and not was_online:
-                            name = "Torre" if device_type == "tower" else "Equipamento"
-                            await send_telegram_alert(token_val, chat_val, f"🟢 {name} ONLINE: {device.name} ({device.ip})")
+                            # UP
+                            msg = f"🟢 O servico Ping no dispositivo {device.name} passou para o status up - IP={device.ip}"
+                            await send_telegram_alert(token_val, chat_val, msg)
+                            
+                            # Save Alert
+                            alert = Alert(
+                                device_type=device_type,
+                                device_name=device.name,
+                                device_ip=device.ip,
+                                message=msg,
+                                timestamp=datetime.now(timezone.utc)
+                            )
+                            session.add(alert)
                 
                 await session.commit()
                 print(f"✅ Pinged {len(all_devices)} devices in batch mode")

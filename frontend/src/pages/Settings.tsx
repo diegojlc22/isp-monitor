@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getTelegramConfig, updateTelegramConfig, getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getDatabaseConfig, updateDatabaseConfig } from '../services/api';
-import { Save, Bell, Smartphone, Settings as SettingsIcon, Activity, Database } from 'lucide-react';
+import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getDatabaseConfig, updateDatabaseConfig } from '../services/api';
+import { Save, Smartphone, Settings as SettingsIcon, Activity, Database } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function Settings() {
     const { user, refreshSystemName } = useAuth();
-    const [config, setConfig] = useState({ bot_token: '', chat_id: '' });
+    // const [config, setConfig] = useState({ bot_token: '', chat_id: '' }); // REMOVED
     const [sysName, setSysName] = useState('');
     const [thresholds, setThresholds] = useState({ good: 50, critical: 200 });
     const [dbConfig, setDbConfig] = useState({ db_type: 'sqlite', postgres_url: '' });
@@ -13,7 +13,7 @@ export function Settings() {
     const [msg, setMsg] = useState('');
 
     useEffect(() => {
-        getTelegramConfig().then(setConfig).catch(console.error);
+        // getTelegramConfig().then(setConfig).catch(console.error); // REMOVED
         getSystemName().then(res => setSysName(res.name)).catch(console.error);
         getLatencyConfig().then(setThresholds).catch(console.error);
         getDatabaseConfig().then(setDbConfig).catch(console.error);
@@ -23,7 +23,7 @@ export function Settings() {
         e.preventDefault();
         setLoading(true);
         try {
-            await updateTelegramConfig(config);
+            // await updateTelegramConfig(config); // REMOVED
             await updateSystemName(sysName);
             await updateLatencyConfig(thresholds);
             // Don't just auto-save DB config, it's sensitive.
@@ -155,33 +155,7 @@ export function Settings() {
                         </div>
                     </div>
 
-                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-                            <div className="p-2 bg-blue-500/10 rounded-lg">
-                                <Bell className="text-blue-500" size={24} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-semibold text-white">Integração Telegram</h3>
-                                <p className="text-sm text-slate-400">Configure o bot para receber alertas de status.</p>
-                            </div>
-                        </div>
 
-                        <div className="p-6 space-y-6">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Bot Token</label>
-                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                                    value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })} placeholder="123456789:ABCDefGHI..." />
-                                <p className="mt-1 text-xs text-slate-500">O token fornecido pelo @BotFather.</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Chat ID</label>
-                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                                    value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })} placeholder="-100..." />
-                                <p className="mt-1 text-xs text-slate-500">O ID do grupo ou usuário para onde enviar alertas.</p>
-                            </div>
-                        </div>
-                    </div>
 
                     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
                         <div className="p-6 border-b border-slate-800 flex items-center gap-3">

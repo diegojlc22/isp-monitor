@@ -12,6 +12,7 @@ import { NetMap } from './pages/NetMap'
 import { Login } from './pages/Login'
 import { ManageUsers } from './pages/ManageUsers'
 import { Profile } from './pages/Profile'
+import { Alerts } from './pages/Alerts'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
 
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="map" element={<NetMap />} />
               <Route path="towers" element={<Towers />} />
               <Route path="equipments" element={<Equipments />} />
+              <Route path="alerts" element={<Alerts />} />
               <Route path="profile" element={<Profile />} />
 
               {/* Admin Routes */}

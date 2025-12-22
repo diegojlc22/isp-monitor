@@ -96,7 +96,7 @@ class ScanRequest(BaseModel):
 import ipaddress
 from fastapi.responses import StreamingResponse
 import json
-from backend.app.services.pinger import scan_range_generator
+from backend.app.services.pinger_fast import scan_range_generator
 
 @router.get("/scan/stream/")
 async def scan_network_stream(ip_range: str):
