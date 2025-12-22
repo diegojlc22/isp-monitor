@@ -12,11 +12,12 @@ from backend.app.config import PING_TIMEOUT_SECONDS, PING_CONCURRENT_LIMIT
 
 try:
     from icmplib import async_ping, async_multiping
-    ICMPLIB_AVAILABLE = True
 except ImportError:
-    ICMPLIB_AVAILABLE = False
-    # Fallback to ping3
-    from ping3 import ping
+    # This should not happen given requirements.txt
+    print("CRITICAL: icmplib not found!")
+    raise
+
+from backend.app.config import PING_TIMEOUT_SECONDS, PING_CONCURRENT_LIMIT
 
 async def ping_ip_fast(ip: str) -> float | None:
     """
@@ -25,17 +26,6 @@ async def ping_ip_fast(ip: str) -> float | None:
     """
     if not ip:
         return None
-    
-    if not ICMPLIB_AVAILABLE:
-        # Fallback to ping3
-        try:
-            loop = asyncio.get_running_loop()
-            response = await loop.run_in_executor(None, lambda: ping(ip, timeout=PING_TIMEOUT_SECONDS))
-            if response is False or response is None:
-                return None
-            return response
-        except Exception:
-            return None
     
     try:
         # icmplib async_ping - VERY fast, works on Windows!
@@ -55,13 +45,6 @@ async def ping_multiple_fast(ips: list[str]) -> dict[str, float | None]:
     """
     if not ips:
         return {}
-    
-    if not ICMPLIB_AVAILABLE:
-        # Fallback to sequential pings
-        results = {}
-        for ip in ips:
-            results[ip] = await ping_ip_fast(ip)
-        return results
     
     try:
         # icmplib async_multiping - pings ALL IPs at once!
@@ -84,11 +67,7 @@ async def ping_multiple_fast(ips: list[str]) -> dict[str, float | None]:
         return results
     except Exception as e:
         print(f"Multiping error: {e}")
-        # Fallback to sequential
-        results = {}
-        for ip in ips:
-            results[ip] = await ping_ip_fast(ip)
-        return results
+        return {}
 
 async def scan_range_generator(ip_range: list[str]):
     """
@@ -110,45 +89,7 @@ async def scan_range_generator(ip_range: list[str]):
             "completed": completed
         }
 
-async def check_and_alert(session, device, device_type: str, token: str, chat_id: str):
-    latency_sec = await ping_ip_fast(device.ip)
-    is_online = latency_sec is not None
-    latency_ms = int(latency_sec * 1000) if latency_sec else None
-    
-    # Get latency thresholds
-    good_res = await session.execute(select(Parameters).where(Parameters.key == "latency_good"))
-    crit_res = await session.execute(select(Parameters).where(Parameters.key == "latency_critical"))
-    good_threshold = int(good_res.scalar_one_or_none().value) if good_res.scalar_one_or_none() else 50
-    crit_threshold = int(crit_res.scalar_one_or_none().value) if crit_res.scalar_one_or_none() else 200
-    
-    # Update device status
-    was_online = device.is_online
-    device.is_online = is_online
-    device.last_checked = datetime.now(timezone.utc)
-    if latency_ms is not None:
-        device.last_latency = latency_ms
-    
-    # Log ping result
-    log_entry = PingLog(
-        device_type=device_type,
-        device_id=device.id,
-        status=is_online,
-        latency_ms=latency_ms,
-        timestamp=datetime.now(timezone.utc)
-    )
-    session.add(log_entry)
-    
-    # Alert logic (only on status change)
-    if device_type == "tower":
-        if not is_online and was_online:
-            await send_telegram_alert(token, chat_id, f"🔴 Torre OFFLINE: {device.name} ({device.ip})")
-        elif is_online and not was_online:
-            await send_telegram_alert(token, chat_id, f"🟢 Torre ONLINE: {device.name} ({device.ip})")
-    else:  # equipment
-        if not is_online and was_online:
-            await send_telegram_alert(token, chat_id, f"🔴 Equipamento OFFLINE: {device.name} ({device.ip})")
-        elif is_online and not was_online:
-            await send_telegram_alert(token, chat_id, f"🟢 Equipamento ONLINE: {device.name} ({device.ip})")
+
 
 async def monitor_job_fast():
     """
@@ -186,7 +127,7 @@ async def monitor_job_fast():
                         all_devices.append(("equipment", eq))
                 
                 # Ping ALL devices at once! (The Dude's secret)
-                if all_devices and ICMPLIB_AVAILABLE:
+                if all_devices:
                     ips = [device[1].ip for device in all_devices]
                     ping_results = await ping_multiple_fast(ips)
                     
@@ -219,10 +160,6 @@ async def monitor_job_fast():
                         elif is_online and not was_online:
                             name = "Torre" if device_type == "tower" else "Equipamento"
                             await send_telegram_alert(token_val, chat_val, f"🟢 {name} ONLINE: {device.name} ({device.ip})")
-                else:
-                    # Fallback to sequential (if icmplib not available)
-                    for device_type, device in all_devices:
-                        await check_and_alert(session, device, device_type, token_val, chat_val)
                 
                 await session.commit()
                 print(f"✅ Pinged {len(all_devices)} devices in batch mode")

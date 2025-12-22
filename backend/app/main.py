@@ -7,13 +7,8 @@ from sqlalchemy import select
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
 
-# Try to import fast pinger (icmplib), fallback to standard pinger
-try:
-    from backend.app.services.pinger_fast import monitor_job_fast as monitor_job
-    print("✅ Using ULTRA-FAST pinger (icmplib) - like The Dude!")
-except ImportError:
-    from backend.app.services.pinger import monitor_job
-    print("⚠️ Using standard pinger (ping3) - slower but works")
+from backend.app.services.pinger_fast import monitor_job_fast as monitor_job
+print("✅ Using ULTRA-FAST pinger (icmplib)")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -21,9 +21,4 @@ async def cleanup_logs(retention_days=None):
     except Exception as e:
         print(f"Maintenance Error: {e}")
 
-async def maintenance_loop():
-    """Runs maintenance tasks perpetually."""
-    while True:
-        await cleanup_logs()
-        # Run every 24 hours (86400 seconds)
-        await asyncio.sleep(24 * 60 * 60)
+
