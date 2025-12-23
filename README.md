@@ -40,45 +40,27 @@ O **ISP Monitor** é um sistema completo de monitoramento de rede desenvolvido e
 
 ## ✨ Características
 
-### 🔍 Monitoramento
+### 🔍 Monitoramento Inteligente (Smart Logging)
 
-- **Ping ultra-rápido** usando `icmplib` (mesma técnica do The Dude)
-- **Monitoramento simultâneo** de 800+ dispositivos
-- **Histórico de latência** com gráficos interativos
-- **Detecção automática** de status (online/offline)
-- **Intervalo configurável** (padrão: 30 segundos)
+- **Ping ultra-rápido** usando `icmplib` (mesma técnica do The Dude).
+- **Monitoramento simultâneo** de 800+ dispositivos em segundos.
+- **Log Inteligente**: O sistema só grava no banco quando realmente importa:
+  - Mudança de Status (Online <-> Offline).
+  - Variação brusca de latência (> 10ms).
+  - *Keepalive* a cada 10 minutos.
+- **Zero inchaço**: Evita que o banco de dados cresça descontroladamente.
 
-### 🚀 Funcionalidades
-- **Monitoramento Ultra-Rápido** (estilo The Dude): monitora centenas de dispositivos via ICMP em segundos.
-- **Alertas Inteligentes**: Dependência Pai/Filho (se um roteador cair, não alerta os dispositivos "filhos").
-- **Notificações Telegram**: Mensagens personalizáveis para eventos UP/DOWN.
-- **Modo Silencioso**: Roda em background na bandeja do sistema (System Tray), sem janelas pretas.
-- **Backend Moderno**: FastAPI + SQLite (WAL Mode) + Uvicorn.
-- **Frontend Interativo**: React + Vite + TypeScript.
-- **SNMP Ready**: Coleta de dados SNMP para dispositivos compatíveis.
+### 📱 Interface Responsiva
 
-### 🗺️ Visualização
+- **Menu Lateral Adaptável**: Funciona em PC, Tablet e Celular.
+- **Gráficos em Tempo Real**: Atualização a cada 5 segundos.
+- **Modo Noturno**: Tema escuro profissional por padrão.
 
-- **Mapa interativo** com Leaflet
-- **Marcadores customizados** por status (verde/vermelho)
-- **Topologia de rede** com links entre torres
-- **Busca rápida** de dispositivos
-- **Múltiplas camadas** de mapa (satélite, ruas, terreno)
+### 🔔 Alertas e Backups
 
-### 📊 Dashboard
-
-- **Estatísticas em tempo real**
-- **Gráficos de disponibilidade**
-- **Alertas visuais**
-- **Histórico de latência**
-- **Dispositivos offline** destacados
-
-### 🔔 Alertas
-
-- **Telegram integrado**
-- **Notificações instantâneas** de mudança de status
-- **Alertas configuráveis**
-- **Histórico de eventos**
+- **Telegram (Alertas)**: Notificações instantâneas de queda (DOWN) e retorno (UP) com templates personalizados.
+- **Telegram (Backups)**: Envio automático do banco de dados (`monitor.db.zip`) diariamente à meia-noite.
+- **Testes Integrados**: Botões para testar o envio de mensagens e backups diretamente do painel.
 
 ### 🔧 Gerenciamento
 
@@ -140,25 +122,22 @@ cd frontend
 npm install
 ```
 
-#### 4. Inicie o sistema
+#### 4. Modo de Produção (Recomendado)
+O sistema possui scripts automáticos para rodar em produção de forma leve e otimizada (sem janelas de terminal extras).
 
-**Terminal 1 - Backend:**
-```bash
-# Na raiz do projeto
-.\venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
+1. Execute **`deploy.bat`** (apenas na primeira vez ou após atualizações).
+   - Isso compila o Frontend e otimiza os arquivos.
+   
+2. Execute **`iniciar_producao.bat`**.
+   - O sistema rodará unificado em **http://localhost:8080**.
+   - Frontend e Backend na mesma porta.
+   - Baixo consumo de memória e CPU.
 
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-npm run dev -- --host
-```
-
-#### 5. Acesse o sistema
-
-- **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:8000
-- **Documentação API:** http://localhost:8000/docs
+#### 5. Modo de Desenvolvimento (Para Programadores)
+Se você quer alterar o código:
+1. Execute **`iniciar_sistema.bat`**.
+2. Frontend em http://localhost:5173 (Hot Reload).
+3. Backend em http://localhost:8080 (Hot Reload).
 
 ### 🔐 Login Padrão
 
@@ -197,12 +176,18 @@ Senha: 110812
 
 ### Configurar Alertas Telegram
 
-1. Acesse **Configurações**
-2. Seção **Telegram**
-3. Preencha:
+1. Acesse **Alertas**
+2. Preencha:
    - Token do Bot
    - Chat ID
-4. Salvar
+3. Use o botão **Testar Alerta** para validar.
+
+### Configurar Backups Automáticos
+
+1. Acesse **Backups** (Menu Admin)
+2. Defina o Chat ID exclusivo para backups.
+3. O sistema enviará o banco de dados diariamente à meia-noite.
+4. Use o botão **Testar Envio** para forçar um backup imediato.
 
 ### Ver Mapa
 
@@ -226,11 +211,11 @@ Senha: 110812
 
 ### Otimizações Implementadas
 
+- ✅ **SQL Smart Logging** - Redução de 95% na escrita de disco.
 - ✅ **SQLite WAL mode** - Leituras/escritas simultâneas
 - ✅ **Cache de 64MB** - Dados quentes em memória
 - ✅ **Batch pinging** - Todos IPs ao mesmo tempo
 - ✅ **Auto-vacuum** - Recuperação automática de espaço
-- ✅ **Índices otimizados** - Queries 100x mais rápidas
 
 ---
 
