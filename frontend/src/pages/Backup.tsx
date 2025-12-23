@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getTelegramConfig, updateTelegramConfig } from '../services/api';
-import { Database, Save } from 'lucide-react';
+import { getTelegramConfig, updateTelegramConfig, testBackup } from '../services/api';
+import { Database, Save, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function Backup() {
@@ -26,6 +26,20 @@ export function Backup() {
             setTimeout(() => setMsg(''), 3000);
         } catch (e) {
             setMsg('Erro ao salvar configuração.');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleTest() {
+        setLoading(true);
+        setMsg('');
+        try {
+            await testBackup();
+            setMsg('Backup de teste enviado com sucesso!');
+            setTimeout(() => setMsg(''), 3000);
+        } catch (e: any) {
+            setMsg('Erro ao testar backup: ' + (e.response?.data?.error || e.message));
         } finally {
             setLoading(false);
         }
@@ -86,7 +100,11 @@ export function Backup() {
                         </div>
                     )}
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={handleTest} disabled={loading} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                            <Send size={18} />
+                            Testar Envio
+                        </button>
                         <button type="submit" disabled={loading} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
                             <Save size={18} />
                             {loading ? 'Salvando...' : 'Salvar Configuração'}

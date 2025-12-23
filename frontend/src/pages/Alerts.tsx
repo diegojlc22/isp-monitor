@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getTelegramConfig, updateTelegramConfig } from '../services/api';
+import { getTelegramConfig, updateTelegramConfig, testTelegramMessage } from '../services/api';
 import { Bell, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -33,6 +33,20 @@ export function Alerts() {
             setTimeout(() => setMsg(''), 3000);
         } catch (e) {
             setMsg('Erro ao salvar configuração.');
+        } finally {
+            setConfigLoading(false);
+        }
+    }
+
+    async function handleTest() {
+        setMsg('');
+        setConfigLoading(true);
+        try {
+            await testTelegramMessage();
+            setMsg('Teste enviado com sucesso!');
+            setTimeout(() => setMsg(''), 3000);
+        } catch (e: any) {
+            setMsg('Erro no teste: ' + (e.response?.data?.error || e.message));
         } finally {
             setConfigLoading(false);
         }
@@ -90,7 +104,11 @@ export function Alerts() {
                             </div>
                         )}
 
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-3">
+                            <button type="button" onClick={handleTest} disabled={configLoading} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                <Bell size={18} />
+                                Testar Alerta
+                            </button>
                             <button type="submit" disabled={configLoading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
                                 <Save size={18} />
                                 {configLoading ? 'Salvando...' : 'Salvar Configuração'}

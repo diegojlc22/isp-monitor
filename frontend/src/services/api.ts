@@ -57,3 +57,7 @@ export const deleteLink = (id: number) => api.delete(`/towers/links/${id}`).then
 export const getDatabaseConfig = () => api.get('/settings/database').then(res => res.data);
 export const updateDatabaseConfig = (data: any) => api.post('/settings/database', data).then(res => res.data);
 export const migrateData = (postgres_url: string) => api.post('/settings/migrate-data', { postgres_url }).then(res => res.data);
+
+// Testing
+export const testTelegramMessage = () => api.post('/settings/telegram/test-message').then(res => res.data);
+export const testBackup = () => api.post('/settings/telegram/test-backup').then(res => res.data);

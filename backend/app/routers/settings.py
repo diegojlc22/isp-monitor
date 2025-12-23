@@ -252,3 +252,35 @@ async def migrate_data(request: MigrateRequest, db: AsyncSession = Depends(get_d
         import traceback
         traceback.print_exc()
         return {"error": f"Erro na migração: {str(e)}"}
+
+from backend.app.services.telegram import send_telegram_message
+from backend.app.services.maintenance import backup_database_job
+
+@router.post("/telegram/test-message")
+async def test_telegram_message(db: AsyncSession = Depends(get_db)):
+    try:
+        token_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_token"))
+        chat_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+        
+        token = token_res.scalar_one_or_none()
+        chat_id = chat_res.scalar_one_or_none()
+        
+        if not token or not token.value:
+            return {"error": "Bot Token não configurado."}
+        if not chat_id or not chat_id.value:
+            return {"error": "Chat ID de Alertas não configurado."}
+            
+        await send_telegram_message(token.value, chat_id.value, "🔔 Teste de Alerta: O sistema de notificações está funcionando!")
+        return {"message": "Mensagem de teste enviada com sucesso!"}
+    except Exception as e:
+        return {"error": f"Erro ao enviar teste: {str(e)}"}
+
+@router.post("/telegram/test-backup")
+async def test_telegram_backup():
+    try:
+        # Run the job synchronously in this request context (or await it directly since it is async)
+        # The job reads config from DB internally.
+        await backup_database_job()
+        return {"message": "Backup de teste iniciado/enviado!"}
+    except Exception as e:
+        return {"error": f"Erro ao executar backup: {str(e)}"}
