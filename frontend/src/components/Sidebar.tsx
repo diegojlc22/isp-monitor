@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User, Bell } from 'lucide-react';
+import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User, Bell, Database } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
@@ -41,6 +41,9 @@ export function Sidebar() {
                         <div className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-4">Administração</div>
                         <NavLink to="/users" className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-colors", isActive ? "bg-blue-600 text-white" : "hover:bg-slate-800")}>
                             <Users className="w-5 h-5" /> <span className="font-medium">Usuários</span>
+                        </NavLink>
+                        <NavLink to="/backup" className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-colors", isActive ? "bg-blue-600 text-white" : "hover:bg-slate-800")}>
+                            <Database className="w-5 h-5" /> <span className="font-medium">Backups</span>
                         </NavLink>
                         <NavLink to="/settings" className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-colors", isActive ? "bg-blue-600 text-white" : "hover:bg-slate-800")}>
                             <Settings className="w-5 h-5" /> <span className="font-medium">Configurações</span>

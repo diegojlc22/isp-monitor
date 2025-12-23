@@ -13,6 +13,7 @@ import { Login } from './pages/Login'
 import { ManageUsers } from './pages/ManageUsers'
 import { Profile } from './pages/Profile'
 import { Alerts } from './pages/Alerts'
+import { Backup } from './pages/Backup'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
 
@@ -36,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
               <Route element={<AdminRoute />}>
                 <Route path="settings" element={<Settings />} />
                 <Route path="users" element={<ManageUsers />} />
+                <Route path="backup" element={<Backup />} />
               </Route>
             </Route>
           </Route>
