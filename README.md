@@ -48,6 +48,15 @@ O **ISP Monitor** é um sistema completo de monitoramento de rede desenvolvido e
 - **Detecção automática** de status (online/offline)
 - **Intervalo configurável** (padrão: 30 segundos)
 
+### 🚀 Funcionalidades
+- **Monitoramento Ultra-Rápido** (estilo The Dude): monitora centenas de dispositivos via ICMP em segundos.
+- **Alertas Inteligentes**: Dependência Pai/Filho (se um roteador cair, não alerta os dispositivos "filhos").
+- **Notificações Telegram**: Mensagens personalizáveis para eventos UP/DOWN.
+- **Modo Silencioso**: Roda em background na bandeja do sistema (System Tray), sem janelas pretas.
+- **Backend Moderno**: FastAPI + SQLite (WAL Mode) + Uvicorn.
+- **Frontend Interativo**: React + Vite + TypeScript.
+- **SNMP Ready**: Coleta de dados SNMP para dispositivos compatíveis.
+
 ### 🗺️ Visualização
 
 - **Mapa interativo** com Leaflet
@@ -123,25 +132,6 @@ O **ISP Monitor** é um sistema completo de monitoramento de rede desenvolvido e
 
 ### Passo a Passo
 
-#### 1. Clone o repositório
-
-```bash
-git clone https://github.com/diegojlc22/isp-monitor.git
-cd isp-monitor
-```
-
-#### 2. Configure o Backend
-
-```bash
-# Criar ambiente virtual
-python -m venv venv
-
-# Ativar ambiente (Windows)
-.\venv\Scripts\activate
-
-# Instalar dependências
-pip install -r backend/requirements.txt
-```
 
 #### 3. Configure o Frontend
 

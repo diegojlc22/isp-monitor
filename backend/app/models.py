@@ -17,6 +17,9 @@ class Tower(Base):
     is_online = Column(Boolean, default=False)
     last_checked = Column(DateTime, default=datetime.now(timezone.utc))
     
+    # Hierarchy (If this tower depends on a router)
+    parent_id = Column(Integer, nullable=True)
+
     equipments = relationship("Equipment", back_populates="tower")
 
 class Equipment(Base):
@@ -27,6 +30,9 @@ class Equipment(Base):
     ip = Column(String, unique=True, index=True)
     tower_id = Column(Integer, ForeignKey("towers.id"), nullable=True)
     
+    # Hierarchy (If this device depends on another device)
+    parent_id = Column(Integer, nullable=True)
+    
     # Status
     is_online = Column(Boolean, default=False)
     last_checked = Column(DateTime, default=datetime.now(timezone.utc))
@@ -36,6 +42,14 @@ class Equipment(Base):
     ssh_user = Column(String, nullable=True, default="admin")
     ssh_password = Column(String, nullable=True)
     ssh_port = Column(Integer, default=22)
+    
+    # SNMP
+    snmp_community = Column(String, default="public")
+    snmp_version = Column(Integer, default=2)
+    snmp_port = Column(Integer, default=161)
+    
+    last_traffic_in = Column(Float, default=0.0) # Mbps
+    last_traffic_out = Column(Float, default=0.0) # Mbps
     
     tower = relationship("Tower", back_populates="equipments")
 

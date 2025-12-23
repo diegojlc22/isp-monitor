@@ -85,12 +85,12 @@ async def lifespan(app: FastAPI):
     print(f"📡 Ping interval: {PING_INTERVAL_SECONDS}s")
     
     # Maintenance (Cleanup): Run every 24 hours
-    from backend.app.services.maintenance import cleanup_logs
-    scheduler.add_job(cleanup_logs, 'interval', hours=24) # Run once a day
+    from backend.app.services.maintenance import cleanup_job
+    scheduler.add_job(cleanup_job, 'interval', hours=24) # Run once a day
     
-    # Run cleanup once on startup
+    # Run cleanup once on startup (background task)
     import asyncio
-    asyncio.create_task(cleanup_logs())
+    asyncio.create_task(cleanup_job())
     
     # Weekly database maintenance (vacuum, analyze)
     asyncio.create_task(maintenance_job())

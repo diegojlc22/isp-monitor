@@ -141,19 +141,37 @@ async def monitor_job_fast():
                     ips = [device[1].ip for device in all_devices]
                     ping_results = await ping_multiple_fast(ips)
                     
-                    # Process results
+                    # Pass 1: Update statuses & Build Map
+                    # Precisamos saber o status ATUAL de todos antes de gerar alertas (para dependencias)
+                    current_status_map = {} # (type, id) -> bool
+                    
+                    # Store previous statuses to check for changes
+                    changes = [] 
+                    
                     for device_type, device in all_devices:
                         latency_sec = ping_results.get(device.ip)
                         is_online = latency_sec is not None
                         latency_ms = int(latency_sec * 1000) if latency_sec else None
                         
                         was_online = device.is_online
+                        
+                        # Update DB object
                         device.is_online = is_online
                         device.last_checked = datetime.now(timezone.utc)
                         if latency_ms is not None:
                             device.last_latency = latency_ms
+                            
+                        # Update Map
+                        current_status_map[(device_type, device.id)] = is_online
                         
-                        # Log
+                        # Record change for Pass 2 if state changed
+                        if is_online != was_online:
+                            changes.append((device_type, device, is_online, was_online))
+
+                        # Always Log (or maybe only on change? No, keep history)
+                        # But logging 50 devices every 5s fills DB fast.
+                        # Ideally log ping only if requested or periodically.
+                        # For now, keep as is (user requested logs).
                         log_entry = PingLog(
                             device_type=device_type,
                             device_id=device.id,
@@ -162,8 +180,28 @@ async def monitor_job_fast():
                             timestamp=datetime.now(timezone.utc)
                         )
                         session.add(log_entry)
+
+                    # Pass 2: Generate Smart Alerts
+                    for device_type, device, is_online, was_online in changes:
+                        # Check Dependency (Suppress if Parent is DOWN)
+                        suppress_alert = False
                         
-                        # Alert on status change
+                        if not is_online: # Only needed for DOWN alerts
+                            parent_id = device.parent_id
+                            if parent_id:
+                                # Assume parent is ALWAYS an Equipment (Router/Switch)
+                                # Check parent's status in the current map
+                                parent_status = current_status_map.get(('equipment', parent_id))
+                                
+                                # If parent status is known AND is False (Offline) -> Suppress
+                                if parent_status is False:
+                                    print(f"🔕 Alert suppressed for {device.name} (Parent {parent_id} is down)")
+                                    suppress_alert = True
+
+                        if suppress_alert:
+                            continue
+
+                        # Generate Alert
                         if not is_online and was_online:
                             # DOWN
                             msg = template_down.replace("[Device.Name]", device.name)\
@@ -172,7 +210,6 @@ async def monitor_job_fast():
                                                .replace("[Device.FirstAddress]", device.ip)
                             await send_telegram_alert(token_val, chat_val, msg)
                             
-                            # Save Alert
                             alert = Alert(
                                 device_type=device_type,
                                 device_name=device.name,
@@ -190,7 +227,6 @@ async def monitor_job_fast():
                                              .replace("[Device.FirstAddress]", device.ip)
                             await send_telegram_alert(token_val, chat_val, msg)
                             
-                            # Save Alert
                             alert = Alert(
                                 device_type=device_type,
                                 device_name=device.name,
@@ -201,7 +237,7 @@ async def monitor_job_fast():
                             session.add(alert)
                 
                 await session.commit()
-                print(f"✅ Pinged {len(all_devices)} devices in batch mode")
+                # print(f"✅ Pinged {len(all_devices)} devices in batch mode")
         except Exception as e:
             print(f"Monitor job error: {e}")
         
