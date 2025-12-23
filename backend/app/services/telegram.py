@@ -18,6 +18,7 @@ async def send_telegram_alert(token: str, chat_id: str, message: str):
                 print(f"❌ Failed to send Telegram message (Status {response.status_code}): {response.text}")
             else:
                 print(f"✅ Telegram message sent to {chat_id}")
+        except Exception as e:
             print(f"❌ Error sending Telegram message: {e}")
 
 async def send_telegram_document(token: str, chat_id: str, file_path: str, caption: str = None):
