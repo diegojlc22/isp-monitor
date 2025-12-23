@@ -30,9 +30,13 @@ export function Equipments() {
         name: '',
         ip: '',
         tower_id: '',
+        parent_id: '',
         ssh_user: 'admin',
         ssh_password: '',
-        ssh_port: 22
+        ssh_port: 22,
+        snmp_community: 'public',
+        snmp_version: 2,
+        snmp_port: 161
     });
 
     async function load() {
@@ -79,8 +83,12 @@ export function Equipments() {
                 name: formData.name,
                 ip: formData.ip,
                 tower_id: formData.tower_id ? parseInt(formData.tower_id) : null,
+                parent_id: formData.parent_id ? parseInt(formData.parent_id) : null,
                 ssh_user: formData.ssh_user,
-                ssh_port: Number(formData.ssh_port)
+                ssh_port: Number(formData.ssh_port),
+                snmp_community: formData.snmp_community,
+                snmp_version: Number(formData.snmp_version),
+                snmp_port: Number(formData.snmp_port)
             };
 
             // Only send password if provided (for updates)
@@ -120,9 +128,13 @@ export function Equipments() {
             name: eq.name,
             ip: eq.ip,
             tower_id: eq.tower_id ? String(eq.tower_id) : '',
+            parent_id: eq.parent_id ? String(eq.parent_id) : '',
             ssh_user: eq.ssh_user || 'admin',
             ssh_password: '', // Password is never returned for security
-            ssh_port: eq.ssh_port || 22
+            ssh_port: eq.ssh_port || 22,
+            snmp_community: eq.snmp_community || 'public',
+            snmp_version: eq.snmp_version || 2,
+            snmp_port: eq.snmp_port || 161
         });
         setShowModal(true);
     }
@@ -132,9 +144,13 @@ export function Equipments() {
             name: '',
             ip: '',
             tower_id: '',
+            parent_id: '',
             ssh_user: 'admin',
             ssh_password: '',
-            ssh_port: 22
+            ssh_port: 22,
+            snmp_community: 'public',
+            snmp_version: 2,
+            snmp_port: 161
         });
     }
 
@@ -352,6 +368,46 @@ export function Equipments() {
                                         <option key={t.id} value={t.id}>{t.name}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Dependência (Dispositivo Pai) - <span className="text-xs text-orange-400">Silencia alerta se Pai cair</span></label>
+                                <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={formData.parent_id} onChange={e => setFormData({ ...formData, parent_id: e.target.value })}>
+                                    <option value="">Nenhuma (Independente)</option>
+                                    {equipments
+                                        .filter(eq => !editingEquipment || eq.id !== editingEquipment.id)
+                                        .map(eq => (
+                                            <option key={eq.id} value={eq.id}>{eq.name} ({eq.ip})</option>
+                                        ))}
+                                </select>
+                            </div>
+
+                            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                                <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase flex items-center gap-2">
+                                    <Activity size={14} className="text-blue-500" />
+                                    Configuração SNMP (Monitoramento)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Comunidade (Community)</label>
+                                        <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.snmp_community} onChange={e => setFormData({ ...formData, snmp_community: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Versão</label>
+                                        <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.snmp_version} onChange={e => setFormData({ ...formData, snmp_version: Number(e.target.value) })}>
+                                            <option value={1}>v1</option>
+                                            <option value={2}>v2c</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Porta</label>
+                                        <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.snmp_port} onChange={e => setFormData({ ...formData, snmp_port: Number(e.target.value) })} />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">

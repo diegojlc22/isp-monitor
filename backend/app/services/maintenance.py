@@ -40,6 +40,58 @@ async def cleanup_job():
     except Exception as e:
         print(f"❌ Erro na limpeza de logs: {e}")
 
+async def backup_database_job():
+    """
+    Creates a ZIP backup of monitor.db and sends it to Telegram.
+    Runs daily.
+    """
+    import zipfile
+    import os
+    from backend.app.models import Parameters
+    from backend.app.services.telegram import send_telegram_document
+    
+    DB_FILENAME = "monitor.db"
+    
+    if not os.path.exists(DB_FILENAME):
+        print("⚠️ Backup skipped: monitor.db not found.")
+        return
+
+    print("📦 Starting daily database backup...")
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+    zip_filename = f"backup_monitor_{timestamp}.zip"
+    
+    try:
+        # 1. Create ZIP
+        # Using ZIP_DEFLATED for compression
+        with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(DB_FILENAME, arcname=DB_FILENAME)
+        
+        print(f"✅ Database compressed: {zip_filename}")
+        
+        # 2. Upload to Telegram
+        async with AsyncSessionLocal() as session:
+            token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
+            chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+            
+            token = token_res.scalar_one_or_none()
+            chat_id = chat_res.scalar_one_or_none()
+            
+            if token and chat_id and token.value and chat_id.value:
+                caption = f"📦 ISP Monitor Backup\n📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                await send_telegram_document(token.value, chat_id.value, zip_filename, caption)
+            else:
+                print("⚠️ Backup not sent: Telegram not configured.")
+
+    except Exception as e:
+        print(f"❌ Backup failed: {e}")
+    finally:
+        # 3. Cleanup (Delete zip)
+        if os.path.exists(zip_filename):
+            os.remove(zip_filename)
+            # print("Deleted temp backup file.")
+
 if __name__ == "__main__":
     # Test execution
     asyncio.run(cleanup_job())
+    # asyncio.run(backup_database_job())

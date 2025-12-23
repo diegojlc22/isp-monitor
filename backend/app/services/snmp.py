@@ -33,7 +33,34 @@ async def get_snmp_uptime(ip: str, community: str = "public", port: int = 161) -
 async def get_snmp_interface_traffic(ip: str, community: str = "public", port: int = 161, interface_index: int = 1):
     """
     Get In/Out Octets for a specific interface.
+    Returns (in_bytes, out_bytes) or None.
+    Uses generic 32-bit counters (MIB-II) for maximum compatibility.
     OID: ifInOctets (1.3.6.1.2.1.2.2.1.10.index), ifOutOctets (1.3.6.1.2.1.2.2.1.16.index)
     """
-    # Placeholder: Future implementation for full traffic monitoring
-    pass
+    def _snmp_get():
+        errorIndication, errorStatus, errorIndex, varBinds = next(
+            getCmd(SnmpEngine(),
+                   CommunityData(community),
+                   UdpTransportTarget((ip, port), timeout=1, retries=1),
+                   ContextData(),
+                   ObjectType(ObjectIdentity(f'1.3.6.1.2.1.2.2.1.10.{interface_index}')), # In
+                   ObjectType(ObjectIdentity(f'1.3.6.1.2.1.2.2.1.16.{interface_index}'))  # Out
+            )
+        )
+        
+        if errorIndication or errorStatus:
+            return None
+        
+        # varBinds[0] is In, varBinds[1] is Out
+        try:
+            val_in = int(varBinds[0][1])
+            val_out = int(varBinds[1][1])
+            return (val_in, val_out)
+        except:
+            return None
+
+    try:
+        val = await asyncio.to_thread(_snmp_get)
+        return val
+    except Exception:
+        return None

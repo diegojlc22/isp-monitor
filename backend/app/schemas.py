@@ -8,6 +8,7 @@ class TowerBase(BaseModel):
     latitude: float
     longitude: float
     observations: Optional[str] = None
+    parent_id: Optional[int] = None
 
 class TowerCreate(TowerBase):
     pass
@@ -24,8 +25,12 @@ class EquipmentBase(BaseModel):
     name: str
     ip: str
     tower_id: Optional[int] = None
+    parent_id: Optional[int] = None
     ssh_user: str = "admin"
     ssh_port: int = 22
+    snmp_community: str = "public"
+    snmp_version: int = 2
+    snmp_port: int = 161
 
 class EquipmentCreate(EquipmentBase):
     ssh_password: Optional[str] = None
@@ -34,9 +39,13 @@ class EquipmentUpdate(BaseModel):
     name: Optional[str] = None
     ip: Optional[str] = None
     tower_id: Optional[int] = None
+    parent_id: Optional[int] = None
     ssh_user: Optional[str] = None
     ssh_password: Optional[str] = None
     ssh_port: Optional[int] = None
+    snmp_community: Optional[str] = None
+    snmp_version: Optional[int] = None
+    snmp_port: Optional[int] = None
 
 class Equipment(EquipmentBase):
     id: int
