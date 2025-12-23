@@ -132,6 +132,35 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(alerts.router)
 
-@app.get("/")
-def read_root():
-    return {"status": "ok", "service": "ISP Monitor Backend"}
+app.include_router(alerts.router)
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Serve Static Files (Frontend) - Production Mode
+frontend_path = os.path.join(os.getcwd(), 'frontend', 'dist')
+
+if os.path.exists(frontend_path):
+    print(f"[INFO] Serving Frontend from {frontend_path}")
+    
+    # Mount assets folder
+    if os.path.exists(os.path.join(frontend_path, "assets")):
+        app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+
+    # Catch-all for SPA routing
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Check if file exists in root (e.g. favicon.ico, manifest.json)
+        potential_file = os.path.join(frontend_path, full_path)
+        if os.path.exists(potential_file) and os.path.isfile(potential_file):
+            return FileResponse(potential_file)
+
+        # Serve index.html for all client-side routes
+        # Note: API routes are matched *before* this catch-all because they are included above
+        return FileResponse(os.path.join(frontend_path, "index.html"))
+
+else:
+    print("[WARN] frontend/dist not found. Running in API-only mode.")
+    @app.get("/")
+    def read_root():
+        return {"status": "ok", "service": "ISP Monitor Backend - Frontend not found (Run deploy.bat)"}
