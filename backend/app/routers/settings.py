@@ -31,13 +31,19 @@ async def update_system_name(data: dict, db: AsyncSession = Depends(get_db), cur
 async def get_telegram_config(db: AsyncSession = Depends(get_db)):
     token_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_token"))
     chat_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+    down_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
+    up_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
     
     token = token_res.scalar_one_or_none()
     chat_id = chat_res.scalar_one_or_none()
+    down = down_res.scalar_one_or_none()
+    up = up_res.scalar_one_or_none()
     
     return TelegramConfig(
         bot_token=token.value if token else "",
-        chat_id=chat_id.value if chat_id else ""
+        chat_id=chat_id.value if chat_id else "",
+        template_down=down.value if down else None,
+        template_up=up.value if up else None
     )
 
 @router.post("/telegram")
@@ -57,6 +63,21 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
         db.add(chat_obj)
     else:
         chat_obj.value = config.chat_id
+        
+    # Upsert Templates
+    if config.template_down:
+        down_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))).scalar_one_or_none()
+        if not down_obj:
+            db.add(Parameters(key="telegram_template_down", value=config.template_down))
+        else:
+            down_obj.value = config.template_down
+            
+    if config.template_up:
+        up_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))).scalar_one_or_none()
+        if not up_obj:
+            db.add(Parameters(key="telegram_template_up", value=config.template_up))
+        else:
+            up_obj.value = config.template_up
         
     await db.commit()
     return {"message": "Settings updated"}

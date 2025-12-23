@@ -1,63 +1,46 @@
 import { useState, useEffect } from 'react';
-import { api, getTelegramConfig, updateTelegramConfig } from '../services/api';
-import { Bell, RefreshCw, Save } from 'lucide-react';
+import { getTelegramConfig, updateTelegramConfig } from '../services/api';
+import { Bell, Save } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
-interface Alert {
-    id: number;
-    device_type: string;
-    device_name: string;
-    device_ip: string;
-    message: string;
-    timestamp: string;
-}
 
 export function Alerts() {
     const { user } = useAuth();
-    const [alerts, setAlerts] = useState<Alert[]>([]);
-    const [loading, setLoading] = useState(true);
 
     // Telegram Config State
-    const [config, setConfig] = useState({ bot_token: '', chat_id: '' });
+    const [config, setConfig] = useState({ bot_token: '', chat_id: '', template_down: '', template_up: '' });
     const [configLoading, setConfigLoading] = useState(false);
     const [msg, setMsg] = useState('');
-
-    const fetchAlerts = async () => {
-        setLoading(true);
-        try {
-            const response = await api.get('/alerts/');
-            setAlerts(response.data);
-        } catch (error) {
-            console.error('Failed to fetch alerts:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [templateDown, setTemplateDown] = useState('O servico [Service.Name] no dispositivo [Device.Name] passou para o status down - IP=[Device.FirstAddress]');
+    const [templateUp, setTemplateUp] = useState('O servico [Service.Name] no dispositivo [Device.Name] passou para o status up - IP=[Device.FirstAddress]');
 
     useEffect(() => {
-        fetchAlerts();
-        const interval = setInterval(fetchAlerts, 30000); // Auto-refresh every 30s
-
         // Load Telegram Config if Admin
         if (user?.role === 'admin') {
-            getTelegramConfig().then(setConfig).catch(console.error);
+            getTelegramConfig().then(res => {
+                setConfig(res);
+                if (res.template_down) setTemplateDown(res.template_down);
+                if (res.template_up) setTemplateUp(res.template_up);
+            }).catch(console.error);
         }
-
-        return () => clearInterval(interval);
     }, [user]);
 
     async function handleSaveConfig(e: React.FormEvent) {
         e.preventDefault();
         setConfigLoading(true);
         try {
-            await updateTelegramConfig(config);
-            setMsg('Configuração do Telegram salva com sucesso!');
+            await updateTelegramConfig({ ...config, template_down: templateDown, template_up: templateUp });
+            setMsg('Configuração salva com sucesso!');
             setTimeout(() => setMsg(''), 3000);
         } catch (e) {
             setMsg('Erro ao salvar configuração.');
         } finally {
             setConfigLoading(false);
         }
+    }
+
+    async function handleSaveTemplates(e: React.FormEvent) {
+        // Alias to same save function for now, or could share logic
+        handleSaveConfig(e);
     }
 
     return (
@@ -67,14 +50,8 @@ export function Alerts() {
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                         <Bell className="w-8 h-8 text-yellow-500" /> Alertas
                     </h1>
-                    <p className="text-slate-400">Histórico de eventos e configurações de notificação</p>
+                    <p className="text-slate-400">Configurações de notificações e templates</p>
                 </div>
-                <button
-                    onClick={fetchAlerts}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                    <RefreshCw className={`w-5 h-5 text-slate-300 ${loading ? 'animate-spin' : ''}`} />
-                </button>
             </div>
 
             {/* Telegram Configuration Section (Admin Only) */}
@@ -127,58 +104,38 @@ export function Alerts() {
                 <div className="p-4 border-b border-slate-800">
                     <h3 className="text-lg font-semibold text-white">Histórico de Alertas</h3>
                 </div>
-                <table className="w-full text-left text-sm text-slate-400">
-                    <thead className="bg-slate-950 text-slate-200 uppercase font-medium">
-                        <tr>
-                            <th className="px-6 py-4">Data/Hora</th>
-                            <th className="px-6 py-4">Dispositivo</th>
-                            <th className="px-6 py-4">IP</th>
-                            <th className="px-6 py-4">Mensagem</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                        {loading && alerts.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                                    Carregando alertas...
-                                </td>
-                            </tr>
-                        ) : alerts.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                                    Nenhum alerta registrado.
-                                </td>
-                            </tr>
-                        ) : (
-                            alerts.map((alert) => (
-                                <tr key={alert.id} className="hover:bg-slate-800/50 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-slate-500">
-                                        {new Date(alert.timestamp).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 font-medium text-white">
-                                        {alert.device_name}
-                                        <span className="ml-2 text-xs text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded uppercase">
-                                            {alert.device_type}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 font-mono">{alert.device_ip}</td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            {alert.message.includes('🔴') || alert.message.includes('offline') || alert.message.includes('down') ? (
-                                                <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span>
-                                            ) : (
-                                                <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                                            )}
-                                            <span className={alert.message.includes('🔴') || alert.message.includes('down') ? 'text-red-400' : 'text-green-400'}>
-                                                {alert.message}
-                                            </span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                <div className="p-6">
+                    <p className="text-slate-400 mb-6">Personalize as mensagens enviadas ao Telegram quando o status muda. Use as variáveis: <code>[Device.Name]</code>, <code>[Device.IP]</code>, <code>[Service.Name]</code>, <code>[Device.FirstAddress]</code>.</p>
+
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Mensagem de Queda (Dispositivo Caiu)</label>
+                            <div className="flex gap-2">
+                                <span className="p-2 bg-slate-800 rounded-lg text-red-500 font-bold border border-slate-700">🔴</span>
+                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                                    value={templateDown} onChange={e => setTemplateDown(e.target.value)}
+                                    placeholder="O servico [Service.Name] no dispositivo [Device.Name] passou para o status down - IP=[Device.FirstAddress]" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Mensagem de Retorno (Dispositivo Voltou)</label>
+                            <div className="flex gap-2">
+                                <span className="p-2 bg-slate-800 rounded-lg text-green-500 font-bold border border-slate-700">🟢</span>
+                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                                    value={templateUp} onChange={e => setTemplateUp(e.target.value)}
+                                    placeholder="O servico [Service.Name] no dispositivo [Device.Name] passou para o status up - IP=[Device.FirstAddress]" />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                            <button onClick={handleSaveTemplates} disabled={configLoading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                <Save size={18} />
+                                Salvar Templates
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

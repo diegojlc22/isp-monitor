@@ -106,10 +106,18 @@ async def monitor_job_fast():
                 # Get Telegram config
                 token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
                 chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+                down_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
+                up_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
+                
                 token = token_res.scalar_one_or_none()
                 chat_id = chat_res.scalar_one_or_none()
+                down_tmpl = down_res.scalar_one_or_none()
+                up_tmpl = up_res.scalar_one_or_none()
+                
                 token_val = token.value if token else ""
                 chat_val = chat_id.value if chat_id else ""
+                template_down = down_tmpl.value if down_tmpl else "🔴 O servico Ping no dispositivo [Device.Name] passou para o status down - IP=[Device.IP]"
+                template_up = up_tmpl.value if up_tmpl else "🟢 O servico Ping no dispositivo [Device.Name] passou para o status up - IP=[Device.IP]"
                 
                 # Get all devices
                 towers_res = await session.execute(select(Tower))
@@ -156,10 +164,12 @@ async def monitor_job_fast():
                         session.add(log_entry)
                         
                         # Alert on status change
-                        # Alert on status change
                         if not is_online and was_online:
                             # DOWN
-                            msg = f"🔴 O servico Ping no dispositivo {device.name} passou para o status down - IP={device.ip}"
+                            msg = template_down.replace("[Device.Name]", device.name)\
+                                               .replace("[Device.IP]", device.ip)\
+                                               .replace("[Service.Name]", "Ping")\
+                                               .replace("[Device.FirstAddress]", device.ip)
                             await send_telegram_alert(token_val, chat_val, msg)
                             
                             # Save Alert
@@ -174,7 +184,10 @@ async def monitor_job_fast():
                             
                         elif is_online and not was_online:
                             # UP
-                            msg = f"🟢 O servico Ping no dispositivo {device.name} passou para o status up - IP={device.ip}"
+                            msg = template_up.replace("[Device.Name]", device.name)\
+                                             .replace("[Device.IP]", device.ip)\
+                                             .replace("[Service.Name]", "Ping")\
+                                             .replace("[Device.FirstAddress]", device.ip)
                             await send_telegram_alert(token_val, chat_val, msg)
                             
                             # Save Alert
