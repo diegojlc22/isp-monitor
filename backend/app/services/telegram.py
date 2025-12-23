@@ -2,7 +2,7 @@ import httpx
 
 async def send_telegram_alert(token: str, chat_id: str, message: str):
     if not token or not chat_id:
-        print("⚠️ Telegram alert skipped: Missing token or chat_id")
+        print("[WARN] Telegram alert skipped: Missing token or chat_id")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -15,11 +15,11 @@ async def send_telegram_alert(token: str, chat_id: str, message: str):
         try:
             response = await client.post(url, json=payload)
             if response.status_code != 200:
-                print(f"❌ Failed to send Telegram message (Status {response.status_code}): {response.text}")
+                print(f"[ERROR] Failed to send Telegram message (Status {response.status_code}): {response.text}")
             else:
-                print(f"✅ Telegram message sent to {chat_id}")
+                print(f"[OK] Telegram message sent to {chat_id}")
         except Exception as e:
-            print(f"❌ Error sending Telegram message: {e}")
+            print(f"[ERROR] Error sending Telegram message: {e}")
 
 async def send_telegram_document(token: str, chat_id: str, file_path: str, caption: str = None):
     """
@@ -27,7 +27,7 @@ async def send_telegram_document(token: str, chat_id: str, file_path: str, capti
     Used for Automated Backups.
     """
     if not token or not chat_id:
-        print("⚠️ Telegram upload skipped: Missing token or chat_id")
+        print("[WARN] Telegram upload skipped: Missing token or chat_id")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendDocument"
@@ -48,9 +48,9 @@ async def send_telegram_document(token: str, chat_id: str, file_path: str, capti
                 response = await client.post(url, data=data, files=files, timeout=60.0)
                 
                 if response.status_code != 200:
-                    print(f"❌ Failed to send Telegram document (Status {response.status_code}): {response.text}")
+                    print(f"[ERROR] Failed to send Telegram document (Status {response.status_code}): {response.text}")
                 else:
-                    print(f"✅ Backup sent to Telegram: {filename}")
+                    print(f"[OK] Backup sent to Telegram: {filename}")
                     
     except Exception as e:
-        print(f"❌ Error sending Telegram document: {e}")
+        print(f"[ERROR] Error sending Telegram document: {e}")

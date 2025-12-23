@@ -75,29 +75,29 @@ async def reboot_device(
                 pass
             
             ssh.close()
-            return True, f"✅ Reboot command sent successfully (attempt {attempt + 1})"
+            return True, f"[OK] Reboot command sent successfully (attempt {attempt + 1})"
             
         except paramiko.AuthenticationException:
-            return False, "❌ Authentication failed - check username/password"
+            return False, "[ERROR] Authentication failed - check username/password"
         
         except paramiko.SSHException as e:
             if attempt < max_retries - 1:
                 # Retry on SSH errors
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
                 return None, str(e)  # Signal retry
-            return False, f"❌ SSH error after {attempt + 1} attempts: {str(e)}"
+            return False, f"[ERROR] SSH error after {attempt + 1} attempts: {str(e)}"
         
         except asyncio.TimeoutError:
             if attempt < max_retries - 1:
                 await asyncio.sleep(2 ** attempt)
                 return None, "Timeout"  # Signal retry
-            return False, f"❌ Connection timeout after {attempt + 1} attempts"
+            return False, f"[ERROR] Connection timeout after {attempt + 1} attempts"
         
         except Exception as e:
             if attempt < max_retries - 1:
                 await asyncio.sleep(2 ** attempt)
                 return None, str(e)  # Signal retry
-            return False, f"❌ Error after {attempt + 1} attempts: {str(e)}"
+            return False, f"[ERROR] Error after {attempt + 1} attempts: {str(e)}"
     
     # Retry loop
     for attempt in range(max_retries):
@@ -107,10 +107,10 @@ async def reboot_device(
             return success, message
         
         # None means retry
-        print(f"⚠️ Retry {attempt + 1}/{max_retries} for {ip}: {message}")
+        print(f"[WARN] Retry {attempt + 1}/{max_retries} for {ip}: {message}")
     
     # Should never reach here, but just in case
-    return False, f"❌ Failed after {max_retries} attempts"
+    return False, f"[ERROR] Failed after {max_retries} attempts"
 
 
 async def execute_command(

@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
 
 from backend.app.services.pinger_fast import monitor_job_fast as monitor_job
-print("✅ Using ULTRA-FAST pinger (icmplib)")
+print("[INFO] Using ULTRA-FAST pinger (icmplib)")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
             )
             db.add(admin_user)
             await db.commit()
-            print("✅ Admin User Seeded.")
+            print("[OK] Admin User Seeded.")
 
         # Seed Telegram Config (if user requested hardcoded)
         from backend.app.models import Parameters
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
             db.add(Parameters(key="telegram_chat_id", value=telegram_chat))
             
         await db.commit()
-        print("✅ Telegram Config Seeded (if missing).")
+        print("[OK] Telegram Config Seeded (if missing).")
         
     # Optimize SQLite database (like The Dude)
     from backend.app.services.sqlite_optimizer import (
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
     
     # Get initial stats
     stats = await get_database_stats()
-    print(f"📊 Database: {stats['database_size_mb']} MB")
+    print(f"[INFO] Database: {stats['database_size_mb']} MB")
     
     # Get ping interval from config
     from backend.app.config import PING_INTERVAL_SECONDS
@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     scheduler = AsyncIOScheduler()
     # Monitor: Run with configurable interval (default 30s)
     scheduler.add_job(monitor_job, 'interval', seconds=PING_INTERVAL_SECONDS)
-    print(f"📡 Ping interval: {PING_INTERVAL_SECONDS}s")
+    print(f"[INFO] Ping interval: {PING_INTERVAL_SECONDS}s")
     
     # Maintenance (Cleanup): Run every 24 hours
     from backend.app.services.maintenance import cleanup_job, backup_database_job

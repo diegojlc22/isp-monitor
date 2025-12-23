@@ -11,7 +11,7 @@ async def cleanup_job():
     """
     DAYS_TO_KEEP = 30
     
-    print("🧹 Iniciando limpeza de logs antigos...")
+    print("[INFO] Iniciando limpeza de logs antigos...")
     try:
         async with AsyncSessionLocal() as session:
             # Calculate updated cutoff date
@@ -33,12 +33,12 @@ async def cleanup_job():
             await session.commit()
             
             if deleted_rows > 0:
-                print(f"✅ Limpeza: {deleted_rows} logs de ping antigos removidos.")
+                print(f"[OK] Limpeza: {deleted_rows} logs de ping antigos removidos.")
             if deleted_alerts > 0:
-                print(f"✅ Limpeza: {deleted_alerts} alertas antigos removidos.")
+                print(f"[OK] Limpeza: {deleted_alerts} alertas antigos removidos.")
                 
     except Exception as e:
-        print(f"❌ Erro na limpeza de logs: {e}")
+        print(f"[ERROR] Erro na limpeza de logs: {e}")
 
 async def backup_database_job():
     """
@@ -53,10 +53,10 @@ async def backup_database_job():
     DB_FILENAME = "monitor.db"
     
     if not os.path.exists(DB_FILENAME):
-        print("⚠️ Backup skipped: monitor.db not found.")
+        print("[WARN] Backup skipped: monitor.db not found.")
         return
 
-    print("📦 Starting daily database backup...")
+    print("[INFO] Starting daily database backup...")
     
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
     zip_filename = f"backup_monitor_{timestamp}.zip"
@@ -67,7 +67,7 @@ async def backup_database_job():
         with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.write(DB_FILENAME, arcname=DB_FILENAME)
         
-        print(f"✅ Database compressed: {zip_filename}")
+        print(f"[OK] Database compressed: {zip_filename}")
         
         # 2. Upload to Telegram
         async with AsyncSessionLocal() as session:
@@ -87,13 +87,13 @@ async def backup_database_job():
                 target_chat_id = chat_id.value
             
             if token and token.value and target_chat_id:
-                caption = f"📦 ISP Monitor Backup\n📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                caption = f"Backup ISP Monitor - {datetime.now().strftime('%d/%m/%Y %H:%M')}"
                 await send_telegram_document(token.value, target_chat_id, zip_filename, caption)
             else:
-                print("⚠️ Backup not sent: Telegram not configured (Token/Chat missing).")
+                print("[WARN] Backup not sent: Telegram not configured (Token/Chat missing).")
 
     except Exception as e:
-        print(f"❌ Backup failed: {e}")
+        print(f"[ERROR] Backup failed: {e}")
     finally:
         # 3. Cleanup (Delete zip)
         if os.path.exists(zip_filename):

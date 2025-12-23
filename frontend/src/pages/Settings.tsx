@@ -103,61 +103,79 @@ export function Settings() {
                         </div>
                     </div>
 
-                    {/* Telegram Config */}
+                    {/* Telegram Alerts Config */}
                     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
                         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
                             <div className="p-2 bg-blue-500/10 rounded-lg">
                                 <Send className="text-blue-500" size={24} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-semibold text-white">Telegram</h3>
-                                <p className="text-sm text-slate-400">Alertas e Backups.</p>
+                                <h3 className="text-lg font-semibold text-white">Notificações (Alertas)</h3>
+                                <p className="text-sm text-slate-400">Configure onde receber os alertas de queda/volta.</p>
                             </div>
                         </div>
                         <div className="p-6 grid gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Bot Token</label>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Bot Token (Telegram)</label>
                                 <input type="password" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
                                     value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })}
                                     placeholder="123456:ABC-DEF..."
                                 />
+                                <p className="text-xs text-slate-500 mt-1">Este mesmo bot será usado para enviar os Backups.</p>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">Chat ID (Alertas)</label>
-                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                        value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })}
-                                        placeholder="-100..."
-                                    />
-                                </div>
-                                <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg">
-                                    <label className="block text-sm font-medium text-emerald-400 mb-1">Backup Chat ID (Opcional)</label>
-                                    <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
-                                        value={config.backup_chat_id || ''} onChange={e => setConfig({ ...config, backup_chat_id: e.target.value })}
-                                        placeholder="Se vazio, usa o Chat de Alertas"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">Chat exclusivo para receber os backups diários do banco.</p>
-                                </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Chat ID de Alertas (Grupo Principal)</label>
+                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })}
+                                    placeholder="-100..."
+                                />
                             </div>
 
                             <div className="pt-4 border-t border-slate-800">
-                                <h4 className="text-sm font-medium text-slate-300 mb-3">Modelos de Mensagem (Ups/Downs)</h4>
+                                <h4 className="text-sm font-medium text-slate-300 mb-3">Modelos de Mensagem (Personalizável)</h4>
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-500 mb-1">Template DOWN</label>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Queda (Down)</label>
                                         <textarea rows={2} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                                             value={config.template_down || ''} onChange={e => setConfig({ ...config, template_down: e.target.value })}
                                             placeholder="Ex: 🔴 [Device.Name] caiu! IP=[Device.IP]"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-500 mb-1">Template UP</label>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Retorno (Up)</label>
                                         <textarea rows={2} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                                             value={config.template_up || ''} onChange={e => setConfig({ ...config, template_up: e.target.value })}
                                             placeholder="Ex: 🟢 [Device.Name] voltou! IP=[Device.IP]"
                                         />
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Backups Config */}
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                            <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                <Database className="text-emerald-500" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Backups Automáticos</h3>
+                                <p className="text-sm text-slate-400">Configure um canal exclusivo para seus arquivos de segurança.</p>
+                            </div>
+                        </div>
+                        <div className="p-6 border-l-4 border-emerald-500/20 bg-emerald-500/5">
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-emerald-400 mb-1">Chat ID de Backups (Exclusivo)</label>
+                                <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                                    value={config.backup_chat_id || ''} onChange={e => setConfig({ ...config, backup_chat_id: e.target.value })}
+                                    placeholder="Ex: -100987654321..."
+                                />
+                                <p className="text-xs text-slate-400 mt-2">
+                                    O sistema enviará o arquivo <b>monitor.db.zip</b> diariamente (00:00) para este grupo.
+                                    <br />
+                                    Obs: Utiliza o mesmo Bot Token configurado acima.
+                                </p>
                             </div>
                         </div>
                     </div>

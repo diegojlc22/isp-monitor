@@ -14,7 +14,7 @@ async def snmp_monitor_job():
     Calculates traffic based on Octet difference.
     """
     import time
-    print("🚦 SNMP Monitor started (Interval: 60s)...")
+    print("[INFO] SNMP Monitor started (Interval: 60s)...")
     
     # Cache for bandwidth calculation: eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 

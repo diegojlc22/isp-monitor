@@ -39,7 +39,7 @@ async def optimize_sqlite():
         # Increase mmap size to 256MB for better performance
         await conn.execute(text("PRAGMA mmap_size=268435456;"))
         
-        print("✅ SQLite optimized (WAL mode, 64MB cache, auto-vacuum)")
+        print("[OK] SQLite optimized (WAL mode, 64MB cache, auto-vacuum)")
 
 async def vacuum_database():
     """
@@ -54,7 +54,7 @@ async def vacuum_database():
             # Analyze database for query optimization
             await conn.execute(text("ANALYZE;"))
             
-        print("✅ Database vacuumed and analyzed")
+            print("[OK] Database vacuumed and analyzed")
     except Exception as e:
         print(f"Vacuum error: {e}")
 
@@ -131,7 +131,7 @@ async def create_performance_indexes():
             ON towers(ip);
         """))
         
-        print("✅ Performance indexes created")
+        print("[OK] Performance indexes created")
 
 async def maintenance_job():
     """
@@ -139,10 +139,10 @@ async def maintenance_job():
     """
     while True:
         try:
-            print("🔧 Running weekly database maintenance...")
+            print("[INFO] Running weekly database maintenance...")
             await vacuum_database()
             stats = await get_database_stats()
-            print(f"📊 Database: {stats['database_size_mb']} MB")
+            print(f"[INFO] Database: {stats['database_size_mb']} MB")
         except Exception as e:
             print(f"Maintenance error: {e}")
         
