@@ -11,12 +11,31 @@ Write-Host "===================================================" -ForegroundColo
 Write-Host ""
 
 # 1. Verificar Versão do Python Instalada
-# FORÇAR DOWNLOAD DO PYTHON 3.11 PORTATIL
-# Ignoramos o python do sistema pois ele tem se mostrado instavel/corrompido.
-Write-Host "[DECISAO] Forcando uso de Python 3.11 Portatil Dedicado." -ForegroundColor Magenta
-$global:SystemPythonGood = $false
+Write-Host "[INFO] Verificando Python do sistema..." -ForegroundColor Yellow
 
-# ... (Detection block removed/skipped) ...
+$global:SystemPythonGood = $false
+try {
+    $sysPy = Get-Command python -ErrorAction SilentlyContinue
+    if ($sysPy) {
+        # Verificar versão e Tkinter
+        $checkCmd = 'import sys; import tkinter; major, minor = sys.version_info[:2]; exit(0) if major == 3 and minor >= 10 else exit(1)'
+        python -c $checkCmd 2>$null
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "       Python do sistema detectado e funcional (com Tkinter)." -ForegroundColor Green
+            $global:SystemPythonGood = $true
+        }
+        else {
+            Write-Host "       Python do sistema encontrado, mas incompleto ou antigo." -ForegroundColor DarkGray
+        }
+    }
+    else {
+        Write-Host "       Nenhum Python encontrado no PATH." -ForegroundColor DarkGray
+    }
+}
+catch {
+    Write-Host "       Erro ao verificar Python do sistema." -ForegroundColor Red
+}
 
 # 3. Decisão: Usar sistema ou instalar portatil
 if (-not $global:SystemPythonGood) {
@@ -46,7 +65,8 @@ if (-not $global:SystemPythonGood) {
         
         # Install
         Write-Host "       Instalando (Uma janela de permissao pode aparecer. ACEITE)..."
-        $installArgs = "/quiet InstallAllUsers=0 TargetDir=`"$pyDir`" Include_tcltk=1 Include_test=0 PrependPath=0"
+        # Usando /passive para mostrar barra de progresso e eventuais erros na tela
+        $installArgs = "/passive InstallAllUsers=0 TargetDir=`"$pyDir`" Include_tcltk=1 Include_test=0 PrependPath=0"
         Start-Process -FilePath $installer -ArgumentList $installArgs -Wait
         
         Remove-Item $installer -ErrorAction SilentlyContinue
