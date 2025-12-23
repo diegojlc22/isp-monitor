@@ -1,4 +1,4 @@
-@echo off
+@echo on
 cd /d "%~dp0"
 title ISP Monitor - Boot
 
@@ -46,6 +46,13 @@ if not exist ".git" (
     echo.
 )
 
+if not exist "repair.ps1" (
+    echo [ERRO CRITICO] Arquivo 'repair.ps1' nao encontrado!
+    echo O download do GitHub pode ter falhado.
+    pause
+    exit
+)
+
 echo Iniciando script de reparo via PowerShell...
 :: Script de boot automatico
 PowerShell -NoProfile -ExecutionPolicy Bypass -File "repair.ps1"
@@ -54,3 +61,4 @@ if %errorlevel% neq 0 (
     echo [ERRO CRITICO] O script PowerShell falhou.
     pause
 )
+pause
