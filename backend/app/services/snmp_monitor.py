@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 from sqlalchemy import select
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import Equipment
+from backend.app.models import Equipment, TrafficLog
 from backend.app.services.snmp import get_snmp_interface_traffic
 
 # Config
@@ -64,6 +64,14 @@ async def snmp_monitor_job():
                                 eq.last_traffic_in = round(mbps_in, 2)
                                 eq.last_traffic_out = round(mbps_out, 2)
                                 
+                                # Log Traffic History
+                                log = TrafficLog(
+                                    equipment_id=eq.id,
+                                    in_mbps=eq.last_traffic_in,
+                                    out_mbps=eq.last_traffic_out
+                                )
+                                session.add(log)
+
                                 session.add(eq)
                                 updates += 1
                         

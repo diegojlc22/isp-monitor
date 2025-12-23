@@ -14,6 +14,7 @@ import { ManageUsers } from './pages/ManageUsers'
 import { Profile } from './pages/Profile'
 import { Alerts } from './pages/Alerts'
 import { Backup } from './pages/Backup'
+import { LiveMonitor } from './pages/LiveMonitor'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
 
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />
+              <Route path="live" element={<LiveMonitor />} />
               <Route path="map" element={<NetMap />} />
               <Route path="towers" element={<Towers />} />
               <Route path="equipments" element={<Equipments />} />

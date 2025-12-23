@@ -1,4 +1,10 @@
 # Script de Reparo e Inicialização do ISP Monitor
+Set-Location $PSScriptRoot
+
+# Matar processos Python antigos que podem estar travando a pasta .venv
+Write-Host "[INIT] Limpando processos antigos..." -ForegroundColor DarkGray
+Get-Process python, pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*isp-monitor*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host "   ISP MONITOR - DIAGNOSTICO E REPARO (PowerShell)" -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
@@ -40,8 +46,8 @@ if (-not $global:SystemPythonGood) {
         
         # Install
         Write-Host "       Instalando (Uma janela de permissao pode aparecer. ACEITE)..."
-        $args = "/quiet InstallAllUsers=0 TargetDir=`"$pyDir`" Include_tcltk=1 Include_test=0 PrependPath=0"
-        Start-Process -FilePath $installer -ArgumentList $args -Wait
+        $installArgs = "/quiet InstallAllUsers=0 TargetDir=`"$pyDir`" Include_tcltk=1 Include_test=0 PrependPath=0"
+        Start-Process -FilePath $installer -ArgumentList $installArgs -Wait
         
         Remove-Item $installer -ErrorAction SilentlyContinue
     }
@@ -51,7 +57,6 @@ if (-not $global:SystemPythonGood) {
     
     if (-not (Test-Path $pythonExe)) {
         Write-Host "[ERRO] A instalacao falhou. python.exe nao encontrado em $pyDir" -ForegroundColor Red
-        Read-Host "Pressione ENTER para sair..."
         exit 1
     }
     
@@ -90,7 +95,6 @@ if (-not $envHealthy) {
     & $pythonExe -m venv .venv
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERRO] Falha ao criar .venv" -ForegroundColor Red
-        Read-Host "Pressione ENTER para sair..."
         exit 1
     }
 

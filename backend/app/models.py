@@ -63,6 +63,15 @@ class PingLog(Base):
     latency_ms = Column(Integer, nullable=True)
     timestamp = Column(DateTime, default=datetime.now(timezone.utc))
 
+class TrafficLog(Base):
+    __tablename__ = "traffic_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    equipment_id = Column(Integer, ForeignKey("equipments.id"), index=True)
+    in_mbps = Column(Float)
+    out_mbps = Column(Float)
+    timestamp = Column(DateTime, default=datetime.now(timezone.utc), index=True)
+
 
 class Parameters(Base):
     __tablename__ = "parameters"

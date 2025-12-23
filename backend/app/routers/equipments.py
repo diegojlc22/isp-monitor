@@ -59,8 +59,6 @@ async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Equipment not found")
     await db.delete(db_eq)
     await db.commit()
-    await db.delete(db_eq)
-    await db.commit()
     return {"message": "Equipment deleted"}
 
 from backend.app.services.ssh_commander import reboot_device
@@ -134,7 +132,7 @@ async def scan_network_stream(ip_range: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-from backend.app.models import PingLog
+from backend.app.models import PingLog, TrafficLog
 from datetime import datetime, timedelta, timezone
 
 @router.get("/{eq_id}/latency-history")
@@ -165,6 +163,35 @@ async def get_latency_history(eq_id: int, period: str = "24h", db: AsyncSession 
                  "timestamp": log.timestamp.isoformat(),
                  "latency": log.latency_ms
              })
+             
+    return data
+
+@router.get("/{eq_id}/traffic-history")
+async def get_traffic_history(eq_id: int, period: str = "24h", db: AsyncSession = Depends(get_db)):
+    # Determine lookback
+    now = datetime.now(timezone.utc)
+    if period == "7d":
+        start_time = now - timedelta(days=7)
+    elif period == "1h":
+         start_time = now - timedelta(hours=1)
+    else: # default 24h
+        start_time = now - timedelta(hours=24)
+        
+    query = select(TrafficLog).where(
+        TrafficLog.equipment_id == eq_id,
+        TrafficLog.timestamp >= start_time
+    ).order_by(TrafficLog.timestamp.asc())
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    data = []
+    for log in logs:
+        data.append({
+            "timestamp": log.timestamp.isoformat(),
+            "in": log.in_mbps,
+            "out": log.out_mbps
+        })
              
     return data
 
