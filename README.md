@@ -112,32 +112,44 @@ O **ISP Monitor** é um sistema completo de monitoramento de rede desenvolvido e
 - **Node.js 18+**
 - **Git**
 
-### Passo a Passo
+### Passo a Passo (Automático)
 
+O sistema conta agora com **Auto-Reparo e Configuração Automática**.
 
-#### 3. Configure o Frontend
+1. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/diegojlc22/isp-monitor.git
+   cd isp-monitor
+   ```
 
-```bash
-cd frontend
-npm install
-```
+2. **Inicie o Sistema:**
+   - Execute o arquivo **`iniciar_sistema.bat`**.
+   - **O que ele faz:**
+     - Verifica se o Python do seu PC está saudável.
+     - Se estiver quebrado (erro de *Tcl/Tk*), ele baixa automaticamente um Python portátil.
+     - Cria o ambiente virtual (`.venv`), instala dependências e inicia o Launcher.
 
-#### 4. Modo de Produção (Recomendado)
-O sistema possui scripts automáticos para rodar em produção de forma leve e otimizada (sem janelas de terminal extras).
+3. **Launcher Unificado:**
+   No painel que abrir, você pode:
+   - Escolher entre **Produção** (Recomendado) ou Desenvolvimento.
+   - Clicar em **"⚡ Criar Build / Deploy"** (Faz todo o trabalho de compilar o site).
+   - Clicar em **"▶ Iniciar Sistema"** para rodar tudo.
 
-1. Execute **`deploy.bat`** (apenas na primeira vez ou após atualizações).
-   - Isso compila o Frontend e otimiza os arquivos.
-   
-2. Execute **`iniciar_producao.bat`**.
-   - O sistema rodará unificado em **http://localhost:8080**.
-   - Frontend e Backend na mesma porta.
-   - Baixo consumo de memória e CPU.
+---
 
-#### 5. Modo de Desenvolvimento (Para Programadores)
-Se você quer alterar o código:
-1. Execute **`iniciar_sistema.bat`**.
-2. Frontend em http://localhost:5173 (Hot Reload).
-3. Backend em http://localhost:8080 (Hot Reload).
+### Modos de Operação
+
+#### 🚀 Modo Produção (Recomendado)
+- Usa arquivos compilados e otimizados do React.
+- **Roda em Porta Única (8080):** Backend serve o Frontend.
+- Menor consumo de RAM/CPU.
+- Ideal para deixar rodando 24/7.
+- **Como usar:** Selecione "Produção" no Launcher > Clique "Deploy" (uma vez) > Clique "Iniciar".
+
+#### 🛠️ Modo Desenvolvimento
+- Hot-Reload (alterou código, atualiza na hora).
+- Abre dois terminais separados.
+- Ideal apenas para programadores editando o código.
 
 ### 🔐 Login Padrão
 
