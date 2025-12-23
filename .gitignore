@@ -3,10 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
 .env
 monitor.db
 monitor.db-shm
 monitor.db-wal
+
+# Local Binaries and Installers
+python_bin/
+python_installer.exe
 
 # Node.js
 node_modules/

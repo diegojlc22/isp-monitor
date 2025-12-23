@@ -132,8 +132,6 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(alerts.router)
 
-app.include_router(alerts.router)
-
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 

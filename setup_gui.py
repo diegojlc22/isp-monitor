@@ -48,6 +48,7 @@ class SetupApp:
         self.step_frames = []
         self.status_labels = []
         self.main_queue = queue.Queue()
+        self.has_launched = False
         
         self.setup_ui()
         
@@ -202,10 +203,25 @@ class SetupApp:
         os.environ["PATH"] += r";C:\Program Files\nodejs"
 
     def check_venv(self):
-        return os.path.exists(".venv") and os.path.exists(os.path.join(".venv", "Scripts", "python.exe"))
+        venv_python = os.path.join(".venv", "Scripts", "python.exe")
+        if not os.path.exists(venv_python):
+            return False
+        
+        # Teste rigoroso: Tenta INICIALIZAR o Tcl/Tk, não apenas importar
+        try:
+            subprocess.run(
+                [venv_python, "-c", "import tkinter; tkinter.Tk()"], 
+                check=True, 
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
 
     def create_venv(self):
-        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
+        # --clear limpa instalação anterior. --upgrade ajuda se for atualização de python.
+        subprocess.run([sys.executable, "-m", "venv", ".venv", "--clear"], check=True)
 
     def check_backend(self):
         # Verifica se requirements está instalado no venv
@@ -257,15 +273,12 @@ class SetupApp:
                     # O ideal é o venv_pythonw. Se não tiver, vamos de venv_python.
                     pass
 
-        # Configurações extras para garantir ocultação no Windows
-        creationflags = 0
-        if platform.system() == 'Windows':
-            creationflags = subprocess.CREATE_NO_WINDOW
-            
-        subprocess.Popen([target_exe, "launcher.pyw"], close_fds=True, creationflags=creationflags)
-        os._exit(0)
+        # Sai com sucesso (0). O arquivo .bat vai lidar com o launcher.
+        sys.exit(0)
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = SetupApp(root)
     root.mainloop()
+    if not app.has_launched:
+        sys.exit(1)
