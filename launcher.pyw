@@ -157,8 +157,14 @@ class LauncherApp:
     def exit_fully(self):
         if self.is_running:
             self.stop_all()
+        
+        # Stop tray icon explicitly to remove ghost icon
+        if self.tray_icon:
+            self.tray_icon.stop()
+
         self.root.destroy()
-        sys.exit(0)
+        # Force kill to ensure no background threads remain
+        os._exit(0)
 
 
     def setup_styles(self):

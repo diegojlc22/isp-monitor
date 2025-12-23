@@ -21,6 +21,9 @@ async def send_telegram_alert(token: str, chat_id: str, message: str):
         except Exception as e:
             print(f"[ERROR] Error sending Telegram message: {e}")
 
+# Alias for generic usage
+send_telegram_message = send_telegram_alert
+
 async def send_telegram_document(token: str, chat_id: str, file_path: str, caption: str = None):
     """
     Send a file (document) to Telegram.
