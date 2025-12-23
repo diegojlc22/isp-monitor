@@ -73,15 +73,24 @@ async def backup_database_job():
         async with AsyncSessionLocal() as session:
             token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
             chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+            backup_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_backup_chat_id"))
             
             token = token_res.scalar_one_or_none()
             chat_id = chat_res.scalar_one_or_none()
+            backup_chat = backup_res.scalar_one_or_none()
             
-            if token and chat_id and token.value and chat_id.value:
+            # Determine Target Chat (Prefer Backup Chat, fallback to Main)
+            target_chat_id = None
+            if backup_chat and backup_chat.value:
+                target_chat_id = backup_chat.value
+            elif chat_id and chat_id.value:
+                target_chat_id = chat_id.value
+            
+            if token and token.value and target_chat_id:
                 caption = f"📦 ISP Monitor Backup\n📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-                await send_telegram_document(token.value, chat_id.value, zip_filename, caption)
+                await send_telegram_document(token.value, target_chat_id, zip_filename, caption)
             else:
-                print("⚠️ Backup not sent: Telegram not configured.")
+                print("⚠️ Backup not sent: Telegram not configured (Token/Chat missing).")
 
     except Exception as e:
         print(f"❌ Backup failed: {e}")

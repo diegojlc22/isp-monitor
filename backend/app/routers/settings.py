@@ -31,17 +31,20 @@ async def update_system_name(data: dict, db: AsyncSession = Depends(get_db), cur
 async def get_telegram_config(db: AsyncSession = Depends(get_db)):
     token_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_token"))
     chat_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+    backup_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_backup_chat_id"))
     down_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
     up_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
     
     token = token_res.scalar_one_or_none()
     chat_id = chat_res.scalar_one_or_none()
+    backup = backup_res.scalar_one_or_none()
     down = down_res.scalar_one_or_none()
     up = up_res.scalar_one_or_none()
     
     return TelegramConfig(
         bot_token=token.value if token else "",
         chat_id=chat_id.value if chat_id else "",
+        backup_chat_id=backup.value if backup else "",
         template_down=down.value if down else None,
         template_up=up.value if up else None
     )
@@ -63,6 +66,14 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
         db.add(chat_obj)
     else:
         chat_obj.value = config.chat_id
+
+    # Upsert Backup Chat ID
+    if config.backup_chat_id is not None:
+        backup_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_backup_chat_id"))).scalar_one_or_none()
+        if not backup_obj:
+            db.add(Parameters(key="telegram_backup_chat_id", value=config.backup_chat_id))
+        else:
+            backup_obj.value = config.backup_chat_id
         
     # Upsert Templates
     if config.template_down:

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getDatabaseConfig, updateDatabaseConfig } from '../services/api';
-import { Save, Smartphone, Settings as SettingsIcon, Activity, Database } from 'lucide-react';
+import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getDatabaseConfig, updateDatabaseConfig, getTelegramConfig, updateTelegramConfig } from '../services/api';
+import { Save, Smartphone, Settings as SettingsIcon, Activity, Database, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function Settings() {
     const { user, refreshSystemName } = useAuth();
-    // const [config, setConfig] = useState({ bot_token: '', chat_id: '' }); // REMOVED
+    const [config, setConfig] = useState({ bot_token: '', chat_id: '', backup_chat_id: '', template_down: '', template_up: '' });
     const [sysName, setSysName] = useState('');
     const [thresholds, setThresholds] = useState({ good: 50, critical: 200 });
     const [dbConfig, setDbConfig] = useState({ db_type: 'sqlite', postgres_url: '' });
@@ -13,7 +13,7 @@ export function Settings() {
     const [msg, setMsg] = useState('');
 
     useEffect(() => {
-        // getTelegramConfig().then(setConfig).catch(console.error); // REMOVED
+        getTelegramConfig().then(setConfig).catch(console.error);
         getSystemName().then(res => setSysName(res.name)).catch(console.error);
         getLatencyConfig().then(setThresholds).catch(console.error);
         getDatabaseConfig().then(setDbConfig).catch(console.error);
@@ -23,7 +23,7 @@ export function Settings() {
         e.preventDefault();
         setLoading(true);
         try {
-            // await updateTelegramConfig(config); // REMOVED
+            await updateTelegramConfig(config);
             await updateSystemName(sysName);
             await updateLatencyConfig(thresholds);
             // Don't just auto-save DB config, it's sensitive.
@@ -100,6 +100,65 @@ export function Settings() {
                             <label className="block text-sm font-medium text-slate-400 mb-1">Nome do Sistema</label>
                             <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
                                 value={sysName} onChange={e => setSysName(e.target.value)} />
+                        </div>
+                    </div>
+
+                    {/* Telegram Config */}
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/10 rounded-lg">
+                                <Send className="text-blue-500" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Telegram</h3>
+                                <p className="text-sm text-slate-400">Alertas e Backups.</p>
+                            </div>
+                        </div>
+                        <div className="p-6 grid gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Bot Token</label>
+                                <input type="password" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })}
+                                    placeholder="123456:ABC-DEF..."
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Chat ID (Alertas)</label>
+                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                        value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })}
+                                        placeholder="-100..."
+                                    />
+                                </div>
+                                <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg">
+                                    <label className="block text-sm font-medium text-emerald-400 mb-1">Backup Chat ID (Opcional)</label>
+                                    <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                                        value={config.backup_chat_id || ''} onChange={e => setConfig({ ...config, backup_chat_id: e.target.value })}
+                                        placeholder="Se vazio, usa o Chat de Alertas"
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">Chat exclusivo para receber os backups diários do banco.</p>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-800">
+                                <h4 className="text-sm font-medium text-slate-300 mb-3">Modelos de Mensagem (Ups/Downs)</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Template DOWN</label>
+                                        <textarea rows={2} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={config.template_down || ''} onChange={e => setConfig({ ...config, template_down: e.target.value })}
+                                            placeholder="Ex: 🔴 [Device.Name] caiu! IP=[Device.IP]"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Template UP</label>
+                                        <textarea rows={2} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={config.template_up || ''} onChange={e => setConfig({ ...config, template_up: e.target.value })}
+                                            placeholder="Ex: 🟢 [Device.Name] voltou! IP=[Device.IP]"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

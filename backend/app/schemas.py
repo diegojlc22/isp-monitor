@@ -59,6 +59,7 @@ class Equipment(EquipmentBase):
 class TelegramConfig(BaseModel):
     bot_token: str
     chat_id: str
+    backup_chat_id: Optional[str] = None
     template_down: Optional[str] = None
     template_up: Optional[str] = None
 

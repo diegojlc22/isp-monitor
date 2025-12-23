@@ -16,11 +16,18 @@ Análise do Projeto e Relatório de Progresso
 2.  **Alertas Inteligentes (Anti-Spam):**
     *   **Dependência Pai/Filho:** Se um roteador principal cair, os dispositivos conectados a ele (filhos) NÃO enviarão alertas. Isso evita o "spam" de 50 notificações simultâneas quando uma torre cai. (Lógica implementada em `pinger_fast.py`).
 
-3.  **Fundação SNMP (Preparado):**
+3.  **Backup Automático:**
+    *   O sistema agora realiza um backup diário do banco de dados (`monitor.db`) à meia-noite.
+    *   O arquivo é compactado (.zip) e enviado para o seu Telegram.
+    *   **Novidade:** É possível configurar um **Grupo de Backup Separado** nas Configurações, para não misturar os backups com os alertas de queda.
+    *   Se não configurar um grupo separado, ele envia para o grupo de alertas padrão.
+    *   O sistema limpa o arquivo temporário após o envio.
+
+4.  **Fundação SNMP (Preparado):**
     *   Backend preparado para SNMP v2c (Novas colunas no banco: community, version, port).
     *   Serviço base criado para consultas futuras de tráfego e uptime.
 
-4.  **Instalação Automatizada (Portátil):**
+5.  **Instalação Automatizada (Portátil):**
     *   `iniciar_sistema.bat` gerencia a detecção e instalação de Python e Node.js automaticamente.
     *   Ambiente isolado (`.venv`) garantindo que o software rode em qualquer PC Windows sem conflitos.
 
