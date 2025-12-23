@@ -58,17 +58,24 @@ export function Backup() {
                 </div>
 
                 <form onSubmit={handleSave} className="p-6 space-y-6">
-                    <div className="p-6 border-l-4 border-emerald-500/20 bg-emerald-500/5 rounded-r-lg">
-                        <div className="mb-4">
+                    <div className="p-6 border-l-4 border-emerald-500/20 bg-emerald-500/5 rounded-r-lg space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-emerald-400 mb-1">Bot Token (Telegram)</label>
+                            <input type="password" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none font-mono"
+                                value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })}
+                                placeholder="123456:ABC-DEF..."
+                            />
+                            <p className="text-xs text-slate-400 mt-1">Token fornecido pelo @BotFather. Usado para enviar o arquivo.</p>
+                        </div>
+
+                        <div>
                             <label className="block text-sm font-medium text-emerald-400 mb-1">Chat ID de Backups (Exclusivo)</label>
                             <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none font-mono"
                                 value={config.backup_chat_id || ''} onChange={e => setConfig({ ...config, backup_chat_id: e.target.value })}
                                 placeholder="Ex: -100987654321..."
                             />
-                            <p className="text-xs text-slate-400 mt-2">
+                            <p className="text-xs text-slate-400 mt-1">
                                 O sistema enviará o arquivo <b>monitor.db.zip</b> diariamente (00:00) para este grupo.
-                                <br />
-                                Obs: Utiliza o mesmo Bot Token configurado na aba de Alertas (Telegram).
                             </p>
                         </div>
                     </div>
