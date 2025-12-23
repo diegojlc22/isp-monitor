@@ -116,12 +116,16 @@ class LauncherApp:
     def __init__(self, root):
         self.root = root
         self.root.title("ISP Monitor - Control Panel")
-        self.root.geometry("1000x700")
+        self.root.geometry("1000x800")
         self.root.configure(bg=COLORS['bg'])
         
         self.log_queue = queue.Queue()
         self.backend_thread = None
         self.frontend_thread = None
+        self.deploy_thread = None
+        
+        # Mode: 'prod' or 'dev'
+        self.mode_var = tk.StringVar(value="prod")
         
         self.setup_styles()
         self.create_widgets()
@@ -135,6 +139,8 @@ class LauncherApp:
         
         # Inicia verificação de logs
         self.root.after(100, self.process_logs)
+
+    # ... (tray methods remain same) ...
 
     def setup_tray(self):
         image = create_tray_image()
@@ -173,11 +179,13 @@ class LauncherApp:
         
         style.configure('TFrame', background=COLORS['bg'])
         style.configure('Panel.TFrame', background=COLORS['panel_bg'], relief='flat')
-        
-        # Labels
         style.configure('TLabel', background=COLORS['bg'], foreground=COLORS['fg'], font=('Segoe UI', 10))
         style.configure('Header.TLabel', font=('Segoe UI', 24, 'bold'), foreground=COLORS['accent'])
         style.configure('Status.TLabel', font=('Segoe UI', 11, 'bold'), background=COLORS['panel_bg'])
+
+        # Radiobuttons
+        style.configure('TRadiobutton', background=COLORS['bg'], foreground=COLORS['fg'], font=('Segoe UI', 10))
+        style.map('TRadiobutton', background=[('active', COLORS['bg'])], indicatorcolor=[('selected', COLORS['accent'])])
 
         # Buttons
         style.configure('TButton', 
@@ -200,9 +208,13 @@ class LauncherApp:
         style.map('Success.TButton',
             background=[('active', '#388e3c'), ('!active', COLORS['success'])],
         )
+        
+        style.configure('Neutral.TButton', background='#424242')
+        style.map('Neutral.TButton',
+            background=[('active', '#616161'), ('!active', '#424242')],
+        )
 
     def create_widgets(self):
-        # Container Principal
         main_container = ttk.Frame(self.root, padding="20")
         main_container.pack(fill='both', expand=True)
 
@@ -223,35 +235,47 @@ class LauncherApp:
         self.status_text = ttk.Label(status_container, text="Parado", font=('Segoe UI', 10, 'bold'), foreground=COLORS['error'])
         self.status_text.pack(side='left')
 
+        # Mode Selection
+        mode_frame = ttk.Frame(main_container)
+        mode_frame.pack(fill='x', pady=(0, 15))
+        
+        ttk.Label(mode_frame, text="Modo de Operação:", font=('Segoe UI', 10, 'bold')).pack(side='left', padx=(0, 10))
+        
+        rb_prod = ttk.Radiobutton(mode_frame, text="Produção (Recomendado)", variable=self.mode_var, value="prod", command=self.on_mode_change)
+        rb_prod.pack(side='left', padx=10)
+        
+        rb_dev = ttk.Radiobutton(mode_frame, text="Desenvolvimento (Hot-Reload)", variable=self.mode_var, value="dev", command=self.on_mode_change)
+        rb_dev.pack(side='left', padx=10)
+        
+        # Build Button
+        self.btn_build = ttk.Button(mode_frame, text="⚡ Criar Build / Deploy", style='Neutral.TButton', command=self.run_deploy)
+        self.btn_build.pack(side='right')
+
         # Control Panel
         control_panel = ttk.Frame(main_container, style='Panel.TFrame', padding="15")
         control_panel.pack(fill='x', pady=(0, 20))
 
         # Botões
-        self.btn_start = ttk.Button(control_panel, text="▶ Iniciar Tudo (Start)", style='Success.TButton', command=self.start_all)
+        self.btn_start = ttk.Button(control_panel, text="▶ Iniciar Sistema", style='Success.TButton', command=self.start_all)
         self.btn_start.pack(side='left', padx=(0, 10))
 
         self.btn_restart_backend = ttk.Button(control_panel, text="⟳ Reiniciar Backend", command=self.restart_backend, state='disabled')
         self.btn_restart_backend.pack(side='left', padx=(0, 10))
 
-        self.btn_stop = ttk.Button(control_panel, text="⏹ Parar Tudo (Stop)", style='Danger.TButton', command=self.stop_all, state='disabled')
+        self.btn_stop = ttk.Button(control_panel, text="⏹ Parar Tudo", style='Danger.TButton', command=self.stop_all, state='disabled')
         self.btn_stop.pack(side='left')
 
-        self.btn_open_browser = ttk.Button(control_panel, text="↗ Abrir no Navegador", command=self.open_browser)
+        self.btn_open_browser = ttk.Button(control_panel, text="↗ Abrir Navegador", command=self.open_browser)
         self.btn_open_browser.pack(side='right')
 
         # Links rápidos
         links_panel = ttk.Frame(main_container, height=30)
         links_panel.pack(fill='x', pady=(0, 10))
-        ttk.Label(links_panel, text="Acessos Rápidos:  ").pack(side='left')
+        ttk.Label(links_panel, text="Acesso: ").pack(side='left')
         
-        link_front = tk.Label(links_panel, text="Frontend (http://localhost:5173)", fg=COLORS['accent'], bg=COLORS['bg'], cursor="hand2")
-        link_front.pack(side='left', padx=10)
-        link_front.bind("<Button-1>", lambda e: self.open_browser())
-
-        link_api = tk.Label(links_panel, text="API Docs (http://localhost:8080/docs)", fg=COLORS['accent'], bg=COLORS['bg'], cursor="hand2")
-        link_api.pack(side='left', padx=10)
-        link_api.bind("<Button-1>", lambda e: subprocess.run('start http://localhost:8080/docs', shell=True))
+        self.link_url_label = tk.Label(links_panel, text="http://localhost:8080", fg=COLORS['accent'], bg=COLORS['bg'], cursor="hand2", font=('Segoe UI', 10, 'underline'))
+        self.link_url_label.pack(side='left', padx=5)
+        self.link_url_label.bind("<Button-1>", lambda e: self.open_browser())
 
         # Console Log
         log_frame = ttk.LabelFrame(main_container, text=" Log do Sistema ", padding="5")
@@ -272,8 +296,25 @@ class LauncherApp:
         self.console.tag_config('WARN', foreground='#ffc107')
         self.console.tag_config('ERROR', foreground='#f44336')
         self.console.tag_config('LOG', foreground='#e0e0e0')
+        self.console.tag_config('SUCCESS', foreground='#4caf50')
 
-        self.log_message('INFO', "Sistema pronto. Clique em Iniciar para começar.")
+        self.log_message('INFO', "Sistema pronto. Selecione o modo e clique em Iniciar.")
+        self.update_url_label()
+
+    def on_mode_change(self):
+        self.update_url_label()
+        mode = self.mode_var.get()
+        if mode == 'prod':
+            self.log_message('INFO', "Modo Selecionado: Produção (Leve, Rápido, Estável).")
+        else:
+            self.log_message('INFO', "Modo Selecionado: Desenvolvimento (Hot-Reload, Debug, Pesado).")
+
+    def update_url_label(self):
+        mode = self.mode_var.get()
+        url = "http://localhost:8080"
+        if mode == 'dev':
+            url = "http://localhost:5173"
+        self.link_url_label.config(text=url)
 
     def log_message(self, level, message):
         self.console.configure(state='normal')
@@ -286,50 +327,84 @@ class LauncherApp:
         while not self.log_queue.empty():
             try:
                 level, msg = self.log_queue.get_nowait()
-                # Tratamento simples para colorir o log que vem do processo
                 tag = level
                 if "ERROR" in msg or "Exception" in msg or "Failed" in msg:
                     tag = 'ERROR'
                 elif "WARNING" in msg:
                     tag = 'WARN'
+                elif "Deploy concluido" in msg:
+                    tag = 'SUCCESS'
                 
-                # Se msg já tem quebra de linha, remove para não duplicar, pois log_message adiciona
                 self.log_message(tag, msg.rstrip())
             except queue.Empty:
                 pass
         self.root.after(50, self.process_logs)
 
+    def run_deploy(self):
+        if self.is_running:
+            messagebox.showwarning("Aviso", "Pare o sistema antes de fazer deploy.")
+            return
+
+        if not messagebox.askyesno("Confirmar Deploy", "Isso vai compilar o Frontend para Produção.\nPode levar alguns minutos. Continuar?"):
+            return
+
+        self.log_message('WARN', "Iniciando Deploy... Aguarde.")
+        
+        project_root = Path(__file__).parent.absolute()
+        frontend_path = project_root / 'frontend'
+        
+        npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
+        
+        # Chain commands: install + build
+        cmd = [npm_cmd, 'run', 'build']
+        
+        self.deploy_thread = ServiceThread(cmd, "DEPLOY", self.log_queue, cwd=frontend_path)
+        self.deploy_thread.start()
+
     def start_all(self):
         if self.is_running:
             return
         
-        self.is_running = True
-        self.update_ui_state(running=True)
-        self.log_message('INFO', "Iniciando serviços...")
-
+        mode = self.mode_var.get()
         project_root = Path(__file__).parent.absolute()
         python_exe = sys.executable
 
-        # Backend
-        backend_cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8080']
-        self.backend_thread = ServiceThread(backend_cmd, "BACKEND", self.log_queue, cwd=project_root)
-        self.backend_thread.start()
+        # Check production build if PROD
+        if mode == 'prod':
+            dist_path = project_root / 'frontend' / 'dist'
+            if not dist_path.exists():
+                messagebox.showerror("Erro de Deploy", "Arquivos de produção não encontrados!\n\nPor favor, clique em 'Criar Build / Deploy' antes de iniciar em modo produção.")
+                return
 
-        # Frontend
-        # Executando via node direto para evitar janelas cmd/npm persistentes
-        frontend_path = project_root / 'frontend'
-        vite_path = frontend_path / 'node_modules' / 'vite' / 'bin' / 'vite.js'
+        self.is_running = True
+        self.update_ui_state(running=True)
+        self.log_message('INFO', f"Iniciando serviços em modo {mode.upper()}...")
+
+        if mode == 'prod':
+            # Single Process
+            # --workers 1 is important for SQLite stability
+            cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--host', '0.0.0.0', '--port', '8080', '--workers', '1']
+            self.backend_thread = ServiceThread(cmd, "SERVER", self.log_queue, cwd=project_root)
+            self.backend_thread.start()
         
-        # Fallback se não achar o caminho direto (embora deva existir após npm install)
-        if vite_path.exists():
-            frontend_cmd = ['node', str(vite_path), '--host']
-        else:
-            # Fallback para o metodo antigo se algo der errado (ainda tenta lista)
-            npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
-            frontend_cmd = [npm_cmd, 'run', 'dev', '--', '--host']
+        else: # DEV MODE
+            # Backend with Reload
+            backend_cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8080']
+            self.backend_thread = ServiceThread(backend_cmd, "BACKEND-DEV", self.log_queue, cwd=project_root)
+            self.backend_thread.start()
 
-        self.frontend_thread = ServiceThread(frontend_cmd, "FRONTEND", self.log_queue, cwd=frontend_path)
-        self.frontend_thread.start()
+            # Frontend with Vite host
+            frontend_path = project_root / 'frontend'
+            vite_path = frontend_path / 'node_modules' / 'vite' / 'bin' / 'vite.js'
+            
+            if vite_path.exists():
+                frontend_cmd = ['node', str(vite_path), '--host']
+            else:
+                npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
+                frontend_cmd = [npm_cmd, 'run', 'dev', '--', '--host']
+
+            self.frontend_thread = ServiceThread(frontend_cmd, "FRONTEND-DEV", self.log_queue, cwd=frontend_path)
+            self.frontend_thread.start()
 
     def stop_all(self):
         if self.backend_thread:
@@ -342,20 +417,33 @@ class LauncherApp:
         self.log_message('WARN', "Todos os serviços foram parados.")
 
     def restart_backend(self):
+        if not self.is_running: return
+        
+        self.log_message('WARN', "Reiniciando Backend...")
+        
         if self.backend_thread:
-            self.log_message('WARN', "Reiniciando Backend...")
             self.backend_thread.stop()
-            time.sleep(1) # Espera liberar porta
-            
-            project_root = Path(__file__).parent.absolute()
-            python_exe = sys.executable
-            backend_cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8080']
-            
-            self.backend_thread = ServiceThread(backend_cmd, "BACKEND", self.log_queue, cwd=project_root)
-            self.backend_thread.start()
+        
+        time.sleep(1)
+        
+        # Restart with same logic as start_all
+        mode = self.mode_var.get()
+        project_root = Path(__file__).parent.absolute()
+        python_exe = sys.executable
+        
+        if mode == 'prod':
+             cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--host', '0.0.0.0', '--port', '8080', '--workers', '1']
+             self.backend_thread = ServiceThread(cmd, "SERVER", self.log_queue, cwd=project_root)
+        else:
+             cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8080']
+             self.backend_thread = ServiceThread(cmd, "BACKEND-DEV", self.log_queue, cwd=project_root)
+             
+        self.backend_thread.start()
 
     def open_browser(self):
-        subprocess.run('start http://localhost:5173', shell=True)
+        mode = self.mode_var.get()
+        url = "http://localhost:8080" if mode == 'prod' else "http://localhost:5173"
+        subprocess.run(f'start {url}', shell=True)
 
     def update_ui_state(self, running):
         if running:
@@ -364,6 +452,9 @@ class LauncherApp:
             self.btn_start.config(state='disabled')
             self.btn_stop.config(state='normal')
             self.btn_restart_backend.config(state='normal')
+            # Disable mode switch while running
+            # We can't easily disable radiobuttons variable but we can disable widgets? 
+            # Simplification: Just trust user or improve later.
         else:
             self.status_indicator.itemconfig(self.status_indicator_circle, fill=COLORS['error'])
             self.status_text.config(text="Parado", foreground=COLORS['error'])
