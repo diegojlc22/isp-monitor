@@ -96,149 +96,169 @@ async def scan_range_generator(ip_range: list[str]):
 async def monitor_job_fast():
     """
     Ultra-fast monitoring loop using batch pinging
-    Pings ALL devices at once (like The Dude)
+    Pings ALL devices at once.
+    Optimized: Caches config & Reduces DB writes (Smart Logging).
     """
     from backend.app.config import PING_INTERVAL_SECONDS
+    import time
     
+    # In-Memory Cache
+    config_cache = {
+        "last_update": 0,
+        "token": "",
+        "chat_id": "",
+        "tmpl_down": "",
+        "tmpl_up": ""
+    }
+    
+    # State tracking for Smart Logging
+    # (type, id) -> { 'last_log_time': timestamp, 'last_status': bool, 'last_latency': float }
+    device_states = {}
+
+    print("[INFO] Starting High-Performance Pinger Service...")
+
     while True:
+        cycle_start = time.time()
         try:
             async with AsyncSessionLocal() as session:
-                # Get Telegram config
-                token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
-                chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
-                down_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
-                up_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
-                
-                token = token_res.scalar_one_or_none()
-                chat_id = chat_res.scalar_one_or_none()
-                down_tmpl = down_res.scalar_one_or_none()
-                up_tmpl = up_res.scalar_one_or_none()
-                
-                token_val = token.value if token else ""
-                chat_val = chat_id.value if chat_id else ""
-                template_down = down_tmpl.value if down_tmpl else "🔴 O servico Ping no dispositivo [Device.Name] passou para o status down - IP=[Device.IP]"
-                template_up = up_tmpl.value if up_tmpl else "🟢 O servico Ping no dispositivo [Device.Name] passou para o status up - IP=[Device.IP]"
-                
-                # Get all devices
-                towers_res = await session.execute(select(Tower))
-                towers = towers_res.scalars().all()
-                
-                equip_res = await session.execute(select(Equipment))
-                equipments = equip_res.scalars().all()
-                
-                # Collect all IPs
-                all_devices = []
-                for tower in towers:
-                    if tower.ip:
-                        all_devices.append(("tower", tower))
-                
-                for eq in equipments:
-                    if eq.ip:
-                        all_devices.append(("equipment", eq))
-                
-                # Ping ALL devices at once! (The Dude's secret)
-                if all_devices:
-                    ips = [device[1].ip for device in all_devices]
-                    ping_results = await ping_multiple_fast(ips)
-                    
-                    # Pass 1: Update statuses & Build Map
-                    # Precisamos saber o status ATUAL de todos antes de gerar alertas (para dependencias)
-                    current_status_map = {} # (type, id) -> bool
-                    
-                    # Store previous statuses to check for changes
-                    changes = [] 
-                    
-                    for device_type, device in all_devices:
-                        latency_sec = ping_results.get(device.ip)
-                        is_online = latency_sec is not None
-                        latency_ms = int(latency_sec * 1000) if latency_sec else None
-                        
-                        was_online = device.is_online
-                        
-                        # Update DB object
-                        device.is_online = is_online
-                        device.last_checked = datetime.now(timezone.utc)
-                        if latency_ms is not None:
-                            device.last_latency = latency_ms
-                            
-                        # Update Map
-                        current_status_map[(device_type, device.id)] = is_online
-                        
-                        # Record change for Pass 2 if state changed
-                        if is_online != was_online:
-                            changes.append((device_type, device, is_online, was_online))
+                # 1. Refresh Config Cache (Every 60s)
+                if time.time() - config_cache["last_update"] > 60:
+                    try:
+                        token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
+                        chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
+                        down_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
+                        up_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
 
-                        # Always Log (or maybe only on change? No, keep history)
-                        # But logging 50 devices every 5s fills DB fast.
-                        # Ideally log ping only if requested or periodically.
-                        # For now, keep as is (user requested logs).
+                        t = token_res.scalar_one_or_none()
+                        c = chat_res.scalar_one_or_none()
+                        d = down_res.scalar_one_or_none()
+                        u = up_res.scalar_one_or_none()
+
+                        config_cache["token"] = t.value if t else ""
+                        config_cache["chat_id"] = c.value if c else ""
+                        config_cache["tmpl_down"] = d.value if d else "🔴 [Device.Name] caiu! IP=[Device.IP]"
+                        config_cache["tmpl_up"] = u.value if u else "🟢 [Device.Name] voltou! IP=[Device.IP]"
+                        config_cache["last_update"] = time.time()
+                    except Exception as e:
+                        print(f"[WARN] Config refresh failed: {e}")
+
+                # 2. Get All Devices
+                # Note: We fetch every time to catch new devices.
+                # Optimization: Could check specific table timestamp if supported, but fetch is fast enough for <500 devices.
+                towers = (await session.execute(select(Tower))).scalars().all()
+                equipments = (await session.execute(select(Equipment))).scalars().all()
+                
+                all_devices = []
+                for t in towers: 
+                    if t.ip: all_devices.append(("tower", t))
+                for e in equipments: 
+                    if e.ip: all_devices.append(("equipment", e))
+                
+                if not all_devices:
+                    await asyncio.sleep(5)
+                    continue
+
+                # 3. Ping Batch
+                ips = [d[1].ip for d in all_devices]
+                ping_results = await ping_multiple_fast(ips)
+                
+                # 4. Process Results & Smart Log
+                current_time = datetime.now(timezone.utc)
+                current_ts = current_time.timestamp()
+                
+                # Map for dependency check
+                current_status_map = {} 
+
+                for device_type, device in all_devices:
+                    # Parse Result
+                    latency_sec = ping_results.get(device.ip)
+                    is_online = latency_sec is not None
+                    latency_ms = int(latency_sec * 1000) if latency_sec else None
+                    
+                    # Previous State
+                    was_online = device.is_online
+                    key = (device_type, device.id)
+                    
+                    prev_state = device_states.get(key, {
+                        'last_log_time': 0, 'last_status': None, 'last_latency': None
+                    })
+
+                    # Update DB Object (Always update Real-time View)
+                    device.is_online = is_online
+                    device.last_checked = current_time
+                    if latency_ms is not None:
+                        device.last_latency = latency_ms
+
+                    current_status_map[key] = is_online
+
+                    # --- SMART LOGGING DECISION ---
+                    should_log = False
+                    
+                    # Rule 1: Status Changed
+                    if is_online != was_online:
+                        should_log = True
+                    
+                    # Rule 2: Keepalive (Every 10 minutes)
+                    elif (current_ts - prev_state['last_log_time']) > 600:
+                        should_log = True
+                        
+                    # Rule 3: Significant Latency Change (>10ms or Jitter)
+                    # Only if online and we had a previous latency
+                    elif is_online and prev_state['last_latency'] is not None:
+                        diff = abs(latency_ms - prev_state['last_latency'])
+                        if diff > 10: # Log if jitter > 10ms
+                            should_log = True
+                            
+                    if should_log:
                         log_entry = PingLog(
                             device_type=device_type,
                             device_id=device.id,
                             status=is_online,
                             latency_ms=latency_ms,
-                            timestamp=datetime.now(timezone.utc)
+                            timestamp=current_time
                         )
                         session.add(log_entry)
-
-                    # Pass 2: Generate Smart Alerts
-                    for device_type, device, is_online, was_online in changes:
-                        # Check Dependency (Suppress if Parent is DOWN)
-                        suppress_alert = False
                         
-                        if not is_online: # Only needed for DOWN alerts
-                            parent_id = device.parent_id
-                            if parent_id:
-                                # Assume parent is ALWAYS an Equipment (Router/Switch)
-                                # Check parent's status in the current map
-                                parent_status = current_status_map.get(('equipment', parent_id))
-                                
-                                # If parent status is known AND is False (Offline) -> Suppress
-                                if parent_status is False:
-                                    print(f"🔕 Alert suppressed for {device.name} (Parent {parent_id} is down)")
-                                    suppress_alert = True
+                        # Update State cache
+                        device_states[key] = {
+                            'last_log_time': current_ts,
+                            'last_status': is_online,
+                            'last_latency': latency_ms if latency_ms else prev_state['last_latency']
+                        }
 
-                        if suppress_alert:
-                            continue
-
-                        # Generate Alert
-                        if not is_online and was_online:
-                            # DOWN
-                            msg = template_down.replace("[Device.Name]", device.name)\
-                                               .replace("[Device.IP]", device.ip)\
-                                               .replace("[Service.Name]", "Ping")\
-                                               .replace("[Device.FirstAddress]", device.ip)
-                            await send_telegram_alert(token_val, chat_val, msg)
+                    # --- ALERTS ---
+                    if is_online != was_online:
+                        # Dependency Check
+                        suppress = False
+                        if not is_online: # Down 
+                            if device.parent_id and ('equipment', device.parent_id) in current_status_map:
+                                if not current_status_map[('equipment', device.parent_id)]:
+                                    # Parent is DOWN, suppress child alert
+                                    suppress = True 
+                        
+                        if not suppress:
+                            tmpl = config_cache["tmpl_down"] if not is_online else config_cache["tmpl_up"]
+                            msg = tmpl.replace("[Device.Name]", device.name)\
+                                      .replace("[Device.IP]", device.ip)\
+                                      .replace("[Service.Name]", "Ping")\
+                                      .replace("[Device.FirstAddress]", device.ip)
                             
-                            alert = Alert(
+                            await send_telegram_alert(config_cache["token"], config_cache["chat_id"], msg)
+                            
+                            session.add(Alert(
                                 device_type=device_type,
                                 device_name=device.name,
                                 device_ip=device.ip,
                                 message=msg,
-                                timestamp=datetime.now(timezone.utc)
-                            )
-                            session.add(alert)
-                            
-                        elif is_online and not was_online:
-                            # UP
-                            msg = template_up.replace("[Device.Name]", device.name)\
-                                             .replace("[Device.IP]", device.ip)\
-                                             .replace("[Service.Name]", "Ping")\
-                                             .replace("[Device.FirstAddress]", device.ip)
-                            await send_telegram_alert(token_val, chat_val, msg)
-                            
-                            alert = Alert(
-                                device_type=device_type,
-                                device_name=device.name,
-                                device_ip=device.ip,
-                                message=msg,
-                                timestamp=datetime.now(timezone.utc)
-                            )
-                            session.add(alert)
-                
+                                timestamp=current_time
+                            ))
+
                 await session.commit()
-                # print(f"✅ Pinged {len(all_devices)} devices in batch mode")
+                
         except Exception as e:
-            print(f"Monitor job error: {e}")
+            print(f"[ERROR] Monitor Loop: {e}")
         
-        await asyncio.sleep(PING_INTERVAL_SECONDS)
+        # Consistent Interval
+        elapsed = time.time() - cycle_start
+        wait_time = max(0.5, PING_INTERVAL_SECONDS - elapsed)
+        await asyncio.sleep(wait_time)
