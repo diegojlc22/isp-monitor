@@ -63,25 +63,44 @@ else {
 
 # 4. Configurar Ambiente Virtual
 Write-Host ""
-Write-Host "[INFO] Configurando dependencias (.venv)..." -ForegroundColor Yellow
+Write-Host "[INFO] Verificando ambiente virtual (.venv)..." -ForegroundColor Yellow
 
-# Remove venv antigo para garantir que usa o python novo
-if (Test-Path ".venv") {
-    Write-Host "       Removendo ambiente virtual antigo..."
-    Remove-Item -Recurse -Force ".venv" -ErrorAction SilentlyContinue
+$venvPython = ".venv\Scripts\python.exe"
+$envHealthy = $false
+
+if (Test-Path $venvPython) {
+    # Tenta importar fastapi como teste de saude
+    & $venvPython -c "import fastapi" 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $envHealthy = $true
+        Write-Host "[OK] Ambiente virtual ja existe e esta saudavel." -ForegroundColor Green
+    }
 }
 
-Write-Host "       Criando novo ambiente..."
-& $pythonExe -m venv .venv
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERRO] Falha ao criar .venv" -ForegroundColor Red
-    Read-Host "Pressione ENTER para sair..."
-    exit 1
-}
+if (-not $envHealthy) {
+    Write-Host "[INFO] Ambiente inexistente ou corrompido. Configurando do zero..." -ForegroundColor Yellow
+    
+    # Remove venv antigo se existir
+    if (Test-Path ".venv") {
+        Write-Host "       Removendo ambiente virtual antigo..."
+        Remove-Item -Recurse -Force ".venv" -ErrorAction SilentlyContinue
+    }
 
-Write-Host "       Instalando bibliotecas (Isso pode demorar um pouco)..."
-$pip = ".venv\Scripts\pip.exe"
-& $pip install -r backend/requirements.txt | Out-Null
+    Write-Host "       Criando novo ambiente..."
+    & $pythonExe -m venv .venv
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERRO] Falha ao criar .venv" -ForegroundColor Red
+        Read-Host "Pressione ENTER para sair..."
+        exit 1
+    }
+
+    Write-Host "       Instalando bibliotecas (Isso pode demorar um pouco)..."
+    $pip = ".venv\Scripts\pip.exe"
+    & $pip install -r backend/requirements.txt | Out-Null
+}
+else {
+    Write-Host "[SKIP] Pulando instalacao de dependencias (Fast Path)." -ForegroundColor DarkGray
+}
 
 # 5. Lançar Aplicação
 Write-Host ""
@@ -89,18 +108,13 @@ Write-Host "[SUCESSO] Tudo pronto! Iniciando Launcher..." -ForegroundColor Green
 Write-Host "===================================================" -ForegroundColor Cyan
 
 # USAR python.exe COMUM (COM JANELA) PARA VERMOS OS ERROS
-$launcher = ".venv\Scripts\python.exe"
+# USAR pythonw.exe (SEM JANELA) PARA DEIXAR LIMPO
+$launcher = ".venv\Scripts\pythonw.exe"
 if (-not (Test-Path $launcher)) { $launcher = ".venv\Scripts\python.exe" }
 
-Write-Host "Executando: $launcher launcher.pyw"
-& $launcher launcher.pyw
+Write-Host "Iniciando Launcher e fechando este console..."
+Start-Process -FilePath $launcher -ArgumentList "launcher.pyw"
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Write-Host "[CRITICO] O Launcher fechou com erro!" -ForegroundColor Red
-}
-
-Write-Host ""
-Write-Host "Pressione ENTER para fechar esta janela..."
-Read-Host
-Start-Sleep -Seconds 10
+# Pequena pausa para garantir que o processo iniciou
+Start-Sleep -Seconds 2
+exit 0

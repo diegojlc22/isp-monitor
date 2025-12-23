@@ -125,12 +125,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(towers.router)
-app.include_router(equipments.router)
-app.include_router(settings.router)
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(alerts.router)
+app.include_router(towers.router, prefix="/api")
+app.include_router(equipments.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+app.include_router(alerts.router, prefix="/api")
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
