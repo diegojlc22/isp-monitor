@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
 import subprocess
 import sys
 import os
@@ -9,6 +9,14 @@ import platform
 import signal
 from pathlib import Path
 import time
+
+try:
+    import pystray
+    from pystray import MenuItem as item
+    from PIL import Image, ImageDraw
+    HAS_TRAY = True
+except ImportError:
+    HAS_TRAY = False
 
 # Configurações de Cores (Tema Escuro Premium)
 COLORS = {
@@ -24,6 +32,20 @@ COLORS = {
     'panel_bg': '#252526',
     'border': '#3e3e42'
 }
+
+def create_tray_image():
+    # Gera um ícone simples via código se não tiver nenhum
+    width = 64
+    height = 64
+    color1 = "#007acc"
+    color2 = "#1e1e1e"
+    
+    image = Image.new('RGB', (width, height), color1)
+    dc = ImageDraw.Draw(image)
+    dc.rectangle(
+        (width // 4, height // 4, width * 3 // 4, height * 3 // 4),
+        fill=color2)
+    return image
 
 class ServiceThread(threading.Thread):
     def __init__(self, command, name, log_queue, cwd=None):
@@ -52,11 +74,11 @@ class ServiceThread(threading.Thread):
                 self.command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                shell=True,
+                shell=False,
                 cwd=self.cwd,
                 env=env,
                 startupinfo=startupinfo,
-                # creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
+                creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
             )
 
             self.log_queue.put(('INFO', f"[{self.name}] Serviço iniciado (PID: {self.process.pid})\n"))
@@ -86,7 +108,7 @@ class ServiceThread(threading.Thread):
             self.log_queue.put(('WARN', f"[{self.name}] Parando serviço...\n"))
             if platform.system() == 'Windows':
                 # Mata a árvore de processos no Windows
-                subprocess.call(['taskkill', '/F', '/T', '/PID', str(self.process.pid)])
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(self.process.pid)], creationflags=subprocess.CREATE_NO_WINDOW)
             else:
                 self.process.terminate()
 
@@ -97,9 +119,6 @@ class LauncherApp:
         self.root.geometry("1000x700")
         self.root.configure(bg=COLORS['bg'])
         
-        # Ícone (opcional, se tiver)
-        # self.root.iconbitmap('icon.ico')
-
         self.log_queue = queue.Queue()
         self.backend_thread = None
         self.frontend_thread = None
@@ -109,8 +128,38 @@ class LauncherApp:
         
         self.is_running = False
         
+        # Setup Tray
+        self.tray_icon = None
+        if HAS_TRAY:
+            self.setup_tray()
+        
         # Inicia verificação de logs
         self.root.after(100, self.process_logs)
+
+    def setup_tray(self):
+        image = create_tray_image()
+        menu = (
+            item('Abrir Painel', self.show_window, default=True),
+            item('Parar e Sair', self.quit_app)
+        )
+        self.tray_icon = pystray.Icon("isp_monitor", image, "ISP Monitor", menu)
+        # Rodar tray em thread separada para não travar GUI
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+
+    def show_window(self, icon=None, item=None):
+        self.root.after(0, self.root.deiconify)
+
+    def quit_app(self, icon=None, item=None):
+        if self.tray_icon:
+            self.tray_icon.stop()
+        self.root.after(0, self.exit_fully)
+
+    def exit_fully(self):
+        if self.is_running:
+            self.stop_all()
+        self.root.destroy()
+        sys.exit(0)
+
 
     def setup_styles(self):
         style = ttk.Style()
@@ -256,15 +305,23 @@ class LauncherApp:
         python_exe = sys.executable
 
         # Backend
-        backend_cmd = f'{python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8080'
+        backend_cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8080']
         self.backend_thread = ServiceThread(backend_cmd, "BACKEND", self.log_queue, cwd=project_root)
         self.backend_thread.start()
 
         # Frontend
+        # Executando via node direto para evitar janelas cmd/npm persistentes
         frontend_path = project_root / 'frontend'
-        # Detectar comando npm correto
-        npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
-        frontend_cmd = f'{npm_cmd} run dev -- --host'
+        vite_path = frontend_path / 'node_modules' / 'vite' / 'bin' / 'vite.js'
+        
+        # Fallback se não achar o caminho direto (embora deva existir após npm install)
+        if vite_path.exists():
+            frontend_cmd = ['node', str(vite_path), '--host']
+        else:
+            # Fallback para o metodo antigo se algo der errado (ainda tenta lista)
+            npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
+            frontend_cmd = [npm_cmd, 'run', 'dev', '--', '--host']
+
         self.frontend_thread = ServiceThread(frontend_cmd, "FRONTEND", self.log_queue, cwd=frontend_path)
         self.frontend_thread.start()
 
@@ -286,7 +343,7 @@ class LauncherApp:
             
             project_root = Path(__file__).parent.absolute()
             python_exe = sys.executable
-            backend_cmd = f'{python_exe} -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8080'
+            backend_cmd = [python_exe, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '0.0.0.0', '--port', '8080']
             
             self.backend_thread = ServiceThread(backend_cmd, "BACKEND", self.log_queue, cwd=project_root)
             self.backend_thread.start()
@@ -309,12 +366,16 @@ class LauncherApp:
             self.btn_restart_backend.config(state='disabled')
 
     def on_closing(self):
-        if self.is_running:
-            if tk.messagebox.askokcancel("Sair", "Os serviços ainda estão rodando. Deseja parar tudo e sair?"):
-                self.stop_all()
-                self.root.destroy()
+        if HAS_TRAY and self.tray_icon:
+            self.root.withdraw()
+            # Mostra notificação na bandeja se possível ou apenas esconde
         else:
-            self.root.destroy()
+            if self.is_running:
+                if tk.messagebox.askokcancel("Sair", "Os serviços ainda estão rodando. Deseja parar tudo e sair?"):
+                    self.stop_all()
+                    self.root.destroy()
+            else:
+                self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
