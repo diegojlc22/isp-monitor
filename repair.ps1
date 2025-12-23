@@ -14,27 +14,52 @@ Write-Host ""
 Write-Host "[INFO] Verificando Python do sistema..." -ForegroundColor Yellow
 
 $global:SystemPythonGood = $false
-try {
-    $sysPy = Get-Command python -ErrorAction SilentlyContinue
-    if ($sysPy) {
-        # Verificar versão e Tkinter
-        $checkCmd = 'import sys; import tkinter; major, minor = sys.version_info[:2]; exit(0) if major == 3 and minor >= 10 else exit(1)'
-        python -c $checkCmd 2>$null
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "       Python do sistema detectado e funcional (com Tkinter)." -ForegroundColor Green
-            $global:SystemPythonGood = $true
-        }
-        else {
-            Write-Host "       Python do sistema encontrado, mas incompleto ou antigo." -ForegroundColor DarkGray
-        }
-    }
-    else {
-        Write-Host "       Nenhum Python encontrado no PATH." -ForegroundColor DarkGray
+# Tenta encontrar Python de varias formas
+$candidates = @()
+
+# 1. Via PATH (python e py launcher)
+try { $candidates += (Get-Command python -ErrorAction SilentlyContinue).Source } catch {}
+try { $candidates += (Get-Command py -ErrorAction SilentlyContinue).Source } catch {}
+
+# 2. Via Locais Comuns (Windows)
+$commonPaths = @(
+    "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe",
+    "$env:ProgramFiles\Python3*\python.exe",
+    "C:\Python3*\python.exe"
+)
+foreach ($pattern in $commonPaths) {
+    if (Test-Path $pattern) {
+        $found = Get-ChildItem $pattern | Select-Object -ExpandProperty FullName
+        $candidates += $found
     }
 }
-catch {
-    Write-Host "       Erro ao verificar Python do sistema." -ForegroundColor Red
+
+# Remove duplicados e vazios
+$candidates = $candidates | Select-Object -Unique | Where-Object { $_ }
+
+Write-Host "       Candidatos encontrados: $($candidates.Count)" -ForegroundColor DarkGray
+
+foreach ($pyBin in $candidates) {
+    Write-Host "       Testando: $pyBin" -NoNewline
+    
+    # Verificar versão e Tkinter
+    $checkCmd = 'import sys; import tkinter; major, minor = sys.version_info[:2]; exit(0) if major == 3 and minor >= 10 else exit(1)'
+    
+    try {
+        & $pyBin -c $checkCmd 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host " [OK] (Compativel)" -ForegroundColor Green
+            $global:SystemPythonGood = $true
+            $global:BestSystemPython = $pyBin
+            break
+        }
+        else {
+            Write-Host " [X] (Versao antiga ou sem Tkinter)" -ForegroundColor DarkGray
+        }
+    }
+    catch {
+        Write-Host " [ERRO]" -ForegroundColor Red
+    }
 }
 
 # 3. Decisão: Usar sistema ou instalar portatil
@@ -69,6 +94,14 @@ if (-not $global:SystemPythonGood) {
         $installArgs = "/passive InstallAllUsers=0 TargetDir=`"$pyDir`" Include_tcltk=1 Include_test=0 PrependPath=0"
         Start-Process -FilePath $installer -ArgumentList $installArgs -Wait
         
+        # Aguardar um pouco mais para garantir que o arquivo apareça no disco
+        $maxRetries = 15
+        while (-not (Test-Path (Join-Path $pyDir "python.exe")) -and $maxRetries -gt 0) {
+            Write-Host "       Aguardando instalacao finalizar..." 
+            Start-Sleep -Seconds 2
+            $maxRetries--
+        }
+
         Remove-Item $installer -ErrorAction SilentlyContinue
     }
     
@@ -83,7 +116,13 @@ if (-not $global:SystemPythonGood) {
     Write-Host "[OK] Python dedicado pronto para uso." -ForegroundColor Green
 }
 else {
-    $pythonExe = "python"
+    if ($global:BestSystemPython) {
+        $pythonExe = $global:BestSystemPython
+        Write-Host "[INFO] Usando Python do sistema: $pythonExe" -ForegroundColor Cyan
+    }
+    else {
+        $pythonExe = "python"
+    }
 }
 
 # 4. Configurar Ambiente Virtual
