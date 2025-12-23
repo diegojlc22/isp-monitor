@@ -1,58 +1,59 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title ISP Monitor - Bootstrapper
+title ISP Monitor
 
-:: 1. Tenta detectar Python (comando python ou py)
+:: ==============================================================================
+:: VERIFICAÇÃO RÁPIDA (FAST PATH)
+:: Se o ambiente já estiver pronto (venv e node_modules), pula a instalação e abre direto.
+:: ==============================================================================
+
+if exist ".venv\Scripts\pythonw.exe" (
+    if exist "frontend\node_modules" (
+        :: Inicia o Launcher imediatamente de forma oculta (sem terminal)
+        start "" ".venv\Scripts\pythonw.exe" launcher.pyw
+        exit /b
+    )
+)
+
+:: ==============================================================================
+:: INSTALAÇÃO / CONFIGURAÇÃO (SLOW PATH)
+:: Só executa se for a primeira vez ou se as pastas sumirem.
+:: ==============================================================================
+
+echo [!] Configurando ambiente de primeira execucao...
+
+:: 1. Tenta detectar Python no sistema
 python --version >nul 2>&1
-if %errorlevel% equ 0 goto :LAUNCH
-
+if %errorlevel% equ 0 goto :SETUP
 py --version >nul 2>&1
-if %errorlevel% equ 0 goto :LAUNCH
+if %errorlevel% equ 0 goto :SETUP
 
-:: 2. Se chegou aqui, nao achou Python. Instalação:
-echo [!] Python nao detectado no sistema.
-echo [!] Iniciando download do instalador (isso pode levar alguns segundos)...
-
-:: Remove arquivo antigo se existir
+:: 2. Se nao achou Python, baixa e instala
+echo [!] Python nao detectado. Baixando instalador portatil...
 if exist "python_installer.exe" del "python_installer.exe"
-
-:: Download via Curl (com flag -L para seguir redirects)
 curl -L -o python_installer.exe https://www.python.org/ftp/python/3.11.5/python-3.11.5-amd64.exe
 
-:: Verifica se baixou
 if not exist "python_installer.exe" (
-    echo.
     echo [ERROR] Falha no download do Python.
-    echo O arquivo instalador nao foi criado.
     pause
     exit /b
 )
 
-echo [!] Download concluido. Instalando Python...
-echo [!] Uma janela de permissao pode aparecer. Por favor, aceite.
-
-:: Instala (Wait garante esperar terminar)
+echo [!] Instalando Python (aceite a permissao)...
 start /wait python_installer.exe /quiet InstallAllUsers=1 PrependPath=1 Include_test=0
-
-:: Limpeza
 if exist "python_installer.exe" del "python_installer.exe"
 
-echo [!] Python instalado.
-echo [!] Tentando iniciar o sistema...
-
-:LAUNCH
-:: Verifica se setup_gui.py existe
-if not exist "setup_gui.py" (
-   echo [ERROR] Arquivo setup_gui.py nao encontrado!
-   pause
-   exit /b
-)
-
-:: Tenta rodar com python ou py
-python setup_gui.py >nul 2>&1
-if %errorlevel% neq 0 (
-    py setup_gui.py >nul 2>&1
+:SETUP
+:: Executa o assistente de instalacao (GUI) que cria a venv e instala libs
+if exist "setup_gui.py" (
+    python setup_gui.py >nul 2>&1
+    if %errorlevel% neq 0 (
+        py setup_gui.py >nul 2>&1
+    )
+) else (
+    echo [ERROR] setup_gui.py nao encontrado.
+    pause
 )
 
 exit /b
