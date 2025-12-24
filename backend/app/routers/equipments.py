@@ -141,11 +141,13 @@ async def get_latency_history(eq_id: int, period: str = "24h", db: AsyncSession 
     now = datetime.now(timezone.utc)
     if period == "7d":
         start_time = now - timedelta(days=7)
+    elif period == "1h":
+        start_time = now - timedelta(hours=1)
     else: # default 24h
         start_time = now - timedelta(hours=24)
         
     query = select(PingLog).where(
-        PingLog.device_type == "Equipamento",
+        PingLog.device_type == "equipment",
         PingLog.device_id == eq_id,
         PingLog.timestamp >= start_time
     ).order_by(PingLog.timestamp.asc())

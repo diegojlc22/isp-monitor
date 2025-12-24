@@ -192,23 +192,21 @@ async def monitor_job_fast():
 
                     current_status_map[key] = is_online
 
-                    # --- SMART LOGGING DECISION ---
-                    should_log = False
+                    # --- LOGGING DECISION ---
+                    # Always log to ensure continuous graphs for Live Monitor
+                    should_log = True
                     
+                    # Old Smart Logging (Disabled for Live Monitor fidelity)
                     # Rule 1: Status Changed
-                    if is_online != was_online:
-                        should_log = True
-                    
+                    # if is_online != was_online:
+                    #    should_log = True
                     # Rule 2: Keepalive (Every 10 minutes)
-                    elif (current_ts - prev_state['last_log_time']) > 600:
-                        should_log = True
-                        
-                    # Rule 3: Significant Latency Change (>10ms or Jitter)
-                    # Only if online and we had a previous latency
-                    elif is_online and prev_state['last_latency'] is not None:
-                        diff = abs(latency_ms - prev_state['last_latency'])
-                        if diff > 10: # Log if jitter > 10ms
-                            should_log = True
+                    # elif (current_ts - prev_state['last_log_time']) > 600:
+                    #    should_log = True
+                    # Rule 3: Significant Latency Change
+                    # elif is_online and prev_state['last_latency'] is not None:
+                    #    if abs(latency_ms - prev_state['last_latency']) > 10:
+                    #        should_log = True
                             
                     if should_log:
                         log_entry = PingLog(
