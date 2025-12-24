@@ -56,6 +56,7 @@ class Equipment(Base):
     
     # Wireless Stats (Ubiquiti/Intelbras)
     brand = Column(String, default="generic") # mikrotik, ubiquiti, intelbras, generic
+    equipment_type = Column(String, default="station")  # "transmitter" or "station"
     signal_dbm = Column(Integer, nullable=True)
     ccq = Column(Integer, nullable=True)
     connected_clients = Column(Integer, nullable=True, default=0)  # For APs/Transmitters

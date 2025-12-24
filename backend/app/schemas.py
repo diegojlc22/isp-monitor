@@ -38,6 +38,7 @@ class EquipmentBase(BaseModel):
     api_port: int = 8728
     # Wireless
     brand: str = "generic"
+    equipment_type: str = "station"  # "transmitter" or "station"
     signal_dbm: Optional[int] = None
     ccq: Optional[int] = None
 
@@ -60,6 +61,7 @@ class EquipmentUpdate(BaseModel):
     mikrotik_interface: Optional[str] = None
     api_port: Optional[int] = None
     brand: Optional[str] = None
+    equipment_type: Optional[str] = None
     signal_dbm: Optional[int] = None
     ccq: Optional[int] = None
 
