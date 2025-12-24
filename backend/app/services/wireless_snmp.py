@@ -18,7 +18,7 @@ async def get_snmp_value(ip, community, oid, port=161):
     try:
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             SnmpEngine(),
-            CommunityData(community),
+            CommunityData(community, mpModel=0),  # v1 for Ubiquiti compatibility
             UdpTransportTarget((ip, port), timeout=2.0, retries=1),
             ContextData(),
             ObjectType(ObjectIdentity(oid))
@@ -67,3 +67,20 @@ async def get_wireless_stats(ip, brand, community, port=161):
              stats['ccq'] = ccq
              
     return stats
+
+async def get_connected_clients_count(ip, brand, community, port=161):
+    """
+    Fetches number of connected clients for Access Points.
+    Returns int or None.
+    """
+    # OID for Ubiquiti wireless clients count
+    # 1.3.6.1.4.1.41112.1.4.5.1.15.1 = ubntWlStatStaCount
+    
+    if brand.lower() == 'ubiquiti':
+        client_oid = '1.3.6.1.4.1.41112.1.4.5.1.15.1'
+        count = await get_snmp_value(ip, community, client_oid, port)
+        
+        if count is not None and isinstance(count, int):
+            return count
+    
+    return None

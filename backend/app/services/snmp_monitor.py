@@ -45,6 +45,18 @@ async def snmp_monitor_job():
                             eq.signal_dbm = w_stats['signal_dbm']
                             eq.ccq = w_stats['ccq']
                             session.add(eq)
+                        
+                        # --- CONNECTED CLIENTS (For APs/Transmitters) ---
+                        from backend.app.services.wireless_snmp import get_connected_clients_count
+                        clients = await get_connected_clients_count(
+                            eq.ip,
+                            eq.brand,
+                            eq.snmp_community,
+                            eq.snmp_port or 161
+                        )
+                        if clients is not None:
+                            eq.connected_clients = clients
+                            session.add(eq)
                     
                     # --- MIKROTIK API STRATEGY (Direct Speed) ---
                     if eq.is_mikrotik and eq.mikrotik_interface:

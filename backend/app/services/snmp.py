@@ -9,7 +9,7 @@ async def get_snmp_uptime(ip: str, community: str = "public", port: int = 161) -
     def _snmp_get():
         errorIndication, errorStatus, errorIndex, varBinds = next(
             getCmd(SnmpEngine(),
-                   CommunityData(community),
+                   CommunityData(community, mpModel=0),  # v1
                    UdpTransportTarget((ip, port), timeout=1, retries=1),
                    ContextData(),
                    ObjectType(ObjectIdentity('1.3.6.1.2.1.1.3.0'))) # sysUpTime
@@ -40,7 +40,7 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
     def _snmp_get():
         errorIndication, errorStatus, errorIndex, varBinds = next(
             getCmd(SnmpEngine(),
-                   CommunityData(community),
+                   CommunityData(community, mpModel=0),  # v1
                    UdpTransportTarget((ip, port), timeout=1, retries=1),
                    ContextData(),
                    ObjectType(ObjectIdentity(f'1.3.6.1.2.1.2.2.1.10.{interface_index}')), # In

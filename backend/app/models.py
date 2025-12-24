@@ -58,6 +58,7 @@ class Equipment(Base):
     brand = Column(String, default="generic") # mikrotik, ubiquiti, intelbras, generic
     signal_dbm = Column(Integer, nullable=True)
     ccq = Column(Integer, nullable=True)
+    connected_clients = Column(Integer, nullable=True, default=0)  # For APs/Transmitters
     
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps
