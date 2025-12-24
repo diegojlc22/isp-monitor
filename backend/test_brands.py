@@ -21,21 +21,21 @@ async def get_snmp(ip, community, oid):
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             SnmpEngine(),
             CommunityData(community),
-            UdpTransportTarget((ip, 161), timeout=2.0, retries=1),
+            UdpTransportTarget((ip, 161), timeout=5.0, retries=3),
             ContextData(),
             ObjectType(ObjectIdentity(oid))
         )
 
         if errorIndication:
-            return None, str(errorIndication)
+            return None, f"ErrorIndication: {errorIndication} (Tipo: {type(errorIndication).__name__})"
         elif errorStatus:
-            return None, errorStatus.prettyPrint()
+            return None, f"ErrorStatus: {errorStatus.prettyPrint()}"
         else:
             for varBind in varBinds:
                 return varBind[1], None
     except Exception as e:
-        return None, str(e)
-    return None, "Unknown"
+        return None, f"Exception: {type(e).__name__}: {str(e)}"
+    return None, "Unknown error"
 
 async def scan():
     print("--- INICIANDO DIAGNOSTICO SNMP ---")
@@ -55,7 +55,7 @@ async def scan():
                 alive = True
                 break
             else:
-                print(f"Falha.")
+                print(f"Falha ({err})")
         
         if not alive:
             print(f"    [X] Nao respondeu SNMP. Verifique se a porta 161 esta aberta e a community.")
