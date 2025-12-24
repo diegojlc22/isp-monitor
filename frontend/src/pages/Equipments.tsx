@@ -36,7 +36,11 @@ export function Equipments() {
         ssh_port: 22,
         snmp_community: 'public',
         snmp_version: 2,
-        snmp_port: 161
+        snmp_port: 161,
+        snmp_interface_index: 1,
+        is_mikrotik: false,
+        mikrotik_interface: '',
+        api_port: 8728
     });
 
     async function load() {
@@ -88,7 +92,11 @@ export function Equipments() {
                 ssh_port: Number(formData.ssh_port),
                 snmp_community: formData.snmp_community,
                 snmp_version: Number(formData.snmp_version),
-                snmp_port: Number(formData.snmp_port)
+                snmp_port: Number(formData.snmp_port),
+                snmp_interface_index: Number(formData.snmp_interface_index),
+                is_mikrotik: formData.is_mikrotik,
+                mikrotik_interface: formData.mikrotik_interface,
+                api_port: Number(formData.api_port)
             };
 
             // Only send password if provided (for updates)
@@ -134,7 +142,11 @@ export function Equipments() {
             ssh_port: eq.ssh_port || 22,
             snmp_community: eq.snmp_community || 'public',
             snmp_version: eq.snmp_version || 2,
-            snmp_port: eq.snmp_port || 161
+            snmp_port: eq.snmp_port || 161,
+            snmp_interface_index: eq.snmp_interface_index || 1,
+            is_mikrotik: eq.is_mikrotik || false,
+            mikrotik_interface: eq.mikrotik_interface || '',
+            api_port: eq.api_port || 8728
         });
         setShowModal(true);
     }
@@ -150,7 +162,11 @@ export function Equipments() {
             ssh_port: 22,
             snmp_community: 'public',
             snmp_version: 2,
-            snmp_port: 161
+            snmp_port: 161,
+            snmp_interface_index: 1,
+            is_mikrotik: false,
+            mikrotik_interface: '',
+            api_port: 8728
         });
     }
 
@@ -384,30 +400,70 @@ export function Equipments() {
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                                <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase flex items-center gap-2">
-                                    <Activity size={14} className="text-blue-500" />
-                                    Configuração SNMP (Monitoramento)
-                                </h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-slate-500 mb-1">Comunidade (Community)</label>
-                                        <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                            value={formData.snmp_community} onChange={e => setFormData({ ...formData, snmp_community: e.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-500 mb-1">Versão</label>
-                                        <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                            value={formData.snmp_version} onChange={e => setFormData({ ...formData, snmp_version: Number(e.target.value) })}>
-                                            <option value={1}>v1</option>
-                                            <option value={2}>v2c</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-500 mb-1">Porta</label>
-                                        <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                            value={formData.snmp_port} onChange={e => setFormData({ ...formData, snmp_port: Number(e.target.value) })} />
-                                    </div>
+                                <div className="flex justify-between items-center mb-3">
+                                    <h4 className="text-sm font-bold text-slate-300 uppercase flex items-center gap-2">
+                                        <Activity size={14} className="text-blue-500" />
+                                        Monitoramento de Tráfego
+                                    </h4>
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input type="checkbox" className="accent-blue-600 w-4 h-4"
+                                            checked={formData.is_mikrotik}
+                                            onChange={e => setFormData({ ...formData, is_mikrotik: e.target.checked })} />
+                                        <span className="text-sm text-white font-medium">Usar API Mikrotik (The Dude)</span>
+                                    </label>
                                 </div>
+
+                                {formData.is_mikrotik ? (
+                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="col-span-2">
+                                            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs p-3 rounded mb-2">
+                                                <p>Neste modo, o sistema conecta via API (igual ao Winbox) para ler o tráfego em tempo real.</p>
+                                                <p className="mt-1">Certifique-se que o serviço <strong>api</strong> está ativo no Mikrotik (/ip service enable api) e que o usuário/senha informados abaixo tenham permissão.</p>
+                                                <p className="mt-1 text-orange-300">Nota: Usa as credenciais de SSH configuradas abaixo.</p>
+                                            </div>
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">Nome da Interface (Ex: ether1)</label>
+                                            <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none font-mono"
+                                                placeholder="ether1"
+                                                value={formData.mikrotik_interface} onChange={e => setFormData({ ...formData, mikrotik_interface: e.target.value })} />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">Porta API (Padrão: 8728)</label>
+                                            <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                value={formData.api_port} onChange={e => setFormData({ ...formData, api_port: Number(e.target.value) })} />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="col-span-2">
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">Comunidade (Community)</label>
+                                            <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                value={formData.snmp_community} onChange={e => setFormData({ ...formData, snmp_community: e.target.value })} />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 col-span-2">
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1">Versão SNMP</label>
+                                                <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                    value={formData.snmp_version} onChange={e => setFormData({ ...formData, snmp_version: Number(e.target.value) })}>
+                                                    <option value={1}>v1</option>
+                                                    <option value={2}>v2c</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1">Porta SNMP</label>
+                                                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                    value={formData.snmp_port} onChange={e => setFormData({ ...formData, snmp_port: Number(e.target.value) })} />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-medium text-slate-500 mb-1">Index Interface (OID Index) <span className="text-slate-600">(Padrão: 1)</span></label>
+                                                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                    placeholder="Ex: 1 (Para ether1 em Mkts padrão, mas pode variar)"
+                                                    value={formData.snmp_interface_index} onChange={e => setFormData({ ...formData, snmp_interface_index: Number(e.target.value) })} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">

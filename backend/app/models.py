@@ -47,6 +47,12 @@ class Equipment(Base):
     snmp_community = Column(String, default="public")
     snmp_version = Column(Integer, default=2)
     snmp_port = Column(Integer, default=161)
+    snmp_interface_index = Column(Integer, default=1) # OID index
+    
+    # Mikrotik API (The Dude style)
+    is_mikrotik = Column(Boolean, default=False)
+    mikrotik_interface = Column(String, nullable=True) # e.g. "ether1"
+    api_port = Column(Integer, default=8728)
     
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps

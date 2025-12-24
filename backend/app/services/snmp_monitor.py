@@ -3,20 +3,20 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from backend.app.database import AsyncSessionLocal
 from backend.app.models import Equipment, TrafficLog
+from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
 
 # Config
-SNMP_INTERVAL = 60 # Check SNMP every 60s (Traffic usually doesn't update instantly)
+SNMP_INTERVAL = 60 # Check SNMP every 60s
 
 async def snmp_monitor_job():
     """
-    Dedicated job for SNMP polling.
-    Calculates traffic based on Octet difference.
+    Dedicated job for Traffic polling (SNMP + Mikrotik API).
     """
     import time
-    print("[INFO] SNMP Monitor started (Interval: 60s)...")
+    print("[INFO] Traffic Monitor (SNMP/API) started (Interval: 60s)...")
     
-    # Cache for bandwidth calculation: eq_id -> (timestamp, in_bytes, out_bytes)
+    # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 
     
     while True:
@@ -30,9 +30,35 @@ async def snmp_monitor_job():
                 for eq in equipments:
                     if not eq.ip or not eq.is_online: 
                         continue
+                    
+                    # --- MIKROTIK API STRATEGY (Direct Speed) ---
+                    if eq.is_mikrotik and eq.mikrotik_interface:
+                        # Use SSH credentials for API (standard practice)
+                        traffic_data = await get_mikrotik_live_traffic(
+                            ip=eq.ip,
+                            user=eq.ssh_user,
+                            password=eq.ssh_password, # Need password!
+                            interface=eq.mikrotik_interface,
+                            port=eq.api_port or 8728
+                        )
                         
-                    # Future: Allow selecting interface index properly
-                    interface_idx = 1 
+                        if traffic_data:
+                            eq.last_traffic_in = traffic_data[0]
+                            eq.last_traffic_out = traffic_data[1]
+                            
+                            log = TrafficLog(
+                                equipment_id=eq.id,
+                                in_mbps=eq.last_traffic_in,
+                                out_mbps=eq.last_traffic_out
+                            )
+                            session.add(log)
+                            session.add(eq)
+                            updates += 1
+                            continue # Skip SNMP for this device
+
+                    # --- SNMP STRATEGY (Delta Calculation) ---    
+                    # Use configured Interface Index (or default to 1)
+                    interface_idx = eq.snmp_interface_index if hasattr(eq, 'snmp_interface_index') and eq.snmp_interface_index else 1 
                     
                     traffic = await get_snmp_interface_traffic(
                         eq.ip, 
@@ -53,7 +79,7 @@ async def snmp_monitor_job():
                                 delta_in = in_bytes - last_in
                                 delta_out = out_bytes - last_out
                                 
-                                # Handle Counter Wrap-around (simple)
+                                # Handle Counter Wrap-around
                                 if delta_in < 0: delta_in = 0 
                                 if delta_out < 0: delta_out = 0
                                 

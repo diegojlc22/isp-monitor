@@ -35,18 +35,17 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
             raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe no sistema")
         raise HTTPException(status_code=500, detail=f"Erro ao criar equipamento: {error_msg}")
 
+from backend.app.schemas import EquipmentUpdate # Ensure this is imported
+
 @router.put("/{eq_id}", response_model=EquipmentSchema)
-async def update_equipment(eq_id: int, equipment: EquipmentSchema, db: AsyncSession = Depends(get_db)):
+async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
     db_eq = await db.get(Equipment, eq_id)
     if not db_eq:
         raise HTTPException(status_code=404, detail="Equipment not found")
     
-    if equipment.name:
-        db_eq.name = equipment.name
-    if equipment.ip:
-        db_eq.ip = equipment.ip
-    # We can handle tower_id being None (unlinked) if needed, but for now assuming valid tower_id or null
-    db_eq.tower_id = equipment.tower_id
+    update_data = equipment.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_eq, key, value)
     
     await db.commit()
     await db.refresh(db_eq)

@@ -29,8 +29,12 @@ class EquipmentBase(BaseModel):
     ssh_user: str = "admin"
     ssh_port: int = 22
     snmp_community: str = "public"
-    snmp_version: int = 2
     snmp_port: int = 161
+    snmp_interface_index: int = 1
+    # Mikrotik
+    is_mikrotik: bool = False
+    mikrotik_interface: Optional[str] = None
+    api_port: int = 8728
 
 class EquipmentCreate(EquipmentBase):
     ssh_password: Optional[str] = None
@@ -46,6 +50,10 @@ class EquipmentUpdate(BaseModel):
     snmp_community: Optional[str] = None
     snmp_version: Optional[int] = None
     snmp_port: Optional[int] = None
+    snmp_interface_index: Optional[int] = None
+    is_mikrotik: Optional[bool] = None
+    mikrotik_interface: Optional[str] = None
+    api_port: Optional[int] = None
 
 class Equipment(EquipmentBase):
     id: int
