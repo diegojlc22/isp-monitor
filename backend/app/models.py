@@ -45,7 +45,7 @@ class Equipment(Base):
     
     # SNMP
     snmp_community = Column(String, default="public")
-    snmp_version = Column(Integer, default=2)
+    snmp_version = Column(Integer, default=1)  # v1 for Ubiquiti compatibility
     snmp_port = Column(Integer, default=161)
     snmp_interface_index = Column(Integer, default=1) # OID index
     

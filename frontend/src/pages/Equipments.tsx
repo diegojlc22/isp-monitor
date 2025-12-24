@@ -35,7 +35,7 @@ export function Equipments() {
         ssh_password: '',
         ssh_port: 22,
         snmp_community: 'public',
-        snmp_version: 2,
+        snmp_version: 1,  // v1 for Ubiquiti compatibility
         snmp_port: 161,
         snmp_interface_index: 1,
         brand: 'generic', // generic, mikrotik, ubiquiti, intelbras
@@ -143,7 +143,7 @@ export function Equipments() {
             ssh_password: '', // Password is never returned for security
             ssh_port: eq.ssh_port || 22,
             snmp_community: eq.snmp_community || 'public',
-            snmp_version: eq.snmp_version || 2,
+            snmp_version: eq.snmp_version || 1,  // Default to v1 for Ubiquiti
             snmp_port: eq.snmp_port || 161,
             snmp_interface_index: eq.snmp_interface_index || 1,
             brand: eq.brand || 'generic',
@@ -164,7 +164,7 @@ export function Equipments() {
             ssh_password: '',
             ssh_port: 22,
             snmp_community: 'public',
-            snmp_version: 2,
+            snmp_version: 1,  // v1 for Ubiquiti compatibility
             snmp_port: 161,
             snmp_interface_index: 1,
             brand: 'generic',
@@ -311,15 +311,18 @@ export function Equipments() {
                             <th className="px-4 py-4 w-12"></th>
                             <th className="px-4 py-4">Nome</th>
                             <th className="px-4 py-4">IP</th>
+                            <th className="px-4 py-4">Status Wireless</th>
                             <th className="px-4 py-4 text-right">Ações</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                         {equipments.length === 0 && (
-                            <tr><td colSpan={4} className="px-6 py-8 text-center">Nenhum equipamento cadastrado.</td></tr>
+                            <tr><td colSpan={5} className="px-6 py-8 text-center">Nenhum equipamento cadastrado.</td></tr>
                         )}
                         {equipments.map(eq => {
                             const tower = towers.find(t => t.id === eq.tower_id);
+                            const hasWirelessData = eq.signal_dbm || eq.ccq || eq.connected_clients;
+
                             return (
                                 <tr key={eq.id} className="hover:bg-slate-800/50 transition-colors">
                                     <td className="px-4 py-4">
@@ -336,6 +339,35 @@ export function Equipments() {
                                         {tower && <div className="text-xs text-slate-500 ml-6">{tower.name}</div>}
                                     </td>
                                     <td className="px-4 py-4 font-mono text-slate-300 text-xs">{eq.ip}</td>
+                                    <td className="px-4 py-4">
+                                        {hasWirelessData ? (
+                                            <div className="flex flex-col gap-1">
+                                                {eq.signal_dbm && (
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <Wifi size={12} className="text-yellow-400" />
+                                                        <span className="text-slate-400">Signal:</span>
+                                                        <span className="font-mono text-yellow-400">{eq.signal_dbm} dBm</span>
+                                                    </div>
+                                                )}
+                                                {eq.ccq && (
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <Activity size={12} className="text-blue-400" />
+                                                        <span className="text-slate-400">CCQ:</span>
+                                                        <span className="font-mono text-blue-400">{eq.ccq}%</span>
+                                                    </div>
+                                                )}
+                                                {eq.connected_clients !== undefined && eq.connected_clients !== null && (
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <Server size={12} className="text-emerald-400" />
+                                                        <span className="text-slate-400">Clientes:</span>
+                                                        <span className="font-mono text-emerald-400 font-bold">{eq.connected_clients}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-600">-</span>
+                                        )}
+                                    </td>
                                     <td className="px-4 py-4 text-right flex justify-end gap-1">
                                         <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2 rounded hover:bg-slate-800" title="Reiniciar">
                                             <Power size={16} />

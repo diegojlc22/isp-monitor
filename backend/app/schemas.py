@@ -29,6 +29,7 @@ class EquipmentBase(BaseModel):
     ssh_user: str = "admin"
     ssh_port: int = 22
     snmp_community: str = "public"
+    snmp_version: int = 1  # Default to v1 for Ubiquiti compatibility
     snmp_port: int = 161
     snmp_interface_index: int = 1
     # Mikrotik
