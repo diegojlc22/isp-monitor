@@ -19,7 +19,7 @@ except ImportError:
     print("CRITICAL: icmplib not found!")
     raise
 
-from backend.app.config import PING_TIMEOUT_SECONDS, PING_CONCURRENT_LIMIT
+
 
 async def ping_ip_fast(ip: str) -> float | None:
     """
@@ -124,35 +124,36 @@ async def monitor_job_fast():
                 # 1. Refresh Config Cache (Every 60s)
                 if time.time() - config_cache["last_update"] > 60:
                     try:
-                        token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
-                        chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
-                        down_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
-                        up_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
+                        # Batch Fetch Config (1 Query instead of 4)
+                        keys = ["telegram_token", "telegram_chat_id", "telegram_template_down", "telegram_template_up"]
+                        res = await session.execute(select(Parameters).where(Parameters.key.in_(keys)))
+                        params = {p.key: p.value for p in res.scalars().all()}
 
-                        t = token_res.scalar_one_or_none()
-                        c = chat_res.scalar_one_or_none()
-                        d = down_res.scalar_one_or_none()
-                        u = up_res.scalar_one_or_none()
-
-                        config_cache["token"] = t.value if t else ""
-                        config_cache["chat_id"] = c.value if c else ""
-                        config_cache["tmpl_down"] = d.value if d else "🔴 [Device.Name] caiu! IP=[Device.IP]"
-                        config_cache["tmpl_up"] = u.value if u else "🟢 [Device.Name] voltou! IP=[Device.IP]"
+                        config_cache["token"] = params.get("telegram_token", "")
+                        config_cache["chat_id"] = params.get("telegram_chat_id", "")
+                        config_cache["tmpl_down"] = params.get("telegram_template_down", "🔴 [Device.Name] caiu! IP=[Device.IP]")
+                        config_cache["tmpl_up"] = params.get("telegram_template_up", "🟢 [Device.Name] voltou! IP=[Device.IP]")
                         config_cache["last_update"] = time.time()
                     except Exception as e:
                         print(f"[WARN] Config refresh failed: {e}")
 
-                # 2. Get All Devices
-                # Note: We fetch every time to catch new devices.
-                # Optimization: Could check specific table timestamp if supported, but fetch is fast enough for <500 devices.
-                towers = (await session.execute(select(Tower))).scalars().all()
-                equipments = (await session.execute(select(Equipment))).scalars().all()
+                # 2. Get All Devices (Optimized SQL Filter)
+                # Filter NULL/Empty IPs directly in Database
+                towers_res = await session.execute(
+                    select(Tower).where(Tower.ip.isnot(None), Tower.ip != "")
+                )
+                equips_res = await session.execute(
+                    select(Equipment).where(Equipment.ip.isnot(None), Equipment.ip != "")
+                )
+                
+                towers = towers_res.scalars().all()
+                equipments = equips_res.scalars().all()
                 
                 all_devices = []
                 for t in towers: 
-                    if t.ip: all_devices.append(("tower", t))
+                    all_devices.append(("tower", t))
                 for e in equipments: 
-                    if e.ip: all_devices.append(("equipment", e))
+                    all_devices.append(("equipment", e))
                 
                 if not all_devices:
                     await asyncio.sleep(5)

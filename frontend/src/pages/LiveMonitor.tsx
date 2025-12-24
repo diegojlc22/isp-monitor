@@ -1,12 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Responsive, WidthProvider } from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
-import 'react-resizable/css/styles.css';
 import { Plus, X, Activity, ArrowDownUp } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory } from '../services/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 // --- Tipos ---
 interface WidgetItem {
@@ -135,15 +130,7 @@ export function LiveMonitor() {
         getEquipments().then(setEquipments);
     }, []);
 
-    const onLayoutChange = (newLayout: any) => {
-        // Merge novas posições com nossos dados (preserve type, title, etc)
-        const updatedLayout = newLayout.map((l: any) => {
-            const existing = layout.find(i => i.i === l.i);
-            return { ...existing, ...l };
-        });
-        setLayout(updatedLayout);
-        saveToLocal(updatedLayout);
-    };
+
 
     const saveToLocal = (data: WidgetItem[]) => {
         localStorage.setItem('dashboard_layout', JSON.stringify(data));
@@ -194,7 +181,7 @@ export function LiveMonitor() {
                 </button>
             </div>
 
-            {/* Grid Area */}
+            {/* Grid Area - Simple CSS Grid Implementation (Stable) */}
             {layout.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/50 text-slate-500">
                     <Activity size={48} className="mb-4 opacity-50" />
@@ -202,25 +189,13 @@ export function LiveMonitor() {
                     <p className="text-sm">Clique em "Adicionar Gráfico" para começar.</p>
                 </div>
             ) : (
-                <ResponsiveGridLayout
-                    className="layout"
-                    layouts={{ lg: layout }}
-                    breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-                    cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-                    rowHeight={100}
-                    draggableHandle=".draggable-handle"
-                    onLayoutChange={onLayoutChange}
-                    isResizable={true}
-                    isDraggable={true}
-                    // Margins [x, y]
-                    margin={[16, 16]}
-                >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {layout.map(item => (
-                        <div key={item.i}>
+                        <div key={item.i} className="h-64 relative group">
                             <ChartWidget item={item} onRemove={removeWidget} />
                         </div>
                     ))}
-                </ResponsiveGridLayout>
+                </div>
             )}
 
             {/* Modal */}
