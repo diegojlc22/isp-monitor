@@ -311,7 +311,7 @@ export function Equipments() {
                             <th className="px-4 py-4 w-12"></th>
                             <th className="px-4 py-4">Nome</th>
                             <th className="px-4 py-4">IP</th>
-                            <th className="px-4 py-4">Status Wireless</th>
+                            <th className="px-4 py-4">Info</th>
                             <th className="px-4 py-4 text-right">Ações</th>
                         </tr>
                     </thead>
@@ -321,7 +321,6 @@ export function Equipments() {
                         )}
                         {equipments.map(eq => {
                             const tower = towers.find(t => t.id === eq.tower_id);
-                            const hasWirelessData = eq.signal_dbm || eq.ccq || eq.connected_clients;
 
                             return (
                                 <tr key={eq.id} className="hover:bg-slate-800/50 transition-colors">
@@ -340,33 +339,79 @@ export function Equipments() {
                                     </td>
                                     <td className="px-4 py-4 font-mono text-slate-300 text-xs">{eq.ip}</td>
                                     <td className="px-4 py-4">
-                                        {hasWirelessData ? (
-                                            <div className="flex flex-col gap-1">
-                                                {eq.signal_dbm && (
-                                                    <div className="flex items-center gap-2 text-xs">
-                                                        <Wifi size={12} className="text-yellow-400" />
-                                                        <span className="text-slate-400">Signal:</span>
-                                                        <span className="font-mono text-yellow-400">{eq.signal_dbm} dBm</span>
-                                                    </div>
-                                                )}
-                                                {eq.ccq && (
-                                                    <div className="flex items-center gap-2 text-xs">
-                                                        <Activity size={12} className="text-blue-400" />
-                                                        <span className="text-slate-400">CCQ:</span>
-                                                        <span className="font-mono text-blue-400">{eq.ccq}%</span>
-                                                    </div>
-                                                )}
-                                                {eq.connected_clients !== undefined && eq.connected_clients !== null && (
-                                                    <div className="flex items-center gap-2 text-xs">
-                                                        <Server size={12} className="text-emerald-400" />
-                                                        <span className="text-slate-400">Clientes:</span>
-                                                        <span className="font-mono text-emerald-400 font-bold">{eq.connected_clients}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-slate-600">-</span>
-                                        )}
+                                        <div className="flex gap-1.5">
+                                            {/* TRANSMISSOR (AP) - Mostrar apenas Clientes */}
+                                            {eq.connected_clients !== undefined && eq.connected_clients !== null && eq.connected_clients > 0 && (
+                                                <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2.5 py-1">
+                                                    <Server size={14} className="text-emerald-400" />
+                                                    <span className="text-xs font-semibold text-emerald-400">{eq.connected_clients}</span>
+                                                    <span className="text-xs text-emerald-400/70">cliente{eq.connected_clients !== 1 ? 's' : ''}</span>
+                                                </div>
+                                            )}
+
+                                            {/* STATION (CPE) - Mostrar Signal e CCQ apenas se NÃO for transmissor */}
+                                            {!(eq.connected_clients > 0) && (eq.signal_dbm || eq.ccq) && (
+                                                <>
+                                                    {eq.signal_dbm && (
+                                                        <div className={clsx(
+                                                            "inline-flex items-center gap-1.5 border rounded-md px-2.5 py-1",
+                                                            eq.signal_dbm >= -60 ? "bg-emerald-500/10 border-emerald-500/30" :
+                                                                eq.signal_dbm >= -70 ? "bg-yellow-500/10 border-yellow-500/30" :
+                                                                    "bg-rose-500/10 border-rose-500/30"
+                                                        )}>
+                                                            <Wifi size={14} className={clsx(
+                                                                eq.signal_dbm >= -60 ? "text-emerald-400" :
+                                                                    eq.signal_dbm >= -70 ? "text-yellow-400" :
+                                                                        "text-rose-400"
+                                                            )} />
+                                                            <span className={clsx(
+                                                                "text-xs font-mono font-semibold",
+                                                                eq.signal_dbm >= -60 ? "text-emerald-400" :
+                                                                    eq.signal_dbm >= -70 ? "text-yellow-400" :
+                                                                        "text-rose-400"
+                                                            )}>{eq.signal_dbm}</span>
+                                                            <span className={clsx(
+                                                                "text-xs",
+                                                                eq.signal_dbm >= -60 ? "text-emerald-400/70" :
+                                                                    eq.signal_dbm >= -70 ? "text-yellow-400/70" :
+                                                                        "text-rose-400/70"
+                                                            )}>dBm</span>
+                                                        </div>
+                                                    )}
+                                                    {eq.ccq && (
+                                                        <div className={clsx(
+                                                            "inline-flex items-center gap-1.5 border rounded-md px-2.5 py-1",
+                                                            eq.ccq >= 80 ? "bg-blue-500/10 border-blue-500/30" :
+                                                                eq.ccq >= 60 ? "bg-yellow-500/10 border-yellow-500/30" :
+                                                                    "bg-rose-500/10 border-rose-500/30"
+                                                        )}>
+                                                            <Activity size={14} className={clsx(
+                                                                eq.ccq >= 80 ? "text-blue-400" :
+                                                                    eq.ccq >= 60 ? "text-yellow-400" :
+                                                                        "text-rose-400"
+                                                            )} />
+                                                            <span className={clsx(
+                                                                "text-xs font-mono font-semibold",
+                                                                eq.ccq >= 80 ? "text-blue-400" :
+                                                                    eq.ccq >= 60 ? "text-yellow-400" :
+                                                                        "text-rose-400"
+                                                            )}>{eq.ccq}</span>
+                                                            <span className={clsx(
+                                                                "text-xs",
+                                                                eq.ccq >= 80 ? "text-blue-400/70" :
+                                                                    eq.ccq >= 60 ? "text-yellow-400/70" :
+                                                                        "text-rose-400/70"
+                                                            )}>%</span>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* Sem dados */}
+                                            {!(eq.connected_clients > 0) && !eq.signal_dbm && !eq.ccq && (
+                                                <span className="text-xs text-slate-600">-</span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-4 text-right flex justify-end gap-1">
                                         <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2 rounded hover:bg-slate-800" title="Reiniciar">
