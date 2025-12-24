@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig, rebootEquipment } from '../services/api';
-import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power } from 'lucide-react';
+import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power, Wifi } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
@@ -38,6 +38,7 @@ export function Equipments() {
         snmp_version: 2,
         snmp_port: 161,
         snmp_interface_index: 1,
+        brand: 'generic', // generic, mikrotik, ubiquiti, intelbras
         is_mikrotik: false,
         mikrotik_interface: '',
         api_port: 8728
@@ -94,6 +95,7 @@ export function Equipments() {
                 snmp_version: Number(formData.snmp_version),
                 snmp_port: Number(formData.snmp_port),
                 snmp_interface_index: Number(formData.snmp_interface_index),
+                brand: formData.brand,
                 is_mikrotik: formData.is_mikrotik,
                 mikrotik_interface: formData.mikrotik_interface,
                 api_port: Number(formData.api_port)
@@ -144,6 +146,7 @@ export function Equipments() {
             snmp_version: eq.snmp_version || 2,
             snmp_port: eq.snmp_port || 161,
             snmp_interface_index: eq.snmp_interface_index || 1,
+            brand: eq.brand || 'generic',
             is_mikrotik: eq.is_mikrotik || false,
             mikrotik_interface: eq.mikrotik_interface || '',
             api_port: eq.api_port || 8728
@@ -164,6 +167,7 @@ export function Equipments() {
             snmp_version: 2,
             snmp_port: 161,
             snmp_interface_index: 1,
+            brand: 'generic',
             is_mikrotik: false,
             mikrotik_interface: '',
             api_port: 8728
@@ -304,49 +308,46 @@ export function Equipments() {
                 <table className="w-full text-left text-sm text-slate-400">
                     <thead className="bg-slate-950 text-slate-200 uppercase font-medium">
                         <tr>
-                            <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4">Nome</th>
-                            <th className="px-6 py-4">IP</th>
-                            <th className="px-6 py-4">Torre Associada</th>
-                            <th className="px-6 py-4 text-right">Ações</th>
+                            <th className="px-4 py-4 w-12"></th>
+                            <th className="px-4 py-4">Nome</th>
+                            <th className="px-4 py-4">IP</th>
+                            <th className="px-4 py-4 text-right">Ações</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                         {equipments.length === 0 && (
-                            <tr><td colSpan={5} className="px-6 py-8 text-center">Nenhum equipamento cadastrado.</td></tr>
+                            <tr><td colSpan={4} className="px-6 py-8 text-center">Nenhum equipamento cadastrado.</td></tr>
                         )}
                         {equipments.map(eq => {
                             const tower = towers.find(t => t.id === eq.tower_id);
                             return (
                                 <tr key={eq.id} className="hover:bg-slate-800/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className={clsx("w-2.5 h-2.5 rounded-full animate-pulse", eq.is_online ? "bg-emerald-500" : "bg-rose-500")} />
-                                            <span className={eq.is_online ? "text-emerald-400" : "text-rose-400"}>
-                                                {eq.is_online ? "Online" : "Offline"}
-                                            </span>
+                                    <td className="px-4 py-4">
+                                        <div className={clsx("w-3 h-3 rounded-full mx-auto", eq.is_online ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-rose-500")} title={eq.is_online ? "Online" : "Offline"} />
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        <div className="font-medium text-white flex items-center gap-2">
+                                            {eq.brand === 'mikrotik' ? <Activity size={16} className="text-blue-400" /> :
+                                                eq.brand === 'ubiquiti' ? <Wifi size={16} className="text-sky-400" /> :
+                                                    eq.brand === 'intelbras' ? <Wifi size={16} className="text-green-400" /> :
+                                                        <Server size={16} className="text-slate-500" />}
+                                            {eq.name}
                                         </div>
+                                        {tower && <div className="text-xs text-slate-500 ml-6">{tower.name}</div>}
                                     </td>
-                                    <td className="px-6 py-4 font-medium text-white flex items-center gap-2">
-                                        <Server size={16} className="text-slate-500" />
-                                        {eq.name}
-                                    </td>
-                                    <td className="px-6 py-4 font-mono text-slate-300">{eq.ip}</td>
-                                    <td className="px-6 py-4">
-                                        {tower ? <span className="text-blue-400">{tower.name}</span> : <span className="text-slate-600">-</span>}
-                                    </td>
-                                    <td className="px-6 py-4 text-right flex justify-end gap-2">
-                                        <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2" title="Reiniciar Equipamento (SSH)">
-                                            <Power size={18} />
+                                    <td className="px-4 py-4 font-mono text-slate-300 text-xs">{eq.ip}</td>
+                                    <td className="px-4 py-4 text-right flex justify-end gap-1">
+                                        <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2 rounded hover:bg-slate-800" title="Reiniciar">
+                                            <Power size={16} />
                                         </button>
-                                        <button onClick={() => handleShowHistory(eq)} className="text-slate-500 hover:text-amber-400 p-2" title="Histórico de Latência">
-                                            <Activity size={18} />
+                                        <button onClick={() => handleShowHistory(eq)} className="text-slate-500 hover:text-amber-400 p-2 rounded hover:bg-slate-800" title="Histórico">
+                                            <Activity size={16} />
                                         </button>
-                                        <button onClick={() => handleEdit(eq)} className="text-slate-500 hover:text-blue-400 p-2">
-                                            <Edit2 size={18} />
+                                        <button onClick={() => handleEdit(eq)} className="text-slate-500 hover:text-blue-400 p-2 rounded hover:bg-slate-800" title="Editar">
+                                            <Edit2 size={16} />
                                         </button>
-                                        <button onClick={() => handleDelete(eq.id)} className="text-slate-500 hover:text-rose-500 p-2">
-                                            <Trash2 size={18} />
+                                        <button onClick={() => handleDelete(eq.id)} className="text-slate-500 hover:text-rose-500 p-2 rounded hover:bg-slate-800" title="Remover">
+                                            <Trash2 size={16} />
                                         </button>
                                     </td>
                                 </tr>
@@ -369,21 +370,33 @@ export function Equipments() {
                                         value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">IP</label>
-                                    <input required type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Endereço IP</label>
+                                    <input required type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono"
                                         value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} />
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Associar à Torre (Opcional)</label>
-                                <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                    value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
-                                    <option value="">Nenhuma</option>
-                                    {towers.map(t => (
-                                        <option key={t.id} value={t.id}>{t.name}</option>
-                                    ))}
-                                </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Fabricante</label>
+                                    <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                        value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}>
+                                        <option value="generic">Genérico</option>
+                                        <option value="mikrotik">Mikrotik</option>
+                                        <option value="ubiquiti">Ubiquiti</option>
+                                        <option value="intelbras">Intelbras</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Torre</label>
+                                    <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                        value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
+                                        <option value="">Nenhuma</option>
+                                        {towers.map((t: any) => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
@@ -400,70 +413,38 @@ export function Equipments() {
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                                <div className="flex justify-between items-center mb-3">
-                                    <h4 className="text-sm font-bold text-slate-300 uppercase flex items-center gap-2">
-                                        <Activity size={14} className="text-blue-500" />
-                                        Monitoramento de Tráfego
-                                    </h4>
-                                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                                        <input type="checkbox" className="accent-blue-600 w-4 h-4"
-                                            checked={formData.is_mikrotik}
-                                            onChange={e => setFormData({ ...formData, is_mikrotik: e.target.checked })} />
-                                        <span className="text-sm text-white font-medium">Usar API Mikrotik (The Dude)</span>
-                                    </label>
-                                </div>
-
-                                {formData.is_mikrotik ? (
-                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <div className="col-span-2">
-                                            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs p-3 rounded mb-2">
-                                                <p>Neste modo, o sistema conecta via API (igual ao Winbox) para ler o tráfego em tempo real.</p>
-                                                <p className="mt-1">Certifique-se que o serviço <strong>api</strong> está ativo no Mikrotik (/ip service enable api) e que o usuário/senha informados abaixo tenham permissão.</p>
-                                                <p className="mt-1 text-orange-300">Nota: Usa as credenciais de SSH configuradas abaixo.</p>
-                                            </div>
+                                <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase flex items-center gap-2">
+                                    <Activity size={14} className="text-blue-500" />
+                                    Configuração SNMP (Monitoramento)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-slate-500 mb-1">Comunidade (Community)</label>
+                                        <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                            value={formData.snmp_community} onChange={e => setFormData({ ...formData, snmp_community: e.target.value })} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 col-span-2">
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">Versão SNMP</label>
+                                            <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                value={formData.snmp_version} onChange={e => setFormData({ ...formData, snmp_version: Number(e.target.value) })}>
+                                                <option value={1}>v1</option>
+                                                <option value={2}>v2c</option>
+                                            </select>
                                         </div>
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-medium text-slate-500 mb-1">Nome da Interface (Ex: ether1)</label>
-                                            <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none font-mono"
-                                                placeholder="ether1"
-                                                value={formData.mikrotik_interface} onChange={e => setFormData({ ...formData, mikrotik_interface: e.target.value })} />
-                                        </div>
-                                        <div className="col-span-1">
-                                            <label className="block text-xs font-medium text-slate-500 mb-1">Porta API (Padrão: 8728)</label>
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">Porta SNMP</label>
                                             <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                value={formData.api_port} onChange={e => setFormData({ ...formData, api_port: Number(e.target.value) })} />
+                                                value={formData.snmp_port} onChange={e => setFormData({ ...formData, snmp_port: Number(e.target.value) })} />
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                                         <div className="col-span-2">
-                                            <label className="block text-xs font-medium text-slate-500 mb-1">Comunidade (Community)</label>
-                                            <input type="text" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                value={formData.snmp_community} onChange={e => setFormData({ ...formData, snmp_community: e.target.value })} />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4 col-span-2">
-                                            <div>
-                                                <label className="block text-xs font-medium text-slate-500 mb-1">Versão SNMP</label>
-                                                <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                    value={formData.snmp_version} onChange={e => setFormData({ ...formData, snmp_version: Number(e.target.value) })}>
-                                                    <option value={1}>v1</option>
-                                                    <option value={2}>v2c</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-slate-500 mb-1">Porta SNMP</label>
-                                                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                    value={formData.snmp_port} onChange={e => setFormData({ ...formData, snmp_port: Number(e.target.value) })} />
-                                            </div>
-                                            <div className="col-span-2">
-                                                <label className="block text-xs font-medium text-slate-500 mb-1">Index Interface (OID Index) <span className="text-slate-600">(Padrão: 1)</span></label>
-                                                <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                    placeholder="Ex: 1 (Para ether1 em Mkts padrão, mas pode variar)"
-                                                    value={formData.snmp_interface_index} onChange={e => setFormData({ ...formData, snmp_interface_index: Number(e.target.value) })} />
-                                            </div>
+                                            <label className="block text-xs font-medium text-slate-500 mb-1">Index Interface (OID Index) <span className="text-slate-600">(Padrão: 1)</span></label>
+                                            <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                placeholder="Ex: 1 (Para ether1 em Mkts padrão, mas pode variar)"
+                                                value={formData.snmp_interface_index} onChange={e => setFormData({ ...formData, snmp_interface_index: Number(e.target.value) })} />
                                         </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">

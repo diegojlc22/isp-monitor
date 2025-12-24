@@ -5,16 +5,17 @@ from backend.app.database import AsyncSessionLocal
 from backend.app.models import Equipment, TrafficLog
 from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
+from backend.app.services.wireless_snmp import get_wireless_stats
 
 # Config
 SNMP_INTERVAL = 60 # Check SNMP every 60s
 
 async def snmp_monitor_job():
     """
-    Dedicated job for Traffic polling (SNMP + Mikrotik API).
+    Dedicated job for Traffic polling (SNMP + Mikrotik API) AND Wireless Stats.
     """
     import time
-    print("[INFO] Traffic Monitor (SNMP/API) started (Interval: 60s)...")
+    print("[INFO] Traffic/Wireless Monitor started (Interval: 60s)...")
     
     # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 
@@ -30,6 +31,20 @@ async def snmp_monitor_job():
                 for eq in equipments:
                     if not eq.ip or not eq.is_online: 
                         continue
+                    
+                    # --- WIRELESS STATS (Signal/CCQ) ---
+                    # Only for brands that support it
+                    if eq.brand and eq.brand in ['ubiquiti', 'intelbras']:
+                        w_stats = await get_wireless_stats(
+                            eq.ip, 
+                            eq.brand, 
+                            eq.snmp_community, 
+                            eq.snmp_port or 161
+                        )
+                        if w_stats['signal_dbm'] is not None:
+                            eq.signal_dbm = w_stats['signal_dbm']
+                            eq.ccq = w_stats['ccq']
+                            session.add(eq)
                     
                     # --- MIKROTIK API STRATEGY (Direct Speed) ---
                     if eq.is_mikrotik and eq.mikrotik_interface:

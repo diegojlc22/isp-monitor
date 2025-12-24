@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Activity, ArrowDownUp } from 'lucide-react';
+import { Plus, X, Activity, ArrowDownUp, Wifi } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory } from '../services/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -10,7 +10,7 @@ interface WidgetItem {
     y: number;
     w: number;
     h: number;
-    type: 'latency' | 'traffic';
+    type: 'latency' | 'traffic' | 'signal';
     equipmentId: number;
     title: string;
 }
@@ -22,36 +22,60 @@ const ChartWidget = ({ item, onRemove }: { item: WidgetItem, onRemove: (id: stri
 
     const fetchData = useCallback(async () => {
         try {
+            if (item.type === 'signal') {
+                // Para sinal, pegamos o valor instantâneo e acumulamos localmente
+                // Idealmente teríamos uma rota GET /equipments/{id} leve
+                const eqs = await getEquipments();
+                const eq = eqs.find((e: any) => e.id === item.equipmentId);
+
+                if (eq && eq.signal_dbm) {
+                    const now = new Date();
+                    const newPoint = {
+                        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                        signal: eq.signal_dbm
+                    };
+                    setData(prev => [...prev, newPoint].slice(-30)); // Manter últimos 30 pontos
+                }
+                setLoading(false);
+                return;
+            }
+
             let res;
             if (item.type === 'latency') {
-                res = await getLatencyHistory(item.equipmentId, '1h'); // Última hora para "Live"
+                res = await getLatencyHistory(item.equipmentId, '1h');
             } else {
                 res = await getTrafficHistory(item.equipmentId, '1h');
             }
-            // Formatar data se necessário
+
             const formatted = res.map((d: any) => ({
                 ...d,
                 time: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }));
             setData(formatted);
+            setLoading(false);
         } catch (error) {
             console.error("Erro ao buscar dados do widget", error);
-        } finally {
             setLoading(false);
         }
     }, [item.equipmentId, item.type]);
 
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 5000); // Atualiza a cada 5s
+        const interval = setInterval(fetchData, 5000);
         return () => clearInterval(interval);
     }, [fetchData]);
+
+    const getIcon = () => {
+        if (item.type === 'latency') return <Activity size={14} className="text-emerald-400" />;
+        if (item.type === 'traffic') return <ArrowDownUp size={14} className="text-blue-400" />;
+        return <Wifi size={14} className="text-yellow-400" />;
+    };
 
     return (
         <div className="h-full flex flex-col bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
             <div className="flex justify-between items-center px-3 py-2 bg-slate-900/50 border-b border-slate-700 cursor-move draggable-handle">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                    {item.type === 'latency' ? <Activity size={14} className="text-emerald-400" /> : <ArrowDownUp size={14} className="text-blue-400" />}
+                    {getIcon()}
                     {item.title}
                 </div>
                 <button onMouseDown={(e) => e.stopPropagation()} onClick={() => onRemove(item.i)} className="text-slate-500 hover:text-rose-500 transition-colors">
@@ -64,7 +88,15 @@ const ChartWidget = ({ item, onRemove }: { item: WidgetItem, onRemove: (id: stri
                     <div className="h-full flex items-center justify-center text-slate-500 text-sm">Carregando...</div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%">
-                        {item.type === 'latency' ? (
+                        {item.type === 'signal' ? (
+                            <AreaChart data={data}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                                <XAxis dataKey="time" hide />
+                                <YAxis stroke="#94a3b8" fontSize={10} width={30} domain={[-90, -30]} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} />
+                                <Area type="monotone" dataKey="signal" stroke="#facc15" fill="#facc15" fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
+                            </AreaChart>
+                        ) : item.type === 'latency' ? (
                             <AreaChart data={data}>
                                 <defs>
                                     <linearGradient id={`gradLatency-${item.i}`} x1="0" y1="0" x2="0" y2="1">
@@ -75,34 +107,20 @@ const ChartWidget = ({ item, onRemove }: { item: WidgetItem, onRemove: (id: stri
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                                 <XAxis dataKey="time" hide />
                                 <YAxis stroke="#94a3b8" fontSize={10} width={30} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-                                    itemStyle={{ color: '#10b981' }}
-                                    formatter={(value: any) => [`${value}ms`, 'Latência']}
-                                />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} />
                                 <Area type="monotone" dataKey="latency" stroke="#10b981" fill={`url(#gradLatency-${item.i})`} strokeWidth={2} isAnimationActive={false} />
                             </AreaChart>
                         ) : (
                             <AreaChart data={data}>
                                 <defs>
-                                    <linearGradient id={`gradIn-${item.i}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id={`gradOut-${item.i}`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                                    </linearGradient>
+                                    {/* Gradients for Traffic */}
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                                 <XAxis dataKey="time" hide />
                                 <YAxis stroke="#94a3b8" fontSize={10} width={30} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-                                    formatter={(value: any) => [`${value} Mbps`, '']}
-                                />
-                                <Area type="monotone" dataKey="in" stackId="1" stroke="#3b82f6" fill={`url(#gradIn-${item.i})`} strokeWidth={2} name="Download" isAnimationActive={false} />
-                                <Area type="monotone" dataKey="out" stackId="1" stroke="#8b5cf6" fill={`url(#gradOut-${item.i})`} strokeWidth={2} name="Upload" isAnimationActive={false} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} />
+                                <Area type="monotone" dataKey="in_mbps" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} strokeWidth={2} name="Download" isAnimationActive={false} />
+                                <Area type="monotone" dataKey="out_mbps" stackId="1" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} strokeWidth={2} name="Upload" isAnimationActive={false} />
                             </AreaChart>
                         )}
                     </ResponsiveContainer>
@@ -124,7 +142,7 @@ export function LiveMonitor() {
 
     // Form state
     const [selectedEq, setSelectedEq] = useState('');
-    const [selectedType, setSelectedType] = useState<'latency' | 'traffic'>('traffic');
+    const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal'>('traffic');
 
     useEffect(() => {
         getEquipments().then(setEquipments);
@@ -149,7 +167,7 @@ export function LiveMonitor() {
             h: 3,
             type: selectedType,
             equipmentId: eq.id,
-            title: `${eq.name} (${selectedType === 'traffic' ? 'Tráfego' : 'Latência'})`
+            title: `${eq.name} (${selectedType === 'traffic' ? 'Tráfego' : selectedType === 'signal' ? 'Sinal' : 'Latência'})`
         };
 
         const newLayout = [...layout, newItem];
@@ -226,7 +244,7 @@ export function LiveMonitor() {
 
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-1">Tipo de Dados</label>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-3 gap-2">
                                     <button
                                         onClick={() => setSelectedType('traffic')}
                                         className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'traffic' ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
@@ -238,6 +256,12 @@ export function LiveMonitor() {
                                         className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'latency' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
                                     >
                                         <Activity size={16} /> Latência
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedType('signal')}
+                                        className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'signal' ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                    >
+                                        <Wifi size={16} /> Sinal
                                     </button>
                                 </div>
                             </div>

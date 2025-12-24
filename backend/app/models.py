@@ -54,6 +54,11 @@ class Equipment(Base):
     mikrotik_interface = Column(String, nullable=True) # e.g. "ether1"
     api_port = Column(Integer, default=8728)
     
+    # Wireless Stats (Ubiquiti/Intelbras)
+    brand = Column(String, default="generic") # mikrotik, ubiquiti, intelbras, generic
+    signal_dbm = Column(Integer, nullable=True)
+    ccq = Column(Integer, nullable=True)
+    
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps
     

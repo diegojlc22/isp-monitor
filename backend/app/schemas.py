@@ -35,6 +35,10 @@ class EquipmentBase(BaseModel):
     is_mikrotik: bool = False
     mikrotik_interface: Optional[str] = None
     api_port: int = 8728
+    # Wireless
+    brand: str = "generic"
+    signal_dbm: Optional[int] = None
+    ccq: Optional[int] = None
 
 class EquipmentCreate(EquipmentBase):
     ssh_password: Optional[str] = None
@@ -54,6 +58,9 @@ class EquipmentUpdate(BaseModel):
     is_mikrotik: Optional[bool] = None
     mikrotik_interface: Optional[str] = None
     api_port: Optional[int] = None
+    brand: Optional[str] = None
+    signal_dbm: Optional[int] = None
+    ccq: Optional[int] = None
 
 class Equipment(EquipmentBase):
     id: int

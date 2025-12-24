@@ -35,7 +35,7 @@ async def get_mikrotik_live_traffic(ip: str, user: str, password: str, interface
             
             return None
         except Exception as e:
-            print(f"[ERROR] Mikrotik API ({ip}): {e}")
+            # print(f"Mikrotik API Error ({ip}): {e}")
             return None
 
     try:
