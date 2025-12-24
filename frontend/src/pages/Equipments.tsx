@@ -319,13 +319,12 @@ export function Equipments() {
                             <th className="px-4 py-4 w-12"></th>
                             <th className="px-4 py-4">Nome</th>
                             <th className="px-4 py-4">IP</th>
-                            <th className="px-4 py-4">Info</th>
                             <th className="px-4 py-4 text-right">Ações</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                         {equipments.length === 0 && (
-                            <tr><td colSpan={5} className="px-6 py-8 text-center">Nenhum equipamento cadastrado.</td></tr>
+                            <tr><td colSpan={4} className="px-6 py-8 text-center">Nenhum equipamento cadastrado.</td></tr>
                         )}
                         {equipments.map(eq => {
                             const tower = towers.find(t => t.id === eq.tower_id);
@@ -346,23 +345,19 @@ export function Equipments() {
                                         {tower && <div className="text-xs text-slate-500 ml-6">{tower.name}</div>}
                                     </td>
                                     <td className="px-4 py-4 font-mono text-slate-300 text-xs">{eq.ip}</td>
-                                    <td className="px-4 py-4">
-                                        {(eq.signal_dbm || eq.ccq || (eq.connected_clients !== undefined && eq.connected_clients !== null)) ? (
+                                    <td className="px-4 py-4 text-right flex justify-end gap-1">
+                                        {(eq.signal_dbm || eq.ccq || (eq.connected_clients !== undefined && eq.connected_clients !== null)) && (
                                             <button
                                                 onClick={() => {
                                                     setSelectedWirelessEq(eq);
                                                     setShowWirelessModal(true);
                                                 }}
-                                                className="text-slate-500 hover:text-blue-400 p-2 rounded hover:bg-slate-800 transition-colors"
-                                                title="Ver informações wireless"
+                                                className="text-slate-500 hover:text-sky-400 p-2 rounded hover:bg-slate-800"
+                                                title="Informações Wireless"
                                             >
-                                                <Info size={18} />
+                                                <Info size={16} />
                                             </button>
-                                        ) : (
-                                            <span className="text-xs text-slate-600 px-2">-</span>
                                         )}
-                                    </td>
-                                    <td className="px-4 py-4 text-right flex justify-end gap-1">
                                         <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2 rounded hover:bg-slate-800" title="Reiniciar">
                                             <Power size={16} />
                                         </button>
