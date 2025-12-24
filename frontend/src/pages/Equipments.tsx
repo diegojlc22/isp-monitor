@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig, rebootEquipment } from '../services/api';
-import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power, Wifi } from 'lucide-react';
+import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power, Wifi, Info } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
@@ -26,6 +26,10 @@ export function Equipments() {
     const [selectedEqHistory, setSelectedEqHistory] = useState<any>(null);
     const [historyPeriod, setHistoryPeriod] = useState('24h');
 
+    // Wireless Info Modal
+    const [showWirelessModal, setShowWirelessModal] = useState(false);
+    const [selectedWirelessEq, setSelectedWirelessEq] = useState<any>(null);
+
     const [formData, setFormData] = useState({
         name: '',
         ip: '',
@@ -39,6 +43,7 @@ export function Equipments() {
         snmp_port: 161,
         snmp_interface_index: 1,
         brand: 'generic', // generic, mikrotik, ubiquiti, intelbras
+        equipment_type: 'station', // transmitter or station
         is_mikrotik: false,
         mikrotik_interface: '',
         api_port: 8728
@@ -96,6 +101,7 @@ export function Equipments() {
                 snmp_port: Number(formData.snmp_port),
                 snmp_interface_index: Number(formData.snmp_interface_index),
                 brand: formData.brand,
+                equipment_type: formData.equipment_type,
                 is_mikrotik: formData.is_mikrotik,
                 mikrotik_interface: formData.mikrotik_interface,
                 api_port: Number(formData.api_port)
@@ -147,6 +153,7 @@ export function Equipments() {
             snmp_port: eq.snmp_port || 161,
             snmp_interface_index: eq.snmp_interface_index || 1,
             brand: eq.brand || 'generic',
+            equipment_type: eq.equipment_type || 'station',
             is_mikrotik: eq.is_mikrotik || false,
             mikrotik_interface: eq.mikrotik_interface || '',
             api_port: eq.api_port || 8728
@@ -168,6 +175,7 @@ export function Equipments() {
             snmp_port: 161,
             snmp_interface_index: 1,
             brand: 'generic',
+            equipment_type: 'station',
             is_mikrotik: false,
             mikrotik_interface: '',
             api_port: 8728
@@ -339,79 +347,20 @@ export function Equipments() {
                                     </td>
                                     <td className="px-4 py-4 font-mono text-slate-300 text-xs">{eq.ip}</td>
                                     <td className="px-4 py-4">
-                                        <div className="flex gap-1.5">
-                                            {/* TRANSMISSOR (AP) - Mostrar apenas Clientes */}
-                                            {eq.connected_clients !== undefined && eq.connected_clients !== null && eq.connected_clients > 0 && (
-                                                <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2.5 py-1">
-                                                    <Server size={14} className="text-emerald-400" />
-                                                    <span className="text-xs font-semibold text-emerald-400">{eq.connected_clients}</span>
-                                                    <span className="text-xs text-emerald-400/70">cliente{eq.connected_clients !== 1 ? 's' : ''}</span>
-                                                </div>
-                                            )}
-
-                                            {/* STATION (CPE) - Mostrar Signal e CCQ apenas se NÃO for transmissor */}
-                                            {!(eq.connected_clients > 0) && (eq.signal_dbm || eq.ccq) && (
-                                                <>
-                                                    {eq.signal_dbm && (
-                                                        <div className={clsx(
-                                                            "inline-flex items-center gap-1.5 border rounded-md px-2.5 py-1",
-                                                            eq.signal_dbm >= -60 ? "bg-emerald-500/10 border-emerald-500/30" :
-                                                                eq.signal_dbm >= -70 ? "bg-yellow-500/10 border-yellow-500/30" :
-                                                                    "bg-rose-500/10 border-rose-500/30"
-                                                        )}>
-                                                            <Wifi size={14} className={clsx(
-                                                                eq.signal_dbm >= -60 ? "text-emerald-400" :
-                                                                    eq.signal_dbm >= -70 ? "text-yellow-400" :
-                                                                        "text-rose-400"
-                                                            )} />
-                                                            <span className={clsx(
-                                                                "text-xs font-mono font-semibold",
-                                                                eq.signal_dbm >= -60 ? "text-emerald-400" :
-                                                                    eq.signal_dbm >= -70 ? "text-yellow-400" :
-                                                                        "text-rose-400"
-                                                            )}>{eq.signal_dbm}</span>
-                                                            <span className={clsx(
-                                                                "text-xs",
-                                                                eq.signal_dbm >= -60 ? "text-emerald-400/70" :
-                                                                    eq.signal_dbm >= -70 ? "text-yellow-400/70" :
-                                                                        "text-rose-400/70"
-                                                            )}>dBm</span>
-                                                        </div>
-                                                    )}
-                                                    {eq.ccq && (
-                                                        <div className={clsx(
-                                                            "inline-flex items-center gap-1.5 border rounded-md px-2.5 py-1",
-                                                            eq.ccq >= 80 ? "bg-blue-500/10 border-blue-500/30" :
-                                                                eq.ccq >= 60 ? "bg-yellow-500/10 border-yellow-500/30" :
-                                                                    "bg-rose-500/10 border-rose-500/30"
-                                                        )}>
-                                                            <Activity size={14} className={clsx(
-                                                                eq.ccq >= 80 ? "text-blue-400" :
-                                                                    eq.ccq >= 60 ? "text-yellow-400" :
-                                                                        "text-rose-400"
-                                                            )} />
-                                                            <span className={clsx(
-                                                                "text-xs font-mono font-semibold",
-                                                                eq.ccq >= 80 ? "text-blue-400" :
-                                                                    eq.ccq >= 60 ? "text-yellow-400" :
-                                                                        "text-rose-400"
-                                                            )}>{eq.ccq}</span>
-                                                            <span className={clsx(
-                                                                "text-xs",
-                                                                eq.ccq >= 80 ? "text-blue-400/70" :
-                                                                    eq.ccq >= 60 ? "text-yellow-400/70" :
-                                                                        "text-rose-400/70"
-                                                            )}>%</span>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
-
-                                            {/* Sem dados */}
-                                            {!(eq.connected_clients > 0) && !eq.signal_dbm && !eq.ccq && (
-                                                <span className="text-xs text-slate-600">-</span>
-                                            )}
-                                        </div>
+                                        {(eq.signal_dbm || eq.ccq || (eq.connected_clients !== undefined && eq.connected_clients !== null)) ? (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedWirelessEq(eq);
+                                                    setShowWirelessModal(true);
+                                                }}
+                                                className="text-slate-500 hover:text-blue-400 p-2 rounded hover:bg-slate-800 transition-colors"
+                                                title="Ver informações wireless"
+                                            >
+                                                <Info size={18} />
+                                            </button>
+                                        ) : (
+                                            <span className="text-xs text-slate-600 px-2">-</span>
+                                        )}
                                     </td>
                                     <td className="px-4 py-4 text-right flex justify-end gap-1">
                                         <button onClick={() => handleReboot(eq)} className="text-slate-500 hover:text-orange-500 p-2 rounded hover:bg-slate-800" title="Reiniciar">
@@ -474,6 +423,19 @@ export function Equipments() {
                                         ))}
                                     </select>
                                 </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Tipo de Equipamento</label>
+                                    <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                        value={formData.equipment_type} onChange={e => setFormData({ ...formData, equipment_type: e.target.value })}>
+                                        <option value="station">📡 Station (CPE/Cliente)</option>
+                                        <option value="transmitter">📶 Transmitter (AP/Transmissor)</option>
+                                    </select>
+                                    <p className="text-xs text-slate-500 mt-1">Define quais dados serão coletados via SNMP</p>
+                                </div>
+                                <div></div>
                             </div>
 
                             <div>
@@ -720,6 +682,110 @@ export function Equipments() {
 
                         <div className="p-4 border-t border-slate-800 flex justify-end bg-slate-900 rounded-b-xl">
                             <button onClick={() => setShowHistoryModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Informações Wireless */}
+            {showWirelessModal && selectedWirelessEq && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl">
+                        <div className="p-6 border-b border-slate-800 bg-slate-950 rounded-t-xl">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Wifi className="text-sky-400" />
+                                Informações Wireless
+                            </h3>
+                            <p className="text-sm text-slate-400 mt-1">{selectedWirelessEq.name}</p>
+                            <p className="text-xs text-slate-500 font-mono">{selectedWirelessEq.ip}</p>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {/* TRANSMISSOR - Mostrar apenas clientes */}
+                            {selectedWirelessEq.equipment_type === 'transmitter' && (
+                                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                                    <div className="flex items-center gap-3">
+                                        <Server size={24} className="text-emerald-400" />
+                                        <div>
+                                            <p className="text-xs text-emerald-400/70 uppercase font-medium">Clientes Conectados</p>
+                                            <p className="text-3xl font-bold text-emerald-400">{selectedWirelessEq.connected_clients || 0}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* STATION - Mostrar Signal e CCQ */}
+                            {selectedWirelessEq.equipment_type === 'station' && (
+                                <>
+                                    {selectedWirelessEq.signal_dbm && (
+                                        <div className={clsx(
+                                            "border rounded-lg p-4",
+                                            selectedWirelessEq.signal_dbm >= -60 ? "bg-emerald-500/10 border-emerald-500/30" :
+                                                selectedWirelessEq.signal_dbm >= -70 ? "bg-yellow-500/10 border-yellow-500/30" :
+                                                    "bg-rose-500/10 border-rose-500/30"
+                                        )}>
+                                            <div className="flex items-center gap-3">
+                                                <Wifi size={24} className={clsx(
+                                                    selectedWirelessEq.signal_dbm >= -60 ? "text-emerald-400" :
+                                                        selectedWirelessEq.signal_dbm >= -70 ? "text-yellow-400" :
+                                                            "text-rose-400"
+                                                )} />
+                                                <div>
+                                                    <p className={clsx(
+                                                        "text-xs uppercase font-medium",
+                                                        selectedWirelessEq.signal_dbm >= -60 ? "text-emerald-400/70" :
+                                                            selectedWirelessEq.signal_dbm >= -70 ? "text-yellow-400/70" :
+                                                                "text-rose-400/70"
+                                                    )}>Sinal</p>
+                                                    <p className={clsx(
+                                                        "text-3xl font-bold font-mono",
+                                                        selectedWirelessEq.signal_dbm >= -60 ? "text-emerald-400" :
+                                                            selectedWirelessEq.signal_dbm >= -70 ? "text-yellow-400" :
+                                                                "text-rose-400"
+                                                    )}>{selectedWirelessEq.signal_dbm} <span className="text-xl">dBm</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {selectedWirelessEq.ccq && (
+                                        <div className={clsx(
+                                            "border rounded-lg p-4",
+                                            selectedWirelessEq.ccq >= 80 ? "bg-blue-500/10 border-blue-500/30" :
+                                                selectedWirelessEq.ccq >= 60 ? "bg-yellow-500/10 border-yellow-500/30" :
+                                                    "bg-rose-500/10 border-rose-500/30"
+                                        )}>
+                                            <div className="flex items-center gap-3">
+                                                <Activity size={24} className={clsx(
+                                                    selectedWirelessEq.ccq >= 80 ? "text-blue-400" :
+                                                        selectedWirelessEq.ccq >= 60 ? "text-yellow-400" :
+                                                            "text-rose-400"
+                                                )} />
+                                                <div>
+                                                    <p className={clsx(
+                                                        "text-xs uppercase font-medium",
+                                                        selectedWirelessEq.ccq >= 80 ? "text-blue-400/70" :
+                                                            selectedWirelessEq.ccq >= 60 ? "text-yellow-400/70" :
+                                                                "text-rose-400/70"
+                                                    )}>CCQ (Qualidade)</p>
+                                                    <p className={clsx(
+                                                        "text-3xl font-bold font-mono",
+                                                        selectedWirelessEq.ccq >= 80 ? "text-blue-400" :
+                                                            selectedWirelessEq.ccq >= 60 ? "text-yellow-400" :
+                                                                "text-rose-400"
+                                                    )}>{selectedWirelessEq.ccq}<span className="text-xl">%</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-slate-800 flex justify-end bg-slate-900 rounded-b-xl">
+                            <button onClick={() => setShowWirelessModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
+                                Fechar
+                            </button>
                         </div>
                     </div>
                 </div>
