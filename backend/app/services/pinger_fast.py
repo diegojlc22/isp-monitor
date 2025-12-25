@@ -184,7 +184,7 @@ async def monitor_job_fast():
                 ping_results = await ping_multiple_fast(ips, concurrent_limit=concurrency_tracker["current_limit"])
                 
                 # 4. Dependency & Maintenance Maps
-                current_time = datetime.now(timezone.utc)
+                current_time = datetime.now(timezone.utc).replace(tzinfo=None)
                 current_ts = current_time.timestamp()
                 current_status_map = {} 
                 maintenance_map = {}
@@ -339,7 +339,7 @@ async def monitor_job_fast():
         
         if new_limit != current_limit:
             concurrency_tracker["current_limit"] = new_limit
-            print(f"[INFO] Concorrência ajustada: {current_limit} → {new_limit} (tempo médio: {avg_time:.1f}s)")
+            print(f"[INFO] Concorrência ajustada: {current_limit} -> {new_limit} (tempo médio: {avg_time:.1f}s)")
         
         # ✅ SPRINT 2: Calcular Intervalo Dinâmico
         # Contar mudanças de status neste ciclo

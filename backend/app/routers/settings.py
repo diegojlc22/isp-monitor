@@ -254,8 +254,6 @@ async def migrate_data(request: MigrateRequest, db: AsyncSession = Depends(get_d
         return {"error": f"Erro na migração: {str(e)}"}
 
 from backend.app.services.telegram import send_telegram_message
-from backend.app.services.maintenance import backup_database_job
-
 @router.post("/telegram/test-message")
 async def test_telegram_message(db: AsyncSession = Depends(get_db)):
     try:
@@ -277,10 +275,4 @@ async def test_telegram_message(db: AsyncSession = Depends(get_db)):
 
 @router.post("/telegram/test-backup")
 async def test_telegram_backup():
-    try:
-        # Run the job synchronously in this request context (or await it directly since it is async)
-        # The job reads config from DB internally.
-        await backup_database_job()
-        return {"message": "Backup de teste iniciado/enviado!"}
-    except Exception as e:
-        return {"error": f"Erro ao executar backup: {str(e)}"}
+    return {"error": "Backup via painel desativado para PostgreSQL. Use pg_dump no servidor."}

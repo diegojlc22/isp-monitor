@@ -181,7 +181,7 @@ async def get_latency_history(
         raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
     
     # Calcular janela de tempo
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     start_time = now - timedelta(hours=hours)
     
     # Query com LIMIT
@@ -227,7 +227,7 @@ async def get_traffic_history(
         raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
     
     # Calcular janela
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     start_time = now - timedelta(hours=hours)
     
     # Query com LIMIT
