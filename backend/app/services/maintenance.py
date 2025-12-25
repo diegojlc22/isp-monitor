@@ -100,7 +100,91 @@ async def backup_database_job():
             os.remove(zip_filename)
             # print("Deleted temp backup file.")
 
+async def rollup_hourly_stats_job():
+    """
+    Aggregates raw PingLogs into PingStatsHourly.
+    Reduces 60*60=3600 rows per device/hour to just 1 row.
+    Ideally runs shortly after the hour changes.
+    """
+    from sqlalchemy import func
+    from backend.app.models import PingStatsHourly
+
+    print("[INFO] Starting Hourly Stats Rollup...")
+    
+    try:
+        async with AsyncSessionLocal() as session:
+            # 1. Determine last rolled up hour
+            # For simplicity, we can look at the latest entry in PingStatsHourly
+            # Or just re-calculate the last 2 hours to be safe.
+            
+            # Let's process the PREVIOUS hour (e.g., if now is 14:10, process 13:00-13:59)
+            now = datetime.now(timezone.utc)
+            start_of_current_hour = now.replace(minute=0, second=0, microsecond=0)
+            target_hour = start_of_current_hour - timedelta(hours=1)
+            end_target_hour = start_of_current_hour
+            
+            # Check if we already have stats for this hour (avoid duplicates)
+            # This check is basic, in production might need a "LastProcessed" pointer table.
+            # But for now, we can just delete and re-insert (safe idempotency)
+            stmt_del = delete(PingStatsHourly).where(PingStatsHourly.timestamp == target_hour)
+            await session.execute(stmt_del)
+            
+            # 2. Aggregation Query
+            # SELECT device_type, device_id, AVG(latency), ... FROM ping_logs
+            # WHERE timestamp >= target_hour AND timestamp < end_target_hour
+            # GROUP BY device_type, device_id
+            
+            stmt = select(
+                PingLog.device_type,
+                PingLog.device_id,
+                func.avg(PingLog.latency_ms).label('avg_latency'),
+                func.count().label('total_pings'),
+                func.sum(PingLog.status).label('successful_pings') # status is boolean (0/1)
+            ).where(
+                PingLog.timestamp >= target_hour,
+                PingLog.timestamp < end_target_hour
+            ).group_by(PingLog.device_type, PingLog.device_id)
+            
+            result = await session.execute(stmt)
+            rows = result.all()
+            
+            rollup_buffer = []
+            for row in rows:
+                total = row.total_pings
+                success = row.successful_pings or 0 # Handle None if no pings
+                
+                # Calculate metrics
+                loss_pct = ((total - success) / total) * 100 if total > 0 else 0
+                uptime_pct = (success / total) * 100 if total > 0 else 0
+                avg_lat = row.avg_latency or 0
+                
+                rollup_buffer.append(PingStatsHourly(
+                    device_type=row.device_type,
+                    device_id=row.device_id,
+                    avg_latency_ms=round(avg_lat, 2),
+                    pkt_loss_percent=round(loss_pct, 2),
+                    availability_percent=round(uptime_pct, 2),
+                    timestamp=target_hour
+                ))
+            
+            if rollup_buffer:
+                session.add_all(rollup_buffer)
+                await session.commit()
+                print(f"[OK] Rollup: Created stats for {len(rollup_buffer)} devices for hour {target_hour.isoformat()}")
+            else:
+                print(f"[INFO] Rollup: No data found for hour {target_hour.isoformat()}")
+
+            # 3. Optional: Prune RAW logs older than 7 days immediately to keep DB tiny
+            # (Assuming we trust the aggregated data)
+            # prune_cutoff = now - timedelta(days=7)
+            # await session.execute(delete(PingLog).where(PingLog.timestamp < prune_cutoff))
+            # await session.commit()
+
+    except Exception as e:
+        print(f"[ERROR] Rollup failed: {e}")
+
 if __name__ == "__main__":
     # Test execution
     asyncio.run(cleanup_job())
     # asyncio.run(backup_database_job())
+    # asyncio.run(rollup_hourly_stats_job()) # Test rollup manually

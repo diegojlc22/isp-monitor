@@ -16,10 +16,9 @@ async def optimize_sqlite():
     """
     async with engine.begin() as conn:
         # Enable WAL (Write-Ahead Logging) mode - CRITICAL for performance
-        # This allows reads and writes simultaneously (like The Dude)
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
         
-        # Set synchronous to NORMAL (faster, still safe)
+        # Set synchronous to NORMAL (Start simple, can go directly to OFF if power is stable, but NORMAL is safest balance)
         await conn.execute(text("PRAGMA synchronous=NORMAL;"))
         
         # Increase cache size to 64MB (default is 2MB)
@@ -30,7 +29,6 @@ async def optimize_sqlite():
         await conn.execute(text("PRAGMA page_size=4096;"))
         
         # Enable auto-vacuum (incremental)
-        # Automatically reclaims space when data is deleted
         await conn.execute(text("PRAGMA auto_vacuum=INCREMENTAL;"))
         
         # Set temp store to memory (faster)
@@ -38,8 +36,17 @@ async def optimize_sqlite():
         
         # Increase mmap size to 256MB for better performance
         await conn.execute(text("PRAGMA mmap_size=268435456;"))
+
+        # --- ADVANCED OPTIMIZATIONS ---
         
-        print("[OK] SQLite optimized (WAL mode, 64MB cache, auto-vacuum)")
+        # Prevent WAL from growing infinitely, but don't checkpoint aggressively
+        # 1000 pages = 4MB. Let's create larger batches for throughput.
+        await conn.execute(text("PRAGMA wal_autocheckpoint=1000;"))
+
+        # Wait up to 5s if DB is locked (prevents "database is locked" errors under high load)
+        await conn.execute(text("PRAGMA busy_timeout=5000;"))
+        
+        print("[OK] SQLite optimized (WAL mode, 64MB cache, auto-vacuum, high-throughput)")
 
 async def vacuum_database():
     """

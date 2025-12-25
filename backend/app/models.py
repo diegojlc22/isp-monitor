@@ -20,6 +20,9 @@ class Tower(Base):
     # Hierarchy (If this tower depends on a router)
     parent_id = Column(Integer, nullable=True)
 
+    # Maintenance Mode
+    maintenance_until = Column(DateTime, nullable=True)
+
     equipments = relationship("Equipment", back_populates="tower")
 
 class Equipment(Base):
@@ -37,6 +40,9 @@ class Equipment(Base):
     is_online = Column(Boolean, default=False)
     last_checked = Column(DateTime, default=datetime.now(timezone.utc))
     last_latency = Column(Integer, nullable=True) # ms
+    
+    # Maintenance Mode
+    maintenance_until = Column(DateTime, nullable=True)
     
     # SSH Credentials
     ssh_user = Column(String, nullable=True, default="admin")
@@ -121,3 +127,18 @@ class Alert(Base):
     device_ip = Column(String)
     message = Column(String)
     timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+
+class PingStatsHourly(Base):
+    """
+    Rollup table for efficient historical graphs.
+    Stores hourly averages instead of raw logs.
+    """
+    __tablename__ = "ping_stats_hourly"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_type = Column(String, index=True) # 'tower' or 'equipment'
+    device_id = Column(Integer, index=True)
+    avg_latency_ms = Column(Float)
+    pkt_loss_percent = Column(Float) # 0.0 to 100.0
+    availability_percent = Column(Float) # 0.0 to 100.0 (Uptime)
+    timestamp = Column(DateTime, index=True) # The hour start time (e.g., 14:00:00)

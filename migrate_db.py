@@ -22,10 +22,12 @@ def migrate():
             ("snmp_version", "INTEGER DEFAULT 2"),
             ("snmp_port", "INTEGER DEFAULT 161"),
             ("last_traffic_in", "REAL"),
-            ("last_traffic_out", "REAL")
+            ("last_traffic_out", "REAL"),
+            ("maintenance_until", "TIMESTAMP")
         ],
         "towers": [
-            ("parent_id", "INTEGER")
+            ("parent_id", "INTEGER"),
+            ("maintenance_until", "TIMESTAMP")
         ]
     }
 
