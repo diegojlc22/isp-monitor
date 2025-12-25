@@ -15,7 +15,7 @@ class Tower(Base):
     
     # Status
     is_online = Column(Boolean, default=False)
-    last_checked = Column(DateTime, default=datetime.now(timezone.utc))
+    last_checked = Column(DateTime, default=datetime.utcnow)
     
     # Hierarchy (If this tower depends on a router)
     parent_id = Column(Integer, nullable=True)
@@ -38,7 +38,7 @@ class Equipment(Base):
     
     # Status
     is_online = Column(Boolean, default=False)
-    last_checked = Column(DateTime, default=datetime.now(timezone.utc))
+    last_checked = Column(DateTime, default=datetime.utcnow)
     last_latency = Column(Integer, nullable=True) # ms
     
     # Maintenance Mode
@@ -80,7 +80,7 @@ class PingLog(Base):
     device_id = Column(Integer)
     status = Column(Boolean) # True=Online, False=Offline
     latency_ms = Column(Integer, nullable=True)
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
 class TrafficLog(Base):
     __tablename__ = "traffic_logs"
@@ -89,7 +89,7 @@ class TrafficLog(Base):
     equipment_id = Column(Integer, ForeignKey("equipments.id"), index=True)
     in_mbps = Column(Float)
     out_mbps = Column(Float)
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 class Parameters(Base):
@@ -108,7 +108,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     role = Column(String, default="tech") # 'admin' or 'tech'
-    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class NetworkLink(Base):
     __tablename__ = "network_links"
@@ -126,7 +126,7 @@ class Alert(Base):
     device_name = Column(String)
     device_ip = Column(String)
     message = Column(String)
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
 class PingStatsHourly(Base):
     """
@@ -159,7 +159,7 @@ class SyntheticLog(Base):
     status_code = Column(Integer, nullable=True) # For HTTP
     success = Column(Boolean, default=False)
     
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 class Baseline(Base):
     """
@@ -181,7 +181,7 @@ class Baseline(Base):
     std_dev = Column(Float) # Standard Deviation
     sample_count = Column(Integer)
     
-    last_updated = Column(DateTime, default=datetime.now(timezone.utc))
+    last_updated = Column(DateTime, default=datetime.utcnow)
 
 class MonitorTarget(Base):
     """

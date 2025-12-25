@@ -74,20 +74,19 @@ async def train_baselines_job():
     try:
         async with AsyncSessionLocal() as session:
             # Look back 14 days
-            cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+            cutoff = datetime.utcnow() - timedelta(days=14)
             
             # Aggregate stats by Hour of Day and Target
             # We want to know: For 'google.com' at '14:00', what is Avg Latency and StdDev?
             
             # Group by hour (0-23)
-            # SQLite specific extraction: strftime('%H', timestamp)
+            # Portable Message: Use EXTRACT(HOUR FROM ...)
+            
             stmt = select(
                 SyntheticLog.target,
-                func.strftime('%H', SyntheticLog.timestamp).label('hour'),
+                func.extract('hour', SyntheticLog.timestamp).label('hour'),
                 func.avg(SyntheticLog.latency_ms).label('avg'),
-                # SQLite doesn't have effortless stddev function in standard build often, 
-                # but we can approximate or use extension. 
-                # Let's use simple variance approx: AVG(x*x) - AVG(x)^2
+                # Simple Variance: AVG(x*x) - AVG(x)^2
                 (func.avg(SyntheticLog.latency_ms * SyntheticLog.latency_ms) - func.avg(SyntheticLog.latency_ms) * func.avg(SyntheticLog.latency_ms)).label('variance'),
                 func.count().label('samples')
             ).where(
@@ -95,7 +94,7 @@ async def train_baselines_job():
                 SyntheticLog.latency_ms.isnot(None)
             ).group_by(
                 SyntheticLog.target,
-                func.strftime('%H', SyntheticLog.timestamp)
+                func.extract('hour', SyntheticLog.timestamp)
             )
             
             rows = await session.execute(stmt)
@@ -104,8 +103,9 @@ async def train_baselines_job():
             for row in rows:
                 target_key = row.target
                 hour = int(row.hour)
-                avg = row.avg
-                variance = row.variance if row.variance and row.variance > 0 else 0
+                # Postgres (asyncpg) returns Decimal, convert to float for python math
+                avg = float(row.avg) if row.avg is not None else 0.0
+                variance = float(row.variance) if (row.variance and row.variance > 0) else 0.0
                 std_dev = variance ** 0.5
                 samples = row.samples
                 
@@ -120,7 +120,7 @@ async def train_baselines_job():
                     baseline.avg_value = avg
                     baseline.std_dev = std_dev
                     baseline.sample_count = samples
-                    baseline.last_updated = datetime.now(timezone.utc)
+                    baseline.last_updated = datetime.utcnow()
                 else:
                     new_b = Baseline(
                         metric_type=f"synthetic_{target_key}",
@@ -204,7 +204,8 @@ async def synthetic_agent_job():
                         test_type=r["type"],
                         target=r["target"],
                         latency_ms=r["latency"] if r["latency"] else 0,
-                        success=r["success"]
+                        success=r["success"],
+                        timestamp=datetime.utcnow() # Naive for Postgres
                     )
                     session.add(log)
                     

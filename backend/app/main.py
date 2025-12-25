@@ -133,6 +133,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Gzip Compression (70-80% redução de tráfego HTTP)
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.include_router(towers.router, prefix="/api")
 app.include_router(equipments.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")

@@ -5,13 +5,26 @@ from typing import List
 from backend.app.database import get_db
 from backend.app.models import Equipment
 from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate
+from backend.app.services.cache import cache  # Cache para performance
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
 
 @router.get("/", response_model=List[EquipmentSchema])
 async def read_equipments(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    # Tenta buscar do cache
+    cache_key = f"equipments_list_{skip}_{limit}"
+    cached = await cache.get(cache_key)
+    if cached:
+        return cached
+    
+    # Se não está no cache, busca do banco
     result = await db.execute(select(Equipment).offset(skip).limit(limit))
-    return result.scalars().all()
+    equipments = result.scalars().all()
+    
+    # Salva no cache por 30 segundos
+    await cache.set(cache_key, equipments, ttl_seconds=30)
+    
+    return equipments
 
 @router.post("/", response_model=EquipmentSchema)
 async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db)):
@@ -25,6 +38,10 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
         db.add(db_eq)
         await db.commit()
         await db.refresh(db_eq)
+        
+        # Invalida o cache de equipamentos
+        await cache.delete("equipments_list_0_100")
+        
         return db_eq
     except HTTPException:
         raise
@@ -49,6 +66,10 @@ async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSess
     
     await db.commit()
     await db.refresh(db_eq)
+    
+    # Invalida o cache de equipamentos
+    await cache.delete("equipments_list_0_100")
+    
     return db_eq
 
 @router.delete("/{eq_id}")
@@ -58,6 +79,10 @@ async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Equipment not found")
     await db.delete(db_eq)
     await db.commit()
+    
+    # Invalida o cache de equipamentos
+    await cache.delete("equipments_list_0_100")
+    
     return {"message": "Equipment deleted"}
 
 from backend.app.services.ssh_commander import reboot_device

@@ -15,6 +15,11 @@ async def optimize_sqlite():
     - Auto-vacuum for space management
     """
     async with engine.begin() as conn:
+        dialect = conn.dialect.name
+        if dialect != 'sqlite':
+            print(f"[INFO] Skipping SQLite optimizations (Using {dialect})")
+            return
+
         # Enable WAL (Write-Ahead Logging) mode - CRITICAL for performance
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
         
@@ -55,6 +60,11 @@ async def vacuum_database():
     """
     try:
         async with engine.begin() as conn:
+            dialect = conn.dialect.name
+            if dialect != 'sqlite':
+                # Postgres has autovacuum daemon, manual vacuum not usually needed in app loop
+                return
+
             # Incremental vacuum - reclaim some space without locking
             await conn.execute(text("PRAGMA incremental_vacuum;"))
             
@@ -70,17 +80,35 @@ async def get_database_stats():
     Get database statistics (like The Dude's database info)
     """
     async with AsyncSessionLocal() as session:
-        # Get database size
-        result = await session.execute(text("PRAGMA page_count;"))
-        page_count = result.scalar()
+        # Check dialect
+        dialect = session.bind.dialect.name
         
-        result = await session.execute(text("PRAGMA page_size;"))
-        page_size = result.scalar()
+        if dialect == 'sqlite':
+            # Get database size
+            result = await session.execute(text("PRAGMA page_count;"))
+            page_count = result.scalar()
+            
+            result = await session.execute(text("PRAGMA page_size;"))
+            page_size = result.scalar()
+            
+            db_size_mb = (page_count * page_size) / (1024 * 1024)
+        else:
+            # Postgres Size
+            try:
+                # Use pg_database_size for current database
+                result = await session.execute(text("SELECT pg_database_size(current_database());"))
+                size_bytes = result.scalar()
+                db_size_mb = size_bytes / (1024 * 1024)
+            except Exception as e:
+                print(f"[WARN] Failed to get Postgres DB size: {e}")
+                db_size_mb = 0
+            
+            page_count = 0
+            page_size = 0
         
-        db_size_mb = (page_count * page_size) / (1024 * 1024)
-        
-        # Get WAL size
-        result = await session.execute(text("PRAGMA wal_checkpoint(PASSIVE);"))
+        # Get WAL size (SQLite Only)
+        if dialect == 'sqlite':
+            await session.execute(text("PRAGMA wal_checkpoint(PASSIVE);"))
         
         # Get table info
         result = await session.execute(text("""

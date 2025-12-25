@@ -10,7 +10,15 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./monitor.db")
 connect_args = {}
 # Note: aiosqlite doesn't need check_same_thread like sync sqlite
 
-engine = create_async_engine(DATABASE_URL, echo=False, connect_args=connect_args)
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=False, 
+    connect_args=connect_args,
+    pool_size=20,              # Conexões permanentes no pool
+    max_overflow=10,           # Conexões extras sob demanda
+    pool_pre_ping=True,        # Testa conexão antes de usar (evita erros)
+    pool_recycle=3600          # Recicla conexões a cada 1h (evita timeouts)
+)
 
 async_session_factory = async_sessionmaker(
     bind=engine,

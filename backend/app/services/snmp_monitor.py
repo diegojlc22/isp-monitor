@@ -19,7 +19,7 @@ async def snmp_monitor_job():
     print("[INFO] Traffic/Wireless Monitor started (Interval: 60s)...")
     
     # Limit Concurrency to avoid network flood
-    sem = asyncio.Semaphore(20) 
+    sem = asyncio.Semaphore(100) 
     
     # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 

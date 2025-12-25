@@ -19,13 +19,16 @@ async def cleanup_job():
             
             # Delete old PingLogs
             # Note: SQLAlchemy delete statement
+            # P.S. asyncpg is strict about timezone. Using naive UTC for compatibility if DB is naive
+            cutoff = datetime.utcnow() - timedelta(days=DAYS_TO_KEEP)
+            
             stmt = delete(PingLog).where(PingLog.timestamp < cutoff)
             result = await session.execute(stmt)
             deleted_rows = result.rowcount
             
             # Delete old Alerts (Optional, maybe keep them longer?)
             # Let's keep alerts for 60 days
-            cutoff_alerts = datetime.now(timezone.utc) - timedelta(days=60)
+            cutoff_alerts = datetime.utcnow() - timedelta(days=60)
             stmt_alerts = delete(Alert).where(Alert.timestamp < cutoff_alerts)
             result_alerts = await session.execute(stmt_alerts)
             deleted_alerts = result_alerts.rowcount

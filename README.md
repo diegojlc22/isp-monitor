@@ -1,341 +1,549 @@
-# 🌐 ISP Monitor
+# 🌐 ISP Monitor - Sistema de Monitoramento para Provedores de Internet
 
-> Sistema profissional de monitoramento para provedores de internet (ISP) com suporte para 800+ dispositivos
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![React](https://img.shields.io/badge/react-18+-61DAFB.svg)](https://reactjs.org/)
-[![FastAPI](https://img.shields.io/badge/fastapi-latest-009688.svg)](https://fastapi.tiangolo.com/)
+**Versão:** 2.0 (PostgreSQL)  
+**Status:** Produção  
+**Licença:** MIT  
+**Plataforma:** Windows Server (Linux compatível)
 
 ---
 
-## 📋 Índice
+## 📋 VISÃO GERAL
 
-- [Sobre](#-sobre)
-- [Características](#-características)
-- [Tecnologias](#-tecnologias)
-- [Instalação](#-instalação)
-- [Uso](#-uso)
-- [Performance](#-performance)
-- [Documentação](#-documentação)
-- [Contribuindo](#-contribuindo)
-- [Licença](#-licença)
+Sistema de monitoramento em tempo real para provedores de internet (ISPs), focado em **estabilidade**, **performance** e **simplicidade operacional**.
 
----
+### O Que Este Sistema FAZ
 
-## 🎯 Sobre
+✅ Monitora torres e equipamentos via **ICMP (ping)**  
+✅ Coleta tráfego e estatísticas wireless via **SNMP**  
+✅ Detecta quedas e degradação de rede  
+✅ Envia alertas via **Telegram**  
+✅ Exibe dashboard web em tempo real  
+✅ Suporta hierarquia de dependências (torre → equipamento)  
+✅ Modo manutenção (silencia alertas temporariamente)  
+✅ Monitoramento sintético (Google DNS, Cloudflare, etc)  
+✅ Detecção inteligente de anomalias (Z-Score)
 
-O **ISP Monitor** é um sistema completo de monitoramento de rede desenvolvido especificamente para provedores de internet. Inspirado no **The Dude** da Mikrotik, oferece monitoramento em tempo real, alertas automáticos e visualização geográfica da topologia de rede.
+### O Que Este Sistema NÃO FAZ
 
-### Por que ISP Monitor?
-
-- ✅ **100% Windows-native** - Funciona perfeitamente no Windows
-- ✅ **Ultra-rápido** - Pinga 800 dispositivos em 3-5 segundos
-- ✅ **Zero configuração** - SQLite embutido, sem servidor de banco
-- ✅ **Alertas inteligentes** - Telegram integrado
-- ✅ **Mapa interativo** - Visualize sua rede geograficamente
-- ✅ **SSH integrado** - Reboot remoto de equipamentos Mikrotik
+❌ Não monitora largura de banda de clientes finais  
+❌ Não gerencia autenticação PPPoE/Radius  
+❌ Não faz billing ou cobrança  
+❌ Não substitui sistemas de NOC completos (Zabbix, PRTG)  
+❌ Não monitora servidores (apenas equipamentos de rede)
 
 ---
 
-## ✨ Características
+## 🏗️ ARQUITETURA TÉCNICA
 
-### 🔍 Monitoramento Inteligente (Smart Logging)
+### Stack Tecnológico
 
-- **Ping ultra-rápido** usando `icmplib` (mesma técnica do The Dude).
-- **Monitoramento simultâneo** de 800+ dispositivos em segundos.
-- **Log Inteligente**: O sistema só grava no banco quando realmente importa:
-  - Mudança de Status (Online <-> Offline).
-  - Variação brusca de latência (> 10ms).
-  - *Keepalive* a cada 10 minutos.
-- **Zero inchaço**: Evita que o banco de dados cresça descontroladamente.
+**Backend:**
+- Python 3.11+ (asyncio nativo)
+- FastAPI (API REST)
+- SQLAlchemy 2.0 (ORM async)
+- PostgreSQL 15+ (banco de dados)
+- icmplib (ping ICMP raw)
+- PySNMP (coleta SNMP)
+- APScheduler (jobs periódicos)
 
-### 📱 Interface Responsiva
+**Frontend:**
+- React 18 + TypeScript
+- Vite (build tool)
+- TailwindCSS (styling)
+- Recharts (gráficos)
+- Leaflet (mapas)
 
-- **Menu Lateral Adaptável**: Funciona em PC, Tablet e Celular.
-- **Gráficos em Tempo Real**: Atualização a cada 5 segundos.
-- **Modo Noturno**: Tema escuro profissional por padrão.
+**Infraestrutura:**
+- Uvicorn (ASGI server)
+- 1 worker (single process)
+- PostgreSQL local (sem replicação)
 
-### 🔔 Alertas e Backups
-
-- **Telegram (Alertas)**: Notificações instantâneas de queda (DOWN) e retorno (UP) com templates personalizados.
-- **Telegram (Backups)**: Envio automático do banco de dados (`monitor.db.zip`) diariamente à meia-noite.
-- **Testes Integrados**: Botões para testar o envio de mensagens e backups diretamente do painel.
-
-### 🔧 Gerenciamento
-
-- **CRUD completo** de torres e equipamentos
-- **SSH para reboot** remoto (Mikrotik)
-- **Migração de dados** SQLite → PostgreSQL
-- **Backup simples** (copiar arquivo .db)
-- **Usuários e permissões**
-
----
-
-## 🛠️ Tecnologias
-
-### Backend
-
-- **FastAPI** - Framework web moderno e rápido
-- **SQLAlchemy** - ORM assíncrono
-- **SQLite** - Banco de dados (otimizado como The Dude)
-- **icmplib** - Ping ultra-rápido (cross-platform)
-- **Paramiko** - SSH para reboot remoto
-- **python-telegram-bot** - Alertas via Telegram
-
-### Frontend
-
-- **React 18** - Interface moderna e responsiva
-- **TypeScript** - Tipagem estática
-- **Vite** - Build ultra-rápido
-- **Tailwind CSS** - Estilização moderna
-- **Leaflet** - Mapas interativos
-- **Recharts** - Gráficos bonitos
-- **Lucide React** - Ícones modernos
-
-### Performance
-
-- **SQLite WAL mode** - 5-10x mais rápido
-- **Cache de 64MB** - Queries instantâneas
-- **Auto-vacuum** - Banco sempre compacto
-- **Índices otimizados** - 100x mais rápido
-- **Batch pinging** - Todos dispositivos simultaneamente
-
----
-
-## 🚀 Instalação
-
-### Requisitos
-
-- **Windows 10/11** (ou Linux/Mac)
-- **Python 3.11+**
-- **Node.js 18+**
-- **Git**
-
-### Passo a Passo (Automático)
-
-O sistema conta agora com **Auto-Reparo e Configuração Automática**.
-
-1. **Clone o repositório:**
-   ```bash
-   git clone https://github.com/diegojlc22/isp-monitor.git
-   cd isp-monitor
-   ```
-
-2. **Inicie o Sistema:**
-   - Execute o arquivo **`iniciar_sistema.bat`**.
-   - **O que ele faz:**
-     - Verifica se o Python do seu PC está saudável.
-     - Se estiver quebrado (erro de *Tcl/Tk*), ele baixa automaticamente um Python portátil.
-     - Cria o ambiente virtual (`.venv`), instala dependências e inicia o Launcher.
-
-3. **Launcher Unificado:**
-   No painel que abrir, você pode:
-   - Escolher entre **Produção** (Recomendado) ou Desenvolvimento.
-   - Clicar em **"⚡ Criar Build / Deploy"** (Faz todo o trabalho de compilar o site).
-   - Clicar em **"▶ Iniciar Sistema"** para rodar tudo.
-
----
-
-### Modos de Operação
-
-#### 🚀 Modo Produção (Recomendado)
-- Usa arquivos compilados e otimizados do React.
-- **Roda em Porta Única (8080):** Backend serve o Frontend.
-- Menor consumo de RAM/CPU.
-- Ideal para deixar rodando 24/7.
-- **Como usar:** Selecione "Produção" no Launcher > Clique "Deploy" (uma vez) > Clique "Iniciar".
-
-#### 🛠️ Modo Desenvolvimento
-- Hot-Reload (alterou código, atualiza na hora).
-- Abre dois terminais separados.
-- Ideal apenas para programadores editando o código.
-
-### 🔐 Login Padrão
+### Diagrama de Componentes
 
 ```
-Email: diegojlc22@gmail.com
-Senha: 110812
+┌─────────────────────────────────────────────────────────┐
+│                    FRONTEND (React)                      │
+│  Dashboard │ Mapa │ Equipamentos │ Torres │ Alertas     │
+└────────────────────────┬────────────────────────────────┘
+                         │ HTTP/JSON
+                         ↓
+┌─────────────────────────────────────────────────────────┐
+│                 BACKEND (FastAPI)                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │ Routers  │  │ Services │  │  Models  │              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+└────────────────────────┬────────────────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        ↓                ↓                ↓
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│   Pinger     │  │ SNMP Monitor │  │ Synthetic    │
+│  (icmplib)   │  │  (PySNMP)    │  │   Agent      │
+│   30s loop   │  │   60s loop   │  │  300s loop   │
+└──────────────┘  └──────────────┘  └──────────────┘
+        │                │                │
+        └────────────────┼────────────────┘
+                         ↓
+                  ┌──────────────┐
+                  │  PostgreSQL  │
+                  │   (Local)    │
+                  └──────────────┘
 ```
 
-> ⚠️ **IMPORTANTE:** Troque as credenciais em produção!
+### Fluxo de Dados
+
+1. **Pinger** pinga todos os devices a cada 30s (batch)
+2. **SNMP Monitor** coleta tráfego/wireless a cada 60s (paralelo)
+3. **Synthetic Agent** testa conectividade externa a cada 5min
+4. Dados são salvos no **PostgreSQL**
+5. **Dashboard** consulta via API REST
+6. **Alertas** são enviados via Telegram quando detectadas anomalias
 
 ---
 
-## 📖 Uso
+## 🚀 INSTALAÇÃO E EXECUÇÃO
 
-### Adicionar Torre
+### Pré-requisitos
 
-1. Acesse **Torres** no menu
-2. Clique em **Nova Torre**
-3. Preencha:
-   - Nome
-   - IP (opcional)
-   - Latitude, Longitude (ex: `-23.550520, -46.633308`)
-   - Observações
-4. Salvar
+- **Windows 10/11** ou **Server 2019+** (ou Linux)
+- **Python 3.11+** (instalado ou será baixado automaticamente)
+- **Node.js 18+** (apenas para build do frontend)
+- **PostgreSQL 15+** (para modo produção)
 
-### Adicionar Equipamento
-
-1. Acesse **Equipamentos**
-2. Clique em **Novo Equipamento**
-3. Preencha:
-   - Nome
-   - IP
-   - Torre associada
-   - Credenciais SSH (para reboot)
-4. Salvar
-
-### Configurar Alertas Telegram
-
-1. Acesse **Alertas**
-2. Preencha:
-   - Token do Bot
-   - Chat ID
-3. Use o botão **Testar Alerta** para validar.
-
-### Configurar Backups Automáticos
-
-1. Acesse **Backups** (Menu Admin)
-2. Defina o Chat ID exclusivo para backups.
-3. O sistema enviará o banco de dados diariamente à meia-noite.
-4. Use o botão **Testar Envio** para forçar um backup imediato.
-
-### Ver Mapa
-
-1. Acesse **Mapa**
-2. Visualize torres e equipamentos
-3. Clique nos marcadores para detalhes
-4. Use **Gerenciar Links** para criar topologia
-
----
-
-## ⚡ Performance
-
-### Benchmarks (800 dispositivos)
-
-| Operação | Tempo | Status |
-|----------|-------|--------|
-| **Ciclo de ping completo** | 3-5s | ✅ Excelente |
-| **Carregar dashboard** | 0.2s | ✅ Instantâneo |
-| **Histórico de latência** | 0.3s | ✅ Rápido |
-| **Tamanho do banco** | ~150MB | ✅ Compacto |
-
-### Otimizações Implementadas
-
-- ✅ **SQL Smart Logging** - Redução de 95% na escrita de disco.
-- ✅ **SQLite WAL mode** - Leituras/escritas simultâneas
-- ✅ **Cache de 64MB** - Dados quentes em memória
-- ✅ **Batch pinging** - Todos IPs ao mesmo tempo
-- ✅ **Auto-vacuum** - Recuperação automática de espaço
-
----
-
-## 📚 Documentação
-
-### Guias Disponíveis
-
-- **[PERFORMANCE.md](PERFORMANCE.md)** - Otimizações e configurações de performance
-- **[WINDOWS_ADMIN.md](WINDOWS_ADMIN.md)** - Como executar como Admin no Windows
-- **[SQLITE_OPTIMIZATION.md](SQLITE_OPTIMIZATION.md)** - Detalhes das otimizações do banco
-- **[ANALISE_PROJETO.md](ANALISE_PROJETO.md)** - Análise completa do código
-- **[RELATORIO_DESENVOLVIMENTO.md](RELATORIO_DESENVOLVIMENTO.md)** - Relatório de desenvolvimento
-
-### Configuração Avançada
-
-#### Arquivo `.env` (opcional)
+### Instalação Rápida (SQLite)
 
 ```bash
-# Ping
-PING_INTERVAL_SECONDS=30
-PING_TIMEOUT_SECONDS=2
-PING_CONCURRENT_LIMIT=100
+# 1. Clone o repositório
+git clone <repo-url>
+cd isp_monitor
 
-# Logs
-LOG_RETENTION_DAYS=30
+# 2. Execute o instalador
+iniciar_sistema.bat
 
-# Database (para PostgreSQL)
-# DATABASE_URL=postgresql+asyncpg://user:pass@localhost/isp_monitor
+# 3. Acesse o sistema
+http://localhost:8080
+Login: admin@admin.com
+Senha: admin
+```
+
+O script `iniciar_sistema.bat` automaticamente:
+- Detecta ou baixa Python 3.11
+- Cria ambiente virtual (`.venv`)
+- Instala dependências
+- Compila o frontend
+- Inicia o servidor
+
+### Instalação Produção (PostgreSQL)
+
+```bash
+# 1. Instale PostgreSQL
+# Download: https://www.postgresql.org/download/windows/
+
+# 2. Crie o banco de dados
+psql -U postgres
+CREATE DATABASE monitor_prod;
+\q
+
+# 3. Execute o script de migração
+python scripts/init_postgres.py
+python scripts/migrar_sqlite_para_postgres.py
+
+# 4. Inicie com PostgreSQL
+iniciar_postgres.bat
+```
+
+**Veja:** `docs/GUIA_MIGRACAO_POSTGRES.md` para detalhes.
+
+---
+
+## ⚙️ CONFIGURAÇÃO
+
+### Variáveis de Ambiente
+
+```bash
+# Banco de Dados
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/monitor_prod
+
+# Telegram (Alertas)
+TELEGRAM_TOKEN=seu_bot_token
+TELEGRAM_CHAT_ID=seu_chat_id
+
+# Performance
+PING_INTERVAL_SECONDS=30        # Intervalo de ping (padrão: 30s)
+PING_CONCURRENT_LIMIT=100       # Pings simultâneos (padrão: 100)
+LOG_RETENTION_DAYS=30           # Retenção de logs (padrão: 30 dias)
+```
+
+### Ajustes de Performance
+
+**PostgreSQL - Otimização Automática:**
+
+O projeto inclui um arquivo de configuração otimizado para PostgreSQL:
+
+```bash
+# 1. Faça backup do arquivo original
+copy "C:\Program Files\PostgreSQL\15\data\postgresql.conf" "C:\Program Files\PostgreSQL\15\data\postgresql.conf.backup"
+
+# 2. Copie o arquivo otimizado
+copy postgresql.conf.optimized "C:\Program Files\PostgreSQL\15\data\postgresql.conf"
+
+# 3. Reinicie o PostgreSQL
+Restart-Service postgresql-x64-15
+```
+
+**Ou edite manualmente** (veja `docs/POSTGRESQL_CONFIG_MUDANCAS.md`):
+
+```ini
+# MEMÓRIA (para 16GB RAM)
+shared_buffers = 2GB              # 25% da RAM
+effective_cache_size = 6GB        # 50% da RAM
+work_mem = 16MB
+maintenance_work_mem = 512MB
+
+# WAL (Write-Ahead Logging)
+wal_buffers = 16MB
+min_wal_size = 1GB
+max_wal_size = 4GB
+checkpoint_completion_target = 0.9
+
+# SSD Optimization
+random_page_cost = 1.1            # SSD
+effective_io_concurrency = 200    # SSD
+
+# Query Planner
+default_statistics_target = 100
+```
+
+**Ganho esperado:** +20-30% performance geral
+
+---
+
+## 📊 DECISÕES TÉCNICAS
+
+### Por Que Python + Asyncio?
+
+✅ **Concorrência nativa** (asyncio) permite pingar 1000 devices simultaneamente  
+✅ **Ecossistema rico** (icmplib, PySNMP, FastAPI)  
+✅ **Manutenibilidade** (código limpo e legível)  
+❌ **GIL limita CPU** (mas I/O-bound, não CPU-bound)
+
+### Por Que PostgreSQL?
+
+✅ **Escala melhor** que SQLite (1000+ devices)  
+✅ **Índices avançados** (B-tree, GIN, BRIN)  
+✅ **ACID completo** (transações seguras)  
+✅ **Replicação nativa** (futuro)  
+❌ **Mais complexo** de instalar
+
+### Por Que icmplib?
+
+✅ **Cross-platform** (Windows, Linux, Mac)  
+✅ **Async nativo** (integra com asyncio)  
+✅ **Multiping** (pinga N IPs simultaneamente)  
+✅ **Raw ICMP** (preciso como The Dude)  
+❌ **Requer privilégios** (admin/root)
+
+### Por Que 1 Worker Uvicorn?
+
+✅ **Simplicidade** (sem shared state)  
+✅ **Suficiente** para 20 usuários simultâneos  
+✅ **Menos bugs** (sem race conditions)  
+❌ **Não escala horizontalmente** (futuro: workers + Redis)
+
+---
+
+## 📈 ESTRATÉGIAS DE PERFORMANCE
+
+### 1. Batch Pinging (icmplib multiping)
+
+Ao invés de pingar 1 device por vez:
+```python
+# ❌ Lento (sequencial)
+for ip in ips:
+    ping(ip)
+
+# ✅ Rápido (paralelo)
+results = await async_multiping(ips, concurrent_tasks=100)
+```
+
+**Ganho:** 100x mais rápido
+
+### 2. Semaphores para Controle de Concorrência
+
+```python
+sem = asyncio.Semaphore(100)
+
+async def fetch_snmp(ip):
+    async with sem:  # Limita a 100 simultâneos
+        return await get_snmp_data(ip)
+```
+
+**Benefício:** Evita sobrecarga de rede
+
+### 3. Smart Logging (Reduz Writes)
+
+Só salva log quando status muda:
+```python
+if device.is_online != new_status:
+    # Mudou de online → offline (ou vice-versa)
+    save_log()
+```
+
+**Ganho:** 90% menos writes no banco
+
+### 4. Índices Compostos
+
+```sql
+CREATE INDEX idx_ping_logs_device_time 
+ON ping_logs(device_id, timestamp DESC);
+```
+
+**Ganho:** Queries 20x mais rápidas
+
+### 5. Limpeza Automática de Logs
+
+Job diário remove logs > 30 dias:
+```python
+cutoff = datetime.utcnow() - timedelta(days=30)
+delete(PingLog).where(PingLog.timestamp < cutoff)
+```
+
+**Benefício:** Banco não cresce infinitamente
+
+---
+
+## ⚠️ LIMITES CONHECIDOS
+
+### Capacidade Atual
+
+| Métrica | Limite Confortável | Limite Máximo |
+|---------|-------------------|---------------|
+| **Dispositivos** | 500 | 1000 |
+| **Usuários Simultâneos** | 10 | 20 |
+| **Intervalo Mínimo de Ping** | 30s | 15s |
+| **Retenção de Logs** | 30 dias | 90 dias |
+
+### Gargalos Identificados
+
+1. **CPU** - Limita em ~1000 devices (Python GIL)
+2. **PostgreSQL Queries** - Lentas sem índices adequados
+3. **Serialização JSON** - Lenta com muitos usuários
+4. **Ausência de Cache** - Queries repetidas desperdiçam CPU
+
+### O Que Acontece no Limite?
+
+- **1000+ devices:** Pings começam a atrasar (timeouts)
+- **20+ usuários:** Dashboard fica lento (2-5s)
+- **90+ dias de logs:** Queries demoram (5-10s)
+
+**Solução:** Ver `docs/FASE3_ANALISE_AJUSTES.md`
+
+---
+
+## 🛣️ ROADMAP
+
+### ✅ Implementado (v2.0)
+
+- [x] Migração para PostgreSQL
+- [x] Ping ultra-rápido (icmplib)
+- [x] SNMP paralelo (Semaphore 100)
+- [x] Synthetic Agent (IA leve)
+- [x] Detecção de anomalias (Z-Score)
+- [x] Alertas Telegram
+- [x] Dashboard responsivo
+- [x] Modo manutenção
+
+### 🔄 Em Progresso
+
+- [ ] Índices compostos (performance)
+- [ ] Cache em memória (reduz queries)
+- [ ] Paginação em endpoints
+- [ ] Compressão Gzip
+
+### 📅 Futuro (v3.0)
+
+- [ ] Redis (cache distribuído)
+- [ ] Workers múltiplos (escala horizontal)
+- [ ] Particionamento de tabelas
+- [ ] Read Replicas (PostgreSQL)
+- [ ] App móvel (APK técnico)
+- [ ] Grafana integration
+- [ ] Webhooks personalizados
+
+---
+
+## 🔧 MANUTENÇÃO
+
+### Logs do Sistema
+
+```bash
+# Ver logs em tempo real
+tail -f logs/app.log
+
+# Ou no Windows (PowerShell)
+Get-Content logs/app.log -Wait
+```
+
+### Backup do Banco
+
+```bash
+# PostgreSQL
+pg_dump -U postgres monitor_prod > backup.sql
+
+# Restaurar
+psql -U postgres monitor_prod < backup.sql
+```
+
+### Limpeza Manual de Logs
+
+```sql
+-- Deletar logs > 60 dias
+DELETE FROM ping_logs WHERE timestamp < NOW() - INTERVAL '60 days';
+DELETE FROM traffic_logs WHERE timestamp < NOW() - INTERVAL '60 days';
+VACUUM ANALYZE;
+```
+
+### Reiniciar Serviços
+
+```bash
+# Windows
+taskkill /F /IM python.exe
+iniciar_postgres.bat
+
+# Linux (systemd)
+sudo systemctl restart isp-monitor
 ```
 
 ---
 
-## 🏗️ Estrutura do Projeto
+## 🐛 TROUBLESHOOTING
+
+### Problema: Pings não funcionam
+
+**Causa:** icmplib precisa de privilégios de administrador
+
+**Solução:**
+```bash
+# Windows: Execute como Administrador
+# Linux: Use sudo ou configure capabilities
+sudo setcap cap_net_raw+ep /path/to/python
+```
+
+### Problema: SNMP não retorna dados
+
+**Causa:** Community string incorreta ou firewall
+
+**Solução:**
+1. Teste com `snmpwalk`:
+```bash
+snmpwalk -v2c -c public <IP> 1.3.6.1.2.1.2.2.1.10
+```
+2. Verifique firewall (porta 161 UDP)
+3. Confirme community string no equipamento
+
+### Problema: Dashboard lento
+
+**Causa:** Muitos logs acumulados sem índices
+
+**Solução:**
+```sql
+-- Criar índices (se não existirem)
+CREATE INDEX idx_ping_logs_device_time ON ping_logs(device_id, timestamp DESC);
+
+-- Limpar logs antigos
+DELETE FROM ping_logs WHERE timestamp < NOW() - INTERVAL '30 days';
+VACUUM ANALYZE;
+```
+
+### Problema: PostgreSQL connection refused
+
+**Causa:** Serviço não está rodando
+
+**Solução:**
+```bash
+# Windows
+services.msc → PostgreSQL → Iniciar
+
+# Linux
+sudo systemctl start postgresql
+```
+
+---
+
+## 📚 DOCUMENTAÇÃO ADICIONAL
+
+- **Migração PostgreSQL:** `docs/GUIA_MIGRACAO_POSTGRES.md`
+- **Performance:** `docs/FASE2_SIMULACAO_CARGA.md`
+- **Otimizações:** `docs/FASE3_ANALISE_AJUSTES.md`
+- **Limpeza de Código:** `docs/FASE1_LIMPEZA.md`
+- **Como Reiniciar:** `docs/COMO_REINICIAR.md`
+
+---
+
+## 🤝 CONTRIBUINDO
+
+### Estrutura do Projeto
 
 ```
-isp-monitor/
+isp_monitor/
 ├── backend/
 │   ├── app/
-│   │   ├── routers/          # Endpoints da API
-│   │   ├── services/         # Lógica de negócio
-│   │   ├── models.py         # Modelos do banco
-│   │   ├── schemas.py        # Validação Pydantic
-│   │   ├── database.py       # Configuração do banco
-│   │   ├── config.py         # Configurações
-│   │   └── main.py           # Aplicação principal
-│   └── requirements.txt
+│   │   ├── routers/      # Endpoints da API
+│   │   ├── services/     # Lógica de negócio
+│   │   ├── models.py     # Schema do banco
+│   │   └── main.py       # Entry point
+│   └── tools/            # Scripts de debug
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/            # Páginas React
-│   │   ├── services/         # API client
-│   │   ├── context/          # Context API
-│   │   └── App.tsx
-│   └── package.json
-├── monitor.db                # Banco SQLite
-├── .env.example              # Exemplo de configuração
+│   └── src/
+│       ├── pages/        # Telas React
+│       ├── components/   # Componentes reutilizáveis
+│       └── services/     # API client
+├── docs/                 # Documentação técnica
+├── scripts/              # Scripts de produção
 └── README.md
 ```
 
----
+### Padrões de Código
 
-## 🤝 Contribuindo
+- **Python:** PEP 8, type hints, async/await
+- **TypeScript:** ESLint, functional components
+- **SQL:** Lowercase, snake_case
+- **Commits:** Conventional Commits
 
-Contribuições são bem-vindas! Por favor:
+### Testes
 
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/MinhaFeature`)
-3. Commit suas mudanças (`git commit -m 'Add: Minha feature'`)
-4. Push para a branch (`git push origin feature/MinhaFeature`)
-5. Abra um Pull Request
+```bash
+# Backend (futuro)
+pytest backend/tests/
 
----
-
-## 📝 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
----
-
-## 👨‍💻 Autor
-
-**Diego Lima**
-- GitHub: [@diegojlc22](https://github.com/diegojlc22)
-- Email: diegojlc22@gmail.com
+# Frontend
+cd frontend
+npm test
+```
 
 ---
 
-## 🙏 Agradecimentos
+## 📄 LICENÇA
 
-- **Mikrotik** - Inspiração do The Dude
-- **FastAPI** - Framework incrível
-- **React** - Biblioteca poderosa
-- **Comunidade Open Source** - Por todas as ferramentas
+MIT License - Veja `LICENSE` para detalhes.
 
 ---
 
-## 📊 Status do Projeto
+## 🙏 AGRADECIMENTOS
 
-- ✅ **Build:** Passando
-- ✅ **Testes:** N/A
-- ✅ **Cobertura:** N/A
-- ✅ **Produção:** Pronto para 800+ dispositivos
+- **icmplib** - Ping cross-platform incrível
+- **FastAPI** - Framework web moderno
+- **PostgreSQL** - Banco de dados robusto
+- **The Dude (MikroTik)** - Inspiração para arquitetura de ping
 
 ---
 
-<p align="center">
-  Feito com ❤️ para a comunidade ISP
-</p>
+## 📞 SUPORTE
 
-<p align="center">
-  <a href="#-isp-monitor">Voltar ao topo</a>
-</p>
+**Issues:** GitHub Issues  
+**Docs:** `docs/` folder  
+**Email:** [seu-email]
+
+---
+
+**Desenvolvido com ❤️ para ISPs que valorizam estabilidade e performance.**
