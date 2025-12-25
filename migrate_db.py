@@ -24,7 +24,15 @@ def migrate():
             ("last_traffic_in", "REAL"),
             ("last_traffic_out", "REAL"),
             ("snmp_interface_index", "INTEGER"),
-            ("maintenance_until", "TIMESTAMP")
+            ("maintenance_until", "TIMESTAMP"),
+            ("is_mikrotik", "BOOLEAN DEFAULT 0"),
+            ("mikrotik_interface", "TEXT"),
+            ("api_port", "INTEGER DEFAULT 8728"),
+            ("brand", "TEXT DEFAULT 'generic'"),
+            ("equipment_type", "TEXT DEFAULT 'station'"),
+            ("signal_dbm", "INTEGER"),
+            ("ccq", "INTEGER"),
+            ("connected_clients", "INTEGER DEFAULT 0")
         ],
         "towers": [
             ("parent_id", "INTEGER"),

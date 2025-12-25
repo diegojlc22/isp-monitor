@@ -14,30 +14,54 @@ DEFAULT_HTTP = ["https://www.google.com", "https://www.cloudflare.com"]
 DEFAULT_DNS = "8.8.8.8"
 
 # --- NETWORK TEST FUNCTIONS ---
-async def check_dns(target_ip: str) -> dict:
-    """Measures DNS resolution time (reverse lookup simulation or direct connect)"""
-    start = time.time()
+from icmplib import async_ping
+
+async def check_ping(target: str) -> dict:
+    """Measures ICMP latency (Real Ping)"""
     try:
-        loop = asyncio.get_running_loop()
-        # Measure time to resolve a known hostname
-        await loop.getaddrinfo("google.com", 80)
-        latency = (time.time() - start) * 1000
-        return {"success": True, "latency": latency}
-    except Exception:
+        # Strip protocol if present for ping
+        host = target.replace("https://", "").replace("http://", "").split("/")[0]
+        result = await async_ping(host, count=2, timeout=2, privileged=False)
+        
+        if result.is_alive:
+            return {"success": True, "latency": result.avg_rtt}
+        else:
+             return {"success": False, "latency": None}
+    except Exception as e:
+        print(f"Ping Error: {e}")
         return {"success": False, "latency": None}
 
+async def check_dns(target_ip: str) -> dict:
+    """Measures DNS resolution time using the target as the resolver (if possible) or just checks reachability"""
+    # For now, let's keep it simple: DNS is often just UDP 53 reachability for this context
+    # But usually users want to know if 8.8.8.8 responds to ping too.
+    # Let's fallback to ping for DNS type as well for latency measurement
+    return await check_ping(target_ip)
+
 async def check_http(url: str) -> dict:
+    # Use Ping for latency accuracy if it's just meant to be "is it slow?"
+    # However, HTTP check implies checking web server payload. 
+    # But user complained about latency. TCP handshake is close to Ping RTT but not same.
+    # Let's verify if the user input looks like an IP.
+    
+    # If user provided raw IP, use Ping. If URL, use TCP Connect.
+    import re
+    is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", url)
+    
+    if is_ip:
+        return await check_ping(url)
+        
     start = time.time()
     try:
         domain = url.replace("https://", "").replace("http://", "").split("/")[0]
-        # Measure TCP handshake time
         reader, writer = await asyncio.open_connection(domain, 443)
         writer.close()
         await writer.wait_closed()
         latency = (time.time() - start) * 1000
         return {"success": True, "latency": latency, "code": 200}
     except Exception:
-        return {"success": False, "latency": None, "code": 0}
+         # Fallback to ping if HTTP fails (maybe firewall blocks port 443)
+         return await check_ping(domain)
 
 # --- INTELLIGENCE MODULES ---
 
@@ -219,17 +243,19 @@ async def synthetic_agent_job():
                 await session.commit()
                 
                 # 4. Global State Judgement
-                # Only alert if MAJORITY of HTTP targets are slow (avoids single site issues)
-                http_anomalies = [a for a in anomalies_found if a["type"] == 'http']
-                total_http = len([t for t in batch_results if t["type"] == 'http'])
+                # CHANGED: Alert on ANY anomaly (HTTP, DNS, ICMP)
                 
                 is_degradation = False
-                if total_http > 0 and len(http_anomalies) >= (total_http / 2):
+                if len(anomalies_found) > 0:
                     is_degradation = True
+                    print(f"[IA-AGENT] Degradation detected on: {[a['target'] for a in anomalies_found]}")
                 
                 if is_degradation:
                     anomaly_streak += 1
+                    print(f"[IA-AGENT] Anomaly Streak: {anomaly_streak}/{ANOMALY_LIMIT}")
                 else:
+                    if anomaly_streak > 0:
+                         print("[IA-AGENT] Streak reset to 0 (Normal)")
                     anomaly_streak = 0
                     state_status = "NORMAL"
 
@@ -238,7 +264,7 @@ async def synthetic_agent_job():
                     state_status = "ALERTED"
                     
                     # Build Smart Message
-                    avg_lat = sum([r["latency"] for r in http_anomalies]) / len(http_anomalies)
+                    avg_lat = sum([r["latency"] for r in anomalies_found]) / len(anomalies_found)
                     
                     msg = (
                         "🚨 **IA DETECTOU DEGRADAÇÃO** 🚨\n\n"
@@ -248,7 +274,7 @@ async def synthetic_agent_job():
                         "🔍 **Análise Estatística:**\n"
                     )
                     
-                    for a in http_anomalies:
+                    for a in anomalies_found:
                         z_info = f"(Z-Score: {a.get('z_score', '?')})" if a.get('z_score') else ""
                         msg += f"• {a['target']}: 🐢 {int(a['latency'])}ms {z_info}\n"
                         msg += f"  (Normal p/ horário: {a.get('expected')}ms)\n"

@@ -8,7 +8,7 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 @router.get("/logs")
 async def get_synthetic_logs(
-    limit: int = 50,
+    limit: int = 20,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

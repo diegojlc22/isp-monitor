@@ -290,7 +290,7 @@ const Agent: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-3 text-gray-300 font-mono text-xs">{log.target}</td>
                                         <td className="px-6 py-3 text-gray-300 font-mono">
-                                            {log.latency_ms ? `${log.latency_ms}ms` : '-'}
+                                            {log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '-'}
                                         </td>
                                         <td className="px-6 py-3">
                                             {log.success ? (
