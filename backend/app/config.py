@@ -5,9 +5,9 @@ import os
 
 # Ping Configuration
 PING_INTERVAL_SECONDS = int(os.getenv("PING_INTERVAL_SECONDS", "30"))  # Default 30s for production
-PING_TIMEOUT_SECONDS = int(os.getenv("PING_TIMEOUT_SECONDS", "2"))
-PING_CONCURRENT_LIMIT = int(os.getenv("PING_CONCURRENT_LIMIT", "100"))  # Max concurrent pings
-USE_FPING = os.getenv("USE_FPING", "false").lower() == "true"  # Use fping if available
+PING_TIMEOUT_SECONDS = int(os.getenv("PING_TIMEOUT_SECONDS", "1"))
+PING_CONCURRENT_LIMIT = int(os.getenv("PING_CONCURRENT_LIMIT", "300"))  # Max concurrent pings (Windows safe limit ~500)
+USE_FPING = os.getenv("USE_FPING", "false").lower() == "true"  # Use fping if available (Linux only)
 
 # Log Retention
 LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "30"))  # Keep logs for 30 days

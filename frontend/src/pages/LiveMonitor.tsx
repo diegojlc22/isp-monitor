@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, X, Activity, ArrowDownUp, Wifi } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory } from '../services/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -16,7 +16,7 @@ interface WidgetItem {
 }
 
 // --- Componente de Gráfico Individual ---
-const ChartWidget = ({ item, onRemove }: { item: WidgetItem, onRemove: (id: string) => void }) => {
+const ChartWidget = React.memo(({ item, onRemove }: { item: WidgetItem, onRemove: (id: string) => void }) => {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -128,7 +128,7 @@ const ChartWidget = ({ item, onRemove }: { item: WidgetItem, onRemove: (id: stri
             </div>
         </div>
     );
-};
+});
 
 // --- Página Principal ---
 export function LiveMonitor() {

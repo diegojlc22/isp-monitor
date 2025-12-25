@@ -17,6 +17,9 @@ echo [!] Iniciando ISP Monitor com POSTGRESQL
 echo [!] Banco: monitor_prod
 echo.
 
+echo [!] Iniciando Coletor (Processo Independente)...
+start "ISP Collector" /B "%PYTHON_EXE%" backend/collector.py
+
 :: Rodar Uvicorn com otimizações
 "%PYTHON_EXE%" -m uvicorn backend.app.main:app ^
   --host 0.0.0.0 ^

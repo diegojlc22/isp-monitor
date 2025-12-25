@@ -5,10 +5,7 @@ from backend.app.routers import towers, equipments, settings, auth, users, alert
 from backend.app.database import engine, Base, AsyncSessionLocal
 from backend.app import models, auth_utils
 from sqlalchemy import select
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
-
-from backend.app.services.pinger_fast import monitor_job_fast as monitor_job
 print("[INFO] Using ULTRA-FAST pinger (icmplib)")
 
 @asynccontextmanager
@@ -60,11 +57,10 @@ async def lifespan(app: FastAPI):
         await db.commit()
         print("[OK] Telegram Config Seeded (if missing).")
         
-    # Optimize SQLite database (like The Dude)
+    # Optimize SQLite database (legacy support) / Ensure Performance Indexes
     from backend.app.services.sqlite_optimizer import (
         optimize_sqlite, 
         create_performance_indexes,
-        maintenance_job,
         get_database_stats
     )
     
@@ -73,49 +69,16 @@ async def lifespan(app: FastAPI):
     await create_performance_indexes()
     
     # Get initial stats
-    stats = await get_database_stats()
-    print(f"[INFO] Database: {stats['database_size_mb']} MB")
-    
-    # Get ping interval from config
-    from backend.app.config import PING_INTERVAL_SECONDS
-    
-    scheduler = AsyncIOScheduler()
-    # Monitor: Run with configurable interval (default 30s)
-    scheduler.add_job(monitor_job, 'interval', seconds=PING_INTERVAL_SECONDS)
-    print(f"[INFO] Ping interval: {PING_INTERVAL_SECONDS}s")
-    
-    # Maintenance (Cleanup): Run every 24 hours
-    from backend.app.services.maintenance import cleanup_job, backup_database_job
-    scheduler.add_job(cleanup_job, 'interval', hours=24) # Run once a day
-    scheduler.add_job(backup_database_job, 'cron', hour=0, minute=0) # Run at midnight
-    
-    # Run cleanup once on startup (background task)
-    import asyncio
-    asyncio.create_task(cleanup_job())
-    
-    # Weekly database maintenance (vacuum, analyze)
-    asyncio.create_task(maintenance_job())
-
-    # SNMP Traffic Monitor (Runs every 60s)
-    from backend.app.services.snmp_monitor import snmp_monitor_job
-    asyncio.create_task(snmp_monitor_job())
-
-    # IA-AGENT: Synthetic Monitor (Runs every 5 min)
     try:
-        from backend.app.services.synthetic_agent import synthetic_agent_job
-        asyncio.create_task(synthetic_agent_job())
-        print("[INFO] Synthetic Agent Started")
-    except ImportError:
-        print("[WARN] Synthetic Agent module missing")
-
-    scheduler.start()
-    
-    yield
-    print("Shutting down...")
-    try:
-        scheduler.shutdown()
+        stats = await get_database_stats()
+        print(f"[INFO] Database: {stats['database_size_mb']} MB")
     except:
         pass
+
+    print("[INFO] API Started (Collector Running in Separate Process)")
+    
+    yield
+    print("Shutting down API...")
 
 app = FastAPI(title="ISP Monitor API", lifespan=lifespan)
 
