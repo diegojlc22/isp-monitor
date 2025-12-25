@@ -1,6 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap, Polyline } from 'react-leaflet';
 import { useEffect, useState } from 'react';
-import { getTowers, getLinks, createLink, deleteLink } from '../services/api';
+import { getTowers, getLinks, createLink, deleteLink, getUsers } from '../services/api';
 import L from 'leaflet';
 import { Search, Network, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
@@ -40,6 +40,26 @@ const createTowerIcon = (name: string, isOnline: boolean) => new L.DivIcon({
     popupAnchor: [0, -60]
 });
 
+const createTechIcon = (name: string) => new L.DivIcon({
+    className: 'custom-div-icon',
+    html: `
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <div style="background-color: #3b82f6; padding: 6px; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); border: 2px solid white; animation: pulse 2s infinite;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+            <span style="margin-top: 4px; background-color: rgba(37, 99, 235, 0.9); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; white-space: nowrap;">
+                ${name}
+            </span>
+        </div>
+    `,
+    iconSize: [40, 60],
+    iconAnchor: [20, 60],
+    popupAnchor: [0, -60]
+});
+
 // Map Controller to handle Pan/Zoom
 function MapController({ center }: { center: [number, number] | null }) {
     const map = useMap();
@@ -54,6 +74,7 @@ function MapController({ center }: { center: [number, number] | null }) {
 export function NetMap() {
     const [towers, setTowers] = useState<any[]>([]);
     const [links, setLinks] = useState<any[]>([]);
+    const [techs, setTechs] = useState<any[]>([]); // New state for techs
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredTowers, setFilteredTowers] = useState<any[]>([]);
     const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(null);
@@ -65,15 +86,22 @@ export function NetMap() {
 
     async function loadData() {
         try {
-            const [tData, lData] = await Promise.all([getTowers(), getLinks()]);
+            const [tData, lData, uData] = await Promise.all([getTowers(), getLinks(), getUsers()]);
             setTowers(tData);
             setLinks(lData);
+            // Filter users with valid coordinates
+            const techsWithLocation = uData.filter((u: any) => u.last_latitude && u.last_longitude);
+            console.log('📍 Técnicos com localização:', techsWithLocation);
+            setTechs(techsWithLocation);
         } catch (e) { console.error(e); }
     }
 
     useEffect(() => {
         loadData();
-        const interval = setInterval(loadData, 30000);
+        const interval = setInterval(() => {
+            console.log('🔄 Atualizando mapa automaticamente...');
+            loadData();
+        }, 30000); // 30 segundos
         return () => clearInterval(interval);
     }, []);
 
@@ -234,6 +262,21 @@ export function NetMap() {
                             </Marker>
                         ))
                     }
+
+                    {/* Tech Markers */}
+                    {techs.map(tech => (
+                        <Marker
+                            key={`tech-${tech.id}`}
+                            position={[tech.last_latitude, tech.last_longitude]}
+                            icon={createTechIcon(tech.name)}
+                            zIndexOffset={100} // Techs on top
+                        >
+                            <Popup>
+                                <strong>Técnico: {tech.name}</strong><br />
+                                Atualizado: {tech.last_location_update ? new Date(tech.last_location_update).toLocaleTimeString() : 'Nunca'}
+                            </Popup>
+                        </Marker>
+                    ))}
                 </MapContainer>
             </div>
 

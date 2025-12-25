@@ -9,8 +9,8 @@ class Tower(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     ip = Column(String, unique=True, index=True, nullable=True)
-    latitude = Column(Float)
-    longitude = Column(Float)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     observations = Column(Text, nullable=True)
     
     # Status
@@ -23,7 +23,20 @@ class Tower(Base):
     # Maintenance Mode
     maintenance_until = Column(DateTime, nullable=True)
 
-    equipments = relationship("Equipment", back_populates="tower")
+    equipments = relationship("Equipment", back_populates="tower", cascade="all, delete-orphan")
+
+class TowerRequest(Base):
+    """Solicitações de cadastro de torre vindas do APK"""
+    __tablename__ = "tower_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    ip = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    requested_by = Column(String, nullable=True) # ID técnico
+    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending") # pending, approved
 
 class Equipment(Base):
     __tablename__ = "equipments"
@@ -33,8 +46,12 @@ class Equipment(Base):
     ip = Column(String, unique=True, index=True)
     tower_id = Column(Integer, ForeignKey("towers.id"), nullable=True)
     
+    # Contexto para APK
+    is_panel = Column(Boolean, default=False) # É um painel/AP?
+    associated_clients = Column(Integer, default=0) # Total clientes
+    
     # Hierarchy (If this device depends on another device)
-    parent_id = Column(Integer, nullable=True)
+    parent_id = Column(Integer, ForeignKey("equipments.id"), nullable=True)
     
     # Status
     is_online = Column(Boolean, default=False)
@@ -71,6 +88,15 @@ class Equipment(Base):
     last_traffic_out = Column(Float, default=0.0) # Mbps
     
     tower = relationship("Tower", back_populates="equipments")
+    # Removido relationships de logs para evitar erro de FK e overload de memória
+    # Logs devem ser acessados via query direta (select)
+    
+    # Adjacency List Pattern (Auto-relacionamento)
+    # parent: aponta para o pai (remote_side=id diz que parent_id se liga ao id da outra ponta)
+    parent = relationship("Equipment", remote_side=[id], back_populates="children")
+    
+    # children: lista de filhos (não precisa remote_side aqui)
+    children = relationship("Equipment", back_populates="parent")
 
 class PingLog(Base):
     __tablename__ = "ping_logs"
@@ -109,6 +135,11 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="tech") # 'admin' or 'tech'
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Rastreamento do Técnico
+    last_latitude = Column(Float, nullable=True)
+    last_longitude = Column(Float, nullable=True)
+    last_location_update = Column(DateTime, nullable=True)
 
 class NetworkLink(Base):
     __tablename__ = "network_links"

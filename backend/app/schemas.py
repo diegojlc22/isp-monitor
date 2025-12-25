@@ -99,6 +99,9 @@ class User(UserBase):
     id: int
     role: str
     created_at: datetime
+    last_latitude: Optional[float] = None
+    last_longitude: Optional[float] = None
+    last_location_update: Optional[datetime] = None
     
     class Config:
         from_attributes = True

@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { getUsers, createUser, updateUser, deleteUser } from '../services/api';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
@@ -25,7 +26,7 @@ export function ManageUsers() {
         try {
             if (editingUser) {
                 // Update
-                const payload: any = { name: formData.name, email: formData.email };
+                const payload: any = { name: formData.name, email: formData.email, role: formData.role };
                 if (formData.password) payload.password = formData.password;
 
                 await updateUser(editingUser.id, payload);
@@ -44,7 +45,7 @@ export function ManageUsers() {
 
     function handleEdit(u: any) {
         setEditingUser(u);
-        setFormData({ name: u.name, email: u.email, password: '', role: u.role });
+        setFormData({ name: u.name, email: u.email, password: '', role: u.role || 'tech' });
         setShowModal(true);
     }
 
@@ -127,16 +128,15 @@ export function ManageUsers() {
                                 <input type="password" required={!editingUser} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
                                     value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} />
                             </div>
-                            {!editingUser && (
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-400 mb-1">Função</label>
-                                    <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                        value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                                        <option value="tech">Técnico</option>
-                                        <option value="admin">Administrador</option>
-                                    </select>
-                                </div>
-                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Função</label>
+                                <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
+                                    <option value="tech">Técnico</option>
+                                    <option value="admin">Administrador</option>
+                                </select>
+                            </div>
 
                             <div className="flex justify-end gap-3 mt-6">
                                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-300 hover:text-white">Cancelar</button>

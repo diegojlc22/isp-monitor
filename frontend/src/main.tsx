@@ -23,6 +23,8 @@ const Backup = lazy(() => import('./pages/Backup').then(m => ({ default: m.Backu
 const LiveMonitor = lazy(() => import('./pages/LiveMonitor').then(m => ({ default: m.LiveMonitor })));
 const Agent = lazy(() => import('./pages/Agent'));
 
+const RequestsPage = lazy(() => import('./pages/RequestsPage'));
+
 // Loading Component
 const PageLoader = () => (
   <div className="h-full w-full flex items-center justify-center bg-slate-950 text-slate-500">
@@ -54,6 +56,7 @@ createRoot(document.getElementById('root')!).render(
 
                 {/* Admin Routes */}
                 <Route element={<AdminRoute />}>
+                  <Route path="requests" element={<RequestsPage />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="users" element={<ManageUsers />} />
                   <Route path="backup" element={<Backup />} />
