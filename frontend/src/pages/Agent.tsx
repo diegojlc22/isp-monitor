@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, Send } from 'lucide-react';
+import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, Send, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SyntheticLog {
@@ -24,6 +24,7 @@ const Agent: React.FC = () => {
     const [logs, setLogs] = useState<SyntheticLog[]>([]);
     const [targets, setTargets] = useState<MonitorTarget[]>([]);
     const [loading, setLoading] = useState(false);
+    const [showLogs, setShowLogs] = useState(true);
 
     // Modals
     const [showModal, setShowModal] = useState(false);
@@ -255,60 +256,71 @@ const Agent: React.FC = () => {
                     <div className="p-4 text-center text-gray-500">Carregando dados...</div>
                 )}
                 <div className="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
-                    <h2 className="font-semibold text-lg">Últimos Testes Sintéticos</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="font-semibold text-lg">Últimos Testes Sintéticos</h2>
+                        <button
+                            onClick={() => setShowLogs(!showLogs)}
+                            className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors text-slate-400 hover:text-white"
+                            title={showLogs ? "Ocultar histórico" : "Mostrar histórico"}
+                        >
+                            {showLogs ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                        </button>
+                    </div>
                     <span className="text-xs text-gray-500">Atualizado a cada 30s</span>
                 </div>
-                <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
-                    <table className="w-full">
-                        <thead className="sticky top-0 bg-slate-900 border-b border-gray-700/50 shadow-sm z-10">
-                            <tr className="text-left text-sm text-gray-400">
-                                <th className="px-6 py-3 font-medium">Hora</th>
-                                <th className="px-6 py-3 font-medium">Tipo</th>
-                                <th className="px-6 py-3 font-medium">Alvo</th>
-                                <th className="px-6 py-3 font-medium">Latência</th>
-                                <th className="px-6 py-3 font-medium">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-700/50 text-sm">
-                            {logs.length === 0 && !loading ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                        Nenhum log encontrado. O agente roda a cada 5 minutos.
-                                    </td>
+                {showLogs && (
+                    <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
+                        <table className="w-full">
+                            <thead className="sticky top-0 bg-slate-900 border-b border-gray-700/50 shadow-sm z-10">
+                                <tr className="text-left text-sm text-gray-400">
+                                    <th className="px-6 py-3 font-medium">Hora</th>
+                                    <th className="px-6 py-3 font-medium">Tipo</th>
+                                    <th className="px-6 py-3 font-medium">Alvo</th>
+                                    <th className="px-6 py-3 font-medium">Latência</th>
+                                    <th className="px-6 py-3 font-medium">Status</th>
                                 </tr>
-                            ) : (
-                                logs.map((log) => (
-                                    <tr key={log.id} className="hover:bg-slate-800/50 transition-colors">
-                                        <td className="px-6 py-3 text-gray-300 whitespace-nowrap">
-                                            {new Date(log.timestamp).toLocaleTimeString()}
-                                        </td>
-                                        <td className="px-6 py-3">
-                                            <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wide uppercase ${log.test_type === 'dns' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                                                }`}>
-                                                {log.test_type}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-3 text-gray-300 font-mono text-xs">{log.target}</td>
-                                        <td className="px-6 py-3 text-gray-300 font-mono">
-                                            {log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '-'}
-                                        </td>
-                                        <td className="px-6 py-3">
-                                            {log.success ? (
-                                                <span className="text-green-400 flex items-center gap-1.5 text-xs font-medium">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" /> OK
-                                                </span>
-                                            ) : (
-                                                <span className="text-red-400 flex items-center gap-1.5 text-xs font-medium">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)]" /> FALHA
-                                                </span>
-                                            )}
+                            </thead>
+                            <tbody className="divide-y divide-gray-700/50 text-sm">
+                                {logs.length === 0 && !loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                                            Nenhum log encontrado. O agente roda a cada 5 minutos.
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : (
+                                    logs.map((log) => (
+                                        <tr key={log.id} className="hover:bg-slate-800/50 transition-colors">
+                                            <td className="px-6 py-3 text-gray-300 whitespace-nowrap">
+                                                {new Date(log.timestamp).toLocaleTimeString()}
+                                            </td>
+                                            <td className="px-6 py-3">
+                                                <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wide uppercase ${log.test_type === 'dns' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                                    }`}>
+                                                    {log.test_type}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-3 text-gray-300 font-mono text-xs">{log.target}</td>
+                                            <td className="px-6 py-3 text-gray-300 font-mono">
+                                                {log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '-'}
+                                            </td>
+                                            <td className="px-6 py-3">
+                                                {log.success ? (
+                                                    <span className="text-green-400 flex items-center gap-1.5 text-xs font-medium">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" /> OK
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-red-400 flex items-center gap-1.5 text-xs font-medium">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)]" /> FALHA
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {/* Modal Add Target */}

@@ -15,9 +15,9 @@ import time
 class ISPMonitorLauncher:
     def __init__(self, root):
         self.root = root
-        self.root.title("ISP Monitor - Launcher v2.3")
-        self.root.geometry("600x700")  # Aumentado para caber todos os botões
-        self.root.resizable(False, False)
+        self.root.title("ISP Monitor - Launcher v2.4")
+        self.root.geometry("600x700")  # Tamanho inicial (redimensionável)
+        self.root.resizable(True, True)  # Permite ajustar o tamanho manualmente
         
         # Cores modernas
         self.bg_color = "#1e1e2e"
@@ -167,20 +167,20 @@ class ISPMonitorLauncher:
         )
         btn_check.pack(fill=tk.X, pady=5)
         
-        # Botão Minimizar Console
-        btn_minimize = tk.Button(
+        # Botão Kill Forçado
+        btn_force_kill = tk.Button(
             buttons_frame,
-            text="📦 MINIMIZAR CONSOLE",
-            font=("Segoe UI", 11),
-            bg="#6c7086",
-            fg=self.fg_color,
-            activebackground="#7f849c",
+            text="💀 KILL FORÇADO",
+            font=("Segoe UI", 11, "bold"),
+            bg="#7f1d1d",
+            fg="#fca5a5",
+            activebackground="#991b1b",
             relief=tk.FLAT,
             cursor="hand2",
-            command=self.minimize_console,
+            command=self.force_kill_all,
             height=2
         )
-        btn_minimize.pack(fill=tk.X, pady=5)
+        btn_force_kill.pack(fill=tk.X, pady=5)
         
         # Footer
         footer = tk.Frame(self.root, bg=self.bg_color)
@@ -188,7 +188,7 @@ class ISPMonitorLauncher:
         
         tk.Label(
             footer,
-            text="ISP Monitor v2.3 Ultra Otimizado | 5x mais rápido | -50% CPU | F5=Reload",
+            text="ISP Monitor v2.4 Ultra Otimizado | Modo Silencioso | 5x mais rápido | F5=Reload",
             font=("Segoe UI", 9),
             bg=self.bg_color,
             fg="#6c7086"
@@ -242,10 +242,13 @@ class ISPMonitorLauncher:
                 messagebox.showerror("Erro", f"Arquivo {script_path} não encontrado!")
                 return
             
-            # Iniciar em nova janela
+            # Iniciar SEM JANELA DE CONSOLE (modo oculto)
+            # CREATE_NO_WINDOW = 0x08000000
             self.process = subprocess.Popen(
                 [script_path],
-                creationflags=subprocess.CREATE_NEW_CONSOLE
+                creationflags=0x08000000,  # CREATE_NO_WINDOW - executa em segundo plano
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
             )
             
             # Aguardar um pouco e verificar
@@ -316,54 +319,77 @@ class ISPMonitorLauncher:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao abrir navegador:\n{str(e)}")
     
-    def minimize_console(self):
-        """Minimiza o console do servidor"""
+    def force_kill_all(self):
+        """Força o encerramento de TODOS os processos relacionados"""
+        response = messagebox.askyesno(
+            "⚠️ KILL FORÇADO",
+            "ATENÇÃO: Isso vai MATAR FORÇADAMENTE todos os processos relacionados:\n\n"
+            "• Python (uvicorn, backend)\n"
+            "• PostgreSQL (se iniciado pelo launcher)\n"
+            "• Processos na porta 8080\n\n"
+            "Deseja continuar?"
+        )
+        
+        if not response:
+            return
+        
+        killed_count = 0
+        errors = []
+        
         try:
-            import win32gui
-            import win32con
+            # 1. Matar processos na porta 8080
+            for conn in psutil.net_connections():
+                try:
+                    if conn.laddr.port == 8080:
+                        proc = psutil.Process(conn.pid)
+                        proc.kill()
+                        killed_count += 1
+                except:
+                    pass
             
-            # Procurar janela com título contendo "postgres" ou "ISP Monitor"
-            def callback(hwnd, windows):
-                if win32gui.IsWindowVisible(hwnd):
-                    title = win32gui.GetWindowText(hwnd).lower()
-                    if "postgres" in title or "iniciar_postgres" in title or "uvicorn" in title:
-                        windows.append(hwnd)
-                return True
+            # 2. Matar processos Python relacionados (uvicorn, backend)
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    # Não matar o próprio launcher
+                    if proc.info['pid'] == current_pid:
+                        continue
+                    
+                    # Verificar se é Python executando uvicorn ou backend
+                    if proc.info['name'] and 'python' in proc.info['name'].lower():
+                        cmdline = proc.info.get('cmdline', [])
+                        if cmdline and any('uvicorn' in str(arg).lower() or 
+                                          'backend' in str(arg).lower() or
+                                          'main:app' in str(arg).lower() 
+                                          for arg in cmdline):
+                            proc.kill()
+                            killed_count += 1
+                except Exception as e:
+                    errors.append(f"PID {proc.info['pid']}: {str(e)}")
             
-            windows = []
-            win32gui.EnumWindows(callback, windows)
+            # 3. Matar processos postgres se existirem
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    if proc.info['name'] and 'postgres' in proc.info['name'].lower():
+                        # Só matar se for local (não servidor externo)
+                        proc.kill()
+                        killed_count += 1
+                except:
+                    pass
             
-            if windows:
-                for hwnd in windows:
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                messagebox.showinfo("Sucesso", f"{len(windows)} console(s) minimizado(s)!")
-            else:
-                messagebox.showinfo("Info", "Nenhum console do servidor encontrado.")
-                
-        except ImportError:
-            # Se não tiver pywin32, usar método alternativo
-            try:
-                # Usar PowerShell para minimizar
-                ps_script = '''
-                Get-Process | Where-Object {$_.MainWindowTitle -like "*postgres*" -or $_.MainWindowTitle -like "*uvicorn*"} | ForEach-Object {
-                    $hwnd = $_.MainWindowHandle
-                    if ($hwnd -ne 0) {
-                        $sig = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);'
-                        $type = Add-Type -MemberDefinition $sig -Name WindowAPI -PassThru
-                        $type::ShowWindow($hwnd, 6) | Out-Null
-                    }
-                }
-                '''
-                subprocess.run(["powershell", "-Command", ps_script], capture_output=True)
-                messagebox.showinfo("Sucesso", "Console minimizado!")
-            except Exception as e2:
-                messagebox.showwarning(
-                    "Aviso",
-                    f"Não foi possível minimizar automaticamente.\n\nMinimize manualmente o console do servidor.\n\nErro: {str(e2)}"
-                )
+            time.sleep(1)
+            self.check_status()
+            
+            msg = f"✅ {killed_count} processo(s) encerrado(s) forçadamente!"
+            if errors:
+                msg += f"\n\n⚠️ Alguns erros:\n" + "\n".join(errors[:3])
+            
+            messagebox.showinfo("Kill Forçado", msg)
+            
         except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao minimizar console:\n{str(e)}")
+            messagebox.showerror("Erro", f"Erro ao executar kill forçado:\n{str(e)}")
     
+
     def reload_interface(self):
         """Recarrega a interface (F5)"""
         python = sys.executable
