@@ -57,23 +57,8 @@ async def lifespan(app: FastAPI):
         await db.commit()
         print("[OK] Telegram Config Seeded (if missing).")
         
-    # Optimize SQLite database (legacy support) / Ensure Performance Indexes
-    from backend.app.services.sqlite_optimizer import (
-        optimize_sqlite, 
-        create_performance_indexes,
-        get_database_stats
-    )
-    
-    # Apply optimizations on startup
-    await optimize_sqlite()
-    await create_performance_indexes()
-    
-    # Get initial stats
-    try:
-        stats = await get_database_stats()
-        print(f"[INFO] Database: {stats['database_size_mb']} MB")
-    except:
-        pass
+    # Startup Message
+    pass
 
     print("[INFO] API Started (Collector Running in Separate Process)")
     

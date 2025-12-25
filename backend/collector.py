@@ -9,6 +9,20 @@ from backend.app.database import engine, Base
 from backend.app.services.pinger_fast import monitor_job_fast
 from backend.app.services.snmp_monitor import snmp_monitor_job
 from backend.app.services.synthetic_agent import synthetic_agent_job
+from backend.app.services.maintenance import cleanup_job
+
+async def maintenance_loop():
+    """Roda tarefas de limpeza a cada 24 horas"""
+    print("[COLLECTOR] Agendador de limpeza iniciado (24h)")
+    while True:
+        try:
+            await asyncio.sleep(60) # Espera sistema estabilizar na primeira vez
+            await cleanup_job()
+        except Exception as e:
+            print(f"[ERROR] Falha na manutenção diária: {e}")
+        
+        # Esperar 24h (86400 segundos)
+        await asyncio.sleep(86400)
 
 async def main():
     print("---------------------------------------------------------")
@@ -52,6 +66,9 @@ async def main():
         tasks.append(asyncio.create_task(synthetic_agent_job()))
     except Exception as e:
         print(f"[WARN] IA Agent falhou na inicialização: {e}")
+
+    # Manutenção Diária (Limpeza de Logs)
+    tasks.append(asyncio.create_task(maintenance_loop()))
 
     # Manter o processo vivo aguardando as tarefas
     await asyncio.gather(*tasks)
