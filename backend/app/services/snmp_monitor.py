@@ -10,6 +10,10 @@ from backend.app.services.wireless_snmp import get_wireless_stats
 # Config
 SNMP_INTERVAL = 60 # Check SNMP every 60s
 
+# ✅ SPRINT 3: Smart Logging - Tracking de estado
+# Armazena último valor salvo para evitar logs duplicados
+snmp_last_logged = {}  # eq_id -> {"in": mbps, "out": mbps, "signal": dbm, "ccq": %, "time": timestamp}
+
 async def snmp_monitor_job():
     """
     Dedicated job for Traffic polling (SNMP + Mikrotik API) AND Wireless Stats.
@@ -145,13 +149,46 @@ async def snmp_monitor_job():
                     for k, v in res["updates"].items():
                         setattr(eq_obj, k, v)
                     
-                    # Add Traffic Log
+                    # ✅ SPRINT 3: Smart Logging para Traffic
+                    # Salva apenas se houver variação significativa
+                    should_log_traffic = False
                     if res["log"]:
-                        session.add(TrafficLog(
-                            equipment_id=res["id"],
-                            in_mbps=res["log"][0],
-                            out_mbps=res["log"][1]
-                        ))
+                        in_mbps, out_mbps = res["log"]
+                        eq_id = res["id"]
+                        current_time = time.time()
+                        
+                        # Verificar se deve logar
+                        if eq_id not in snmp_last_logged:
+                            # Primeira vez - sempre loga
+                            should_log_traffic = True
+                        else:
+                            last_log = snmp_last_logged[eq_id]
+                            time_since_last = current_time - last_log.get("time", 0)
+                            
+                            # Logar se:
+                            # 1. Passou 10 minutos (600s)
+                            if time_since_last > 600:
+                                should_log_traffic = True
+                            # 2. Variação > 10% no tráfego
+                            elif last_log.get("in") is not None:
+                                in_variation = abs(in_mbps - last_log["in"]) / max(last_log["in"], 0.1)
+                                out_variation = abs(out_mbps - last_log["out"]) / max(last_log["out"], 0.1)
+                                if in_variation > 0.1 or out_variation > 0.1:  # >10% variação
+                                    should_log_traffic = True
+                        
+                        # Salvar log se necessário
+                        if should_log_traffic:
+                            session.add(TrafficLog(
+                                equipment_id=eq_id,
+                                in_mbps=in_mbps,
+                                out_mbps=out_mbps
+                            ))
+                            # Atualizar tracking
+                            snmp_last_logged[eq_id] = {
+                                "in": in_mbps,
+                                "out": out_mbps,
+                                "time": current_time
+                            }
                     
                     session.add(eq_obj)
                     updates_count += 1

@@ -40,13 +40,19 @@ async def ping_ip_fast(ip: str) -> float | None:
     except Exception:
         return None
 
-async def ping_multiple_fast(ips: list[str]) -> dict[str, float | None]:
+async def ping_multiple_fast(ips: list[str], concurrent_limit: int = None) -> dict[str, float | None]:
     """
     Ping multiple IPs simultaneously - ULTRA FAST!
     This is the secret sauce of The Dude's speed
+    
+    Args:
+        concurrent_limit: Max concurrent pings (default: PING_CONCURRENT_LIMIT)
     """
     if not ips:
         return {}
+    
+    # ✅ Usa limite fornecido ou padrão
+    limit = concurrent_limit if concurrent_limit is not None else PING_CONCURRENT_LIMIT
     
     try:
         # icmplib async_multiping - pings ALL IPs at once!
@@ -55,7 +61,7 @@ async def ping_multiple_fast(ips: list[str]) -> dict[str, float | None]:
             ips,
             count=1,
             timeout=PING_TIMEOUT_SECONDS,
-            concurrent_tasks=PING_CONCURRENT_LIMIT,
+            concurrent_tasks=limit,  # ✅ Concorrência adaptativa
             privileged=True
         )
         
@@ -113,8 +119,25 @@ async def monitor_job_fast():
         "tmpl_up": ""
     }
     
-    # State tracking for Smart Logging
+    # State tracking for Smart Logging + Dynamic Interval
     device_states = {}
+    
+    # ✅ SPRINT 2: Intervalo Dinâmico
+    # Tracking de estabilidade para ajustar intervalo
+    stability_tracker = {
+        "stable_cycles": 0,      # Ciclos consecutivos estáveis
+        "unstable_cycles": 0,    # Ciclos com mudanças
+        "offline_count": 0,      # Dispositivos offline
+        "current_interval": PING_INTERVAL_SECONDS  # Intervalo atual
+    }
+    
+    # ✅ SPRINT 2: Concorrência Adaptativa
+    # Ajusta número de pings simultâneos baseado em performance
+    concurrency_tracker = {
+        "current_limit": PING_CONCURRENT_LIMIT,  # Limite atual
+        "cycle_times": [],       # Últimos tempos de ciclo
+        "avg_cycle_time": 0      # Tempo médio
+    }
 
     # Buffer for bulk raw inserts (Performance Booster)
     # List of dicts ready for insert(PingLog).values([...])
@@ -156,9 +179,9 @@ async def monitor_job_fast():
                     await asyncio.sleep(5)
                     continue
 
-                # 3. Ping Batch
+                # 3. Ping Batch com Concorrência Adaptativa
                 ips = [d[1].ip for d in all_devices]
-                ping_results = await ping_multiple_fast(ips)
+                ping_results = await ping_multiple_fast(ips, concurrent_limit=concurrency_tracker["current_limit"])
                 
                 # 4. Dependency & Maintenance Maps
                 current_time = datetime.now(timezone.utc)
@@ -288,6 +311,74 @@ async def monitor_job_fast():
             import traceback
             traceback.print_exc()
         
+        # ✅ SPRINT 2: Ajustar Concorrência Adaptativa
         elapsed = time.time() - cycle_start
-        wait_time = max(0.5, PING_INTERVAL_SECONDS - elapsed)
+        
+        # Manter histórico dos últimos 5 ciclos
+        concurrency_tracker["cycle_times"].append(elapsed)
+        if len(concurrency_tracker["cycle_times"]) > 5:
+            concurrency_tracker["cycle_times"].pop(0)
+        
+        # Calcular tempo médio
+        if concurrency_tracker["cycle_times"]:
+            concurrency_tracker["avg_cycle_time"] = sum(concurrency_tracker["cycle_times"]) / len(concurrency_tracker["cycle_times"])
+        
+        # Ajustar concorrência baseado no tempo de ciclo
+        avg_time = concurrency_tracker["avg_cycle_time"]
+        current_limit = concurrency_tracker["current_limit"]
+        
+        if avg_time > 40:  # Ciclo muito lento (>40s)
+            # Reduzir concorrência
+            new_limit = max(30, current_limit - 20)
+        elif avg_time < 15:  # Ciclo muito rápido (<15s)
+            # Aumentar concorrência
+            new_limit = min(200, current_limit + 20)
+        else:
+            # Manter
+            new_limit = current_limit
+        
+        if new_limit != current_limit:
+            concurrency_tracker["current_limit"] = new_limit
+            print(f"[INFO] Concorrência ajustada: {current_limit} → {new_limit} (tempo médio: {avg_time:.1f}s)")
+        
+        # ✅ SPRINT 2: Calcular Intervalo Dinâmico
+        # Contar mudanças de status neste ciclo
+        status_changes = sum(1 for n in notifications_to_send if n)
+        offline_devices = sum(1 for _, _, is_online, _ in processed_results if not is_online)
+        
+        # Atualizar tracker
+        stability_tracker["offline_count"] = offline_devices
+        
+        if status_changes > 0:
+            # Houve mudanças - rede instável
+            stability_tracker["unstable_cycles"] += 1
+            stability_tracker["stable_cycles"] = 0
+        else:
+            # Sem mudanças - rede estável
+            stability_tracker["stable_cycles"] += 1
+            stability_tracker["unstable_cycles"] = 0
+        
+        # Determinar intervalo baseado em estabilidade
+        if offline_devices > 5:
+            # Muitos dispositivos offline - ping rápido para detectar volta
+            new_interval = 15  # 15s
+        elif stability_tracker["unstable_cycles"] > 0:
+            # Rede instável - ping normal
+            new_interval = 30  # 30s
+        elif stability_tracker["stable_cycles"] >= 3:
+            # Rede estável por 3+ ciclos - pode relaxar
+            new_interval = 60  # 60s
+        else:
+            # Padrão
+            new_interval = PING_INTERVAL_SECONDS
+        
+        stability_tracker["current_interval"] = new_interval
+        
+        # Log de mudança de intervalo (ocasional)
+        if new_interval != PING_INTERVAL_SECONDS and cycle_start % 300 < 30:  # A cada ~5min
+            print(f"[INFO] Intervalo dinâmico: {new_interval}s (offline={offline_devices}, stable={stability_tracker['stable_cycles']})")
+        
+        # Usar elapsed já calculado acima
+        wait_time = max(0.5, new_interval - elapsed)
         await asyncio.sleep(wait_time)
+

@@ -17,8 +17,14 @@ echo [!] Iniciando ISP Monitor com POSTGRESQL
 echo [!] Banco: monitor_prod
 echo.
 
-:: Rodar Uvicorn
-"%PYTHON_EXE%" -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --workers 1
+:: Rodar Uvicorn com otimizações
+"%PYTHON_EXE%" -m uvicorn backend.app.main:app ^
+  --host 0.0.0.0 ^
+  --port 8080 ^
+  --workers 1 ^
+  --http h11 ^
+  --limit-concurrency 100 ^
+  --timeout-keep-alive 30
 
 if %errorlevel% neq 0 (
     echo [ERROR] O servidor caiu.

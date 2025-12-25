@@ -148,6 +148,10 @@ app.include_router(alerts.router, prefix="/api")
 from backend.app.routers import agent
 app.include_router(agent.router, prefix="/api")
 
+# ✅ SPRINT 2: Métricas Internas
+from backend.app.routers import metrics
+app.include_router(metrics.router, prefix="/api")
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 

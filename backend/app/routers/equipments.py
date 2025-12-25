@@ -160,64 +160,99 @@ from backend.app.models import PingLog, TrafficLog
 from datetime import datetime, timedelta, timezone
 
 @router.get("/{eq_id}/latency-history")
-async def get_latency_history(eq_id: int, period: str = "24h", db: AsyncSession = Depends(get_db)):
-    # Determine lookback
+async def get_latency_history(
+    eq_id: int, 
+    hours: int = 2,          # ✅ Padrão: últimas 2 horas
+    limit: int = 1000,       # ✅ Máximo 1000 registros
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retorna histórico de latência com paginação obrigatória.
+    
+    Args:
+        hours: Janela de tempo (1-168h = 1h a 7 dias)
+        limit: Máximo de registros (1-5000)
+    """
+    # Validação
+    if hours < 1 or hours > 168:  # Max 7 dias
+        raise HTTPException(status_code=400, detail="hours deve estar entre 1 e 168")
+    
+    if limit < 1 or limit > 5000:
+        raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
+    
+    # Calcular janela de tempo
     now = datetime.now(timezone.utc)
-    if period == "7d":
-        start_time = now - timedelta(days=7)
-    elif period == "1h":
-        start_time = now - timedelta(hours=1)
-    else: # default 24h
-        start_time = now - timedelta(hours=24)
-        
+    start_time = now - timedelta(hours=hours)
+    
+    # Query com LIMIT
     query = select(PingLog).where(
         PingLog.device_type == "equipment",
         PingLog.device_id == eq_id,
         PingLog.timestamp >= start_time
-    ).order_by(PingLog.timestamp.asc())
+    ).order_by(PingLog.timestamp.desc()).limit(limit)
     
     result = await db.execute(query)
     logs = result.scalars().all()
     
-    # Return simplified list
-    # frontend will handle visualization
+    # Retornar em ordem cronológica
     data = []
-    for log in logs:
-        # Only include logs with latency
+    for log in reversed(logs):  # Inverter para ordem crescente
         if log.latency_ms is not None:
-             data.append({
-                 "timestamp": log.timestamp.isoformat(),
-                 "latency": log.latency_ms
-             })
-             
-    return data
+            data.append({
+                "timestamp": log.timestamp.isoformat(),
+                "latency": log.latency_ms
+            })
+    
+    return {
+        "data": data,
+        "count": len(data),
+        "hours": hours,
+        "limit": limit,
+        "truncated": len(data) == limit  # True se atingiu o limite
+    }
 
 @router.get("/{eq_id}/traffic-history")
-async def get_traffic_history(eq_id: int, period: str = "24h", db: AsyncSession = Depends(get_db)):
-    # Determine lookback
+async def get_traffic_history(
+    eq_id: int,
+    hours: int = 2,
+    limit: int = 1000,
+    db: AsyncSession = Depends(get_db)
+):
+    """Retorna histórico de tráfego com paginação obrigatória."""
+    # Validação
+    if hours < 1 or hours > 168:
+        raise HTTPException(status_code=400, detail="hours deve estar entre 1 e 168")
+    
+    if limit < 1 or limit > 5000:
+        raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
+    
+    # Calcular janela
     now = datetime.now(timezone.utc)
-    if period == "7d":
-        start_time = now - timedelta(days=7)
-    elif period == "1h":
-         start_time = now - timedelta(hours=1)
-    else: # default 24h
-        start_time = now - timedelta(hours=24)
-        
+    start_time = now - timedelta(hours=hours)
+    
+    # Query com LIMIT
     query = select(TrafficLog).where(
         TrafficLog.equipment_id == eq_id,
         TrafficLog.timestamp >= start_time
-    ).order_by(TrafficLog.timestamp.asc())
+    ).order_by(TrafficLog.timestamp.desc()).limit(limit)
     
     result = await db.execute(query)
     logs = result.scalars().all()
     
     data = []
-    for log in logs:
+    for log in reversed(logs):
         data.append({
             "timestamp": log.timestamp.isoformat(),
             "in": log.in_mbps,
             "out": log.out_mbps
         })
-             
-    return data
+    
+    return {
+        "data": data,
+        "count": len(data),
+        "hours": hours,
+        "limit": limit,
+        "truncated": len(data) == limit
+    }
+
 

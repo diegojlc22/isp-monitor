@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
+from backend.app.services.cache import cache  # ✅ Cache para performance
 
 router = APIRouter(
     prefix="/alerts",
@@ -26,6 +27,23 @@ class AlertSchema(BaseModel):
 
 @router.get("/", response_model=List[AlertSchema])
 async def get_alerts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Alert).order_by(Alert.timestamp.desc()).offset(skip).limit(limit))
+    """Retorna alertas com cache de 10 segundos (alertas mudam rápido)"""
+    # ✅ Tentar cache primeiro
+    cache_key = f"alerts_list_{skip}_{limit}"
+    cached = await cache.get(cache_key)
+    if cached:
+        return cached
+    
+    # Buscar do banco
+    result = await db.execute(
+        select(Alert)
+        .order_by(Alert.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
+    )
     alerts = result.scalars().all()
+    
+    # ✅ Salvar no cache por 10 segundos (alertas mudam rápido)
+    await cache.set(cache_key, alerts, ttl_seconds=10)
+    
     return alerts
