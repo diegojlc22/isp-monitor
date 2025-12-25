@@ -97,7 +97,7 @@ async def monitor_job_fast():
     """
     Ultra-fast monitoring loop using batch pinging
     Pings ALL devices at once.
-    Optimized: Caches config & Reduces DB writes (Smart Logging).
+    Optimized: Caches config, Reduces DB writes (Smart Logging), and Fixes Dependency Logic.
     """
     from backend.app.config import PING_INTERVAL_SECONDS
     import time
@@ -163,77 +163,101 @@ async def monitor_job_fast():
                 ips = [d[1].ip for d in all_devices]
                 ping_results = await ping_multiple_fast(ips)
                 
-                # 4. Process Results & Smart Log
+                # 4. First Pass: Create Status Map for Dependency Resolution
                 current_time = datetime.now(timezone.utc)
                 current_ts = current_time.timestamp()
                 
-                # Map for dependency check
+                # Map for dependency check: (type, id) -> is_online
                 current_status_map = {} 
+                
+                # Temp list to hold processed data to avoid double iteration over raw devices
+                processed_results = []
 
                 for device_type, device in all_devices:
-                    # Parse Result
                     latency_sec = ping_results.get(device.ip)
                     is_online = latency_sec is not None
-                    latency_ms = int(latency_sec * 1000) if latency_sec else None
+                    current_status_map[(device_type, device.id)] = is_online
                     
-                    # Previous State
-                    was_online = device.is_online
-                    key = (device_type, device.id)
-                    
-                    prev_state = device_states.get(key, {
-                        'last_log_time': 0, 'last_status': None, 'last_latency': None
-                    })
+                    latency_ms = int(latency_sec * 1000) if latency_sec is not None else None
+                    processed_results.append((device_type, device, is_online, latency_ms))
 
-                    # Update DB Object (Always update Real-time View)
+                # 5. Second Pass: Update DB, Smart Log, and Alerts
+                logs_to_add = []
+                alerts_to_add = []
+                notifications_to_send = []
+
+                for device_type, device, is_online, latency_ms in processed_results:
+                    # Update Real-time Status in Object
+                    # Note: We don't commit yet, we add to session
                     device.is_online = is_online
                     device.last_checked = current_time
                     if latency_ms is not None:
                         device.last_latency = latency_ms
 
-                    current_status_map[key] = is_online
+                    # Retrieve previous state
+                    key = (device_type, device.id)
+                    prev_state = device_states.get(key, {
+                        'last_log_time': 0, 'last_status': None, 'last_latency': None
+                    })
 
-                    # --- LOGGING DECISION ---
-                    # Always log to ensure continuous graphs for Live Monitor
-                    should_log = True
+                    # --- SMART LOGGING ---
+                    should_log = False
                     
-                    # Old Smart Logging (Disabled for Live Monitor fidelity)
-                    # Rule 1: Status Changed
-                    # if is_online != was_online:
-                    #    should_log = True
-                    # Rule 2: Keepalive (Every 10 minutes)
-                    # elif (current_ts - prev_state['last_log_time']) > 600:
-                    #    should_log = True
-                    # Rule 3: Significant Latency Change
-                    # elif is_online and prev_state['last_latency'] is not None:
-                    #    if abs(latency_ms - prev_state['last_latency']) > 10:
-                    #        should_log = True
-                            
+                    # Reason 1: Status Changed (Always log)
+                    if is_online != prev_state['last_status']:
+                        should_log = True
+                    
+                    # Reason 2: Keepalive (Log every 10 min to keep graphs seemingly alive)
+                    elif (current_ts - prev_state['last_log_time']) > 600:
+                         should_log = True
+
+                    # Reason 3: Significant Latency Change (> 20ms or > 20% diff - heuristic)
+                    elif is_online and prev_state['last_latency'] is not None:
+                        diff = abs(latency_ms - prev_state['last_latency'])
+                        if diff > 20: # Log if jitter is high
+                           should_log = True
+                    
                     if should_log:
-                        log_entry = PingLog(
+                        logs_to_add.append(PingLog(
                             device_type=device_type,
                             device_id=device.id,
                             status=is_online,
                             latency_ms=latency_ms,
                             timestamp=current_time
-                        )
-                        session.add(log_entry)
+                        ))
                         
-                        # Update State cache
+                        # Update Cache
                         device_states[key] = {
                             'last_log_time': current_ts,
                             'last_status': is_online,
-                            'last_latency': latency_ms if latency_ms else prev_state['last_latency']
+                            'last_latency': latency_ms if latency_ms is not None else prev_state['last_latency']
                         }
+                    else:
+                        # Even if we don't log to DB, we update the cache status to ensure next comparison is valid
+                        # But we keep the 'last_log_time' of the actual DB log
+                        device_states[key]['last_status'] = is_online
+                        if latency_ms is not None:
+                            device_states[key]['last_latency'] = latency_ms
 
-                    # --- ALERTS ---
-                    if is_online != was_online:
-                        # Dependency Check
+                    # --- ALERTS & NOTIFICATIONS ---
+                    # Only alert if status actually changed
+                    # (Uses cache to determine 'was_online', as DB object might be dirty)
+                    was_online_cached = prev_state['last_status']
+                    
+                    # If this is the first run (was_online_cached is None), don't alert, just sync
+                    if was_online_cached is not None and is_online != was_online_cached:
+                        
+                        # Dependency Logic
                         suppress = False
-                        if not is_online: # Down 
-                            if device.parent_id and ('equipment', device.parent_id) in current_status_map:
-                                if not current_status_map[('equipment', device.parent_id)]:
-                                    # Parent is DOWN, suppress child alert
-                                    suppress = True 
+                        if not is_online: # Device just went DOWN
+                            # Check Parent
+                            if device.parent_id:
+                                # Look up parent status in CURRENT map (which is now fully populated)
+                                parent_key = ('equipment', device.parent_id)
+                                parent_online = current_status_map.get(parent_key, True) # Default to True if not found
+                                
+                                if not parent_online:
+                                    suppress = True # Parent is also down, silent this child
                         
                         if not suppress:
                             tmpl = config_cache["tmpl_down"] if not is_online else config_cache["tmpl_up"]
@@ -242,9 +266,9 @@ async def monitor_job_fast():
                                       .replace("[Service.Name]", "Ping")\
                                       .replace("[Device.FirstAddress]", device.ip)
                             
-                            await send_telegram_alert(config_cache["token"], config_cache["chat_id"], msg)
+                            notifications_to_send.append((config_cache["token"], config_cache["chat_id"], msg))
                             
-                            session.add(Alert(
+                            alerts_to_add.append(Alert(
                                 device_type=device_type,
                                 device_name=device.name,
                                 device_ip=device.ip,
@@ -252,10 +276,29 @@ async def monitor_job_fast():
                                 timestamp=current_time
                             ))
 
+                # Batch write to DB
+                if logs_to_add:
+                    session.add_all(logs_to_add)
+                if alerts_to_add:
+                    session.add_all(alerts_to_add)
+                
                 await session.commit()
                 
+                # Send notifications asynchronously (don't block loop)
+                # We can fire and forget or gather. Gather is safer.
+                if notifications_to_send:
+                    tasks = [send_telegram_alert(token, chat_id, msg) for token, chat_id, msg in notifications_to_send if token and chat_id]
+                    if tasks:
+                        # Run them in background so we don't delay the ping loop? 
+                        # Ideally yes, but for now gather with a short timeout or just await is safer to ensure delivery.
+                        # Given "Ultrafast", let's use ensure_future to not block.
+                        for t in tasks:
+                            asyncio.create_task(t)
+
         except Exception as e:
             print(f"[ERROR] Monitor Loop: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Consistent Interval
         elapsed = time.time() - cycle_start
