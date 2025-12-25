@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select, desc
 from backend.app.database import get_db, AsyncSession
 from backend.app.models import SyntheticLog, User
-from backend.app.auth_utils import get_current_user
+from backend.app.dependencies import get_current_user
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
