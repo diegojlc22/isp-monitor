@@ -18,3 +18,4 @@ requests>=2.31.0
 pystray>=0.19.5
 Pillow>=10.0.0
 pysnmp>=7.0.0
+librouteros>=3.2.1
