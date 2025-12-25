@@ -21,6 +21,7 @@ const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Pro
 const Alerts = lazy(() => import('./pages/Alerts').then(m => ({ default: m.Alerts })));
 const Backup = lazy(() => import('./pages/Backup').then(m => ({ default: m.Backup })));
 const LiveMonitor = lazy(() => import('./pages/LiveMonitor').then(m => ({ default: m.LiveMonitor })));
+const Agent = lazy(() => import('./pages/Agent'));
 
 // Loading Component
 const PageLoader = () => (
@@ -49,6 +50,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="equipments" element={<Equipments />} />
                 <Route path="alerts" element={<Alerts />} />
                 <Route path="profile" element={<Profile />} />
+                <Route path="agent" element={<Agent />} />
 
                 {/* Admin Routes */}
                 <Route element={<AdminRoute />}>

@@ -142,3 +142,55 @@ class PingStatsHourly(Base):
     pkt_loss_percent = Column(Float) # 0.0 to 100.0
     availability_percent = Column(Float) # 0.0 to 100.0 (Uptime)
     timestamp = Column(DateTime, index=True) # The hour start time (e.g., 14:00:00)
+
+class SyntheticLog(Base):
+    """
+    Logs for synthetic monitoring (DNS, HTTP, VoIP simulation).
+    """
+    __tablename__ = "synthetic_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    target = Column(String) # e.g., "google.com", "8.8.8.8"
+    test_type = Column(String) # "dns", "http", "voip_sim"
+    
+    # Metrics
+    latency_ms = Column(Integer, nullable=True) # DNS resolve or HTTP TTFB
+    jitter_ms = Column(Integer, nullable=True) # For VoIP
+    status_code = Column(Integer, nullable=True) # For HTTP
+    success = Column(Boolean, default=False)
+    
+    timestamp = Column(DateTime, default=datetime.now(timezone.utc), index=True)
+
+class Baseline(Base):
+    """
+    Stores learned behavior patterns (Machine Learning/Statistics).
+    Example: Correct latency for Tower X at 14:00 is 15ms +/- 5ms.
+    """
+    __tablename__ = "baselines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Integer, index=True) # Null for global tests
+    metric_type = Column(String) # "ping_latency", "dns_time", "http_time"
+    
+    # Time bucket
+    hour_of_day = Column(Integer) # 0-23
+    day_of_week = Column(Integer) # 0-6 (0=Monday)
+    
+    # Stats
+    avg_value = Column(Float)
+    std_dev = Column(Float) # Standard Deviation
+    sample_count = Column(Integer)
+    
+    last_updated = Column(DateTime, default=datetime.now(timezone.utc))
+
+class MonitorTarget(Base):
+    """
+    User-defined targets for the Synthetic Agent.
+    """
+    __tablename__ = "monitor_targets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String) # Friendly Name (e.g. "Google DNS")
+    target = Column(String, unique=True, index=True) # IP or Domain (e.g. "8.8.8.8")
+    type = Column(String) # "icmp" (ping), "http", "dns"
+    enabled = Column(Boolean, default=True)

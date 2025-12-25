@@ -100,6 +100,14 @@ async def lifespan(app: FastAPI):
     from backend.app.services.snmp_monitor import snmp_monitor_job
     asyncio.create_task(snmp_monitor_job())
 
+    # IA-AGENT: Synthetic Monitor (Runs every 5 min)
+    try:
+        from backend.app.services.synthetic_agent import synthetic_agent_job
+        asyncio.create_task(synthetic_agent_job())
+        print("[INFO] Synthetic Agent Started")
+    except ImportError:
+        print("[WARN] Synthetic Agent module missing")
+
     scheduler.start()
     
     yield
@@ -131,6 +139,10 @@ app.include_router(settings.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
+
+# Agent (Synthetic Monitor)
+from backend.app.routers import agent
+app.include_router(agent.router, prefix="/api")
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
