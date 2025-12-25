@@ -84,7 +84,7 @@ from backend.app.models import Parameters
 
 @router.get("/settings")
 async def get_agent_settings(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    keys = ["agent_latency_threshold", "agent_anomaly_cycles", "agent_check_interval"]
+    keys = ["agent_latency_threshold", "agent_anomaly_cycles", "agent_check_interval", "telegram_token", "telegram_chat_id"]
     stmt = select(Parameters).where(Parameters.key.in_(keys))
     result = await db.execute(stmt)
     params = result.scalars().all()
@@ -93,7 +93,9 @@ async def get_agent_settings(db: AsyncSession = Depends(get_db), current_user: U
     settings = {
         "agent_latency_threshold": "300",
         "agent_anomaly_cycles": "2",
-        "agent_check_interval": "300"
+        "agent_check_interval": "300",
+        "telegram_token": "",
+        "telegram_chat_id": ""
     }
     
     for p in params:
@@ -105,6 +107,8 @@ class AgentSettingsUpdate(BaseModel):
     latency_threshold: int
     anomaly_cycles: int
     check_interval: int
+    telegram_token: str | None = None
+    telegram_chat_id: str | None = None
 
 @router.post("/settings")
 async def update_agent_settings(
@@ -119,6 +123,11 @@ async def update_agent_settings(
         "agent_check_interval": str(settings.check_interval)
     }
     
+    if settings.telegram_token is not None:
+        updates["telegram_token"] = settings.telegram_token
+    if settings.telegram_chat_id is not None:
+        updates["telegram_chat_id"] = settings.telegram_chat_id
+    
     for key, value in updates.items():
         stmt = select(Parameters).where(Parameters.key == key)
         result = await db.execute(stmt)
@@ -131,3 +140,27 @@ async def update_agent_settings(
             
     await db.commit()
     return {"status": "updated"}
+
+@router.post("/telegram-test")
+async def test_telegram_config(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    from backend.app.services.telegram import send_telegram_alert
+    
+    # Fetch current settings from DB to test what is saved
+    stmt = select(Parameters).where(Parameters.key.in_(["telegram_token", "telegram_chat_id"]))
+    result = await db.execute(stmt)
+    params = {p.key: p.value for p in result.scalars().all()}
+    
+    token = params.get("telegram_token")
+    chat_id = params.get("telegram_chat_id")
+    
+    if not token or not chat_id:
+        return {"success": False, "message": "Token ou Chat ID não configurados."}
+        
+    try:
+        await send_telegram_alert(token, chat_id, "🔔 **Teste de Configuração**\n\nO sistema de alertas do ISP Monitor está funcionando corretamente! 🚀")
+        return {"success": True, "message": "Mensagem enviada! Verifique seu Telegram."}
+    except Exception as e:
+        return {"success": False, "message": f"Erro ao enviar: {str(e)}"}

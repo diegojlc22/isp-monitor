@@ -145,7 +145,7 @@ async def synthetic_agent_job():
                 db_targets = targets_res.scalars().all()
                 targets = []
                 
-                if notdb_targets:
+                if not db_targets:
                      # Default fallbacks
                     targets.append(("dns", DEFAULT_DNS))
                     for url in DEFAULT_HTTP:

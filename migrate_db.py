@@ -23,6 +23,7 @@ def migrate():
             ("snmp_port", "INTEGER DEFAULT 161"),
             ("last_traffic_in", "REAL"),
             ("last_traffic_out", "REAL"),
+            ("snmp_interface_index", "INTEGER"),
             ("maintenance_until", "TIMESTAMP")
         ],
         "towers": [
