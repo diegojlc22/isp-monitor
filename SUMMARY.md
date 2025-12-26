@@ -65,4 +65,11 @@ O sistema de alertas foi expandido para permitir escolha granular de canais via 
 
 ---
 
+
+### 🐛 Hotfix (26/12 - 13:50)
+*   **Correção de Startup**: Corrigido erro `NameError: name 'Optional' is not defined` no backend (`settings.py`) que impedia a inicialização da API Uvicorn. Importação adicionada com sucesso.
+
+### 🎨 UI Update (26/12 - 13:55)
+*   **Melhoria em Configurações (Alertas)**: A pedido do usuário, a seção do WhatsApp foi dividida em dois campos claros: "Destino Individual (Número)" e "ID do Grupo", assemelhando-se à estrutura Token/ChatID do Telegram e facilitando o envio para ambos os destinos simultaneamente.
+
 **Status Final:** ✅ Sistema Operacional, Estável e Documentado.

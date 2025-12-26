@@ -14,7 +14,8 @@ export function Alerts() {
         template_up: '',
         telegram_enabled: true,
         whatsapp_enabled: false,
-        whatsapp_target: ''
+        whatsapp_target: '',
+        whatsapp_target_group: ''
     });
     const [configLoading, setConfigLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -31,7 +32,8 @@ export function Alerts() {
                     // Garante booleanos e strings
                     telegram_enabled: res.telegram_enabled !== false, // default true se undefined
                     whatsapp_enabled: res.whatsapp_enabled === true,
-                    whatsapp_target: res.whatsapp_target || ''
+                    whatsapp_target: res.whatsapp_target || '',
+                    whatsapp_target_group: res.whatsapp_target_group || ''
                 });
                 if (res.template_down) setTemplateDown(res.template_down);
                 if (res.template_up) setTemplateUp(res.template_up);
@@ -146,12 +148,20 @@ export function Alerts() {
 
                             <div className={`space-y-4 ${!config.whatsapp_enabled && 'opacity-50 pointer-events-none'}`}>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Destino (ID ou Número)</label>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Destino Individual (Número)</label>
                                     <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
                                         value={config.whatsapp_target} onChange={e => setConfig({ ...config, whatsapp_target: e.target.value })}
-                                        placeholder="12036...@g.us ou 551199..." />
-                                    <p className="text-[10px] text-slate-500 mt-1">Use a lista de grupos no Launcher para copiar o ID.</p>
+                                        placeholder="551199..." />
                                 </div>
+
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">ID do Grupo (Copie do Launcher)</label>
+                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
+                                        value={(config as any).whatsapp_target_group || ''}
+                                        onChange={e => setConfig({ ...config, whatsapp_target_group: e.target.value } as any)}
+                                        placeholder="12036...@g.us" />
+                                </div>
+
                                 <button type="button" onClick={handleTestWhatsapp} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
                                     <MessageCircle size={12} /> Testar Envio WhatsApp
                                 </button>

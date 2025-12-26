@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.app.database import get_db
@@ -44,15 +45,15 @@ async def get_telegram_config(db: AsyncSession = Depends(get_db)):
         # Multi-Channel
         telegram_enabled=(await get_val("telegram_enabled") != "false"), # Default True
         whatsapp_enabled=(await get_val("whatsapp_enabled") == "true"),  # Default False
-        whatsapp_target=await get_val("whatsapp_target") or ""
+        whatsapp_target=await get_val("whatsapp_target") or "",
+        whatsapp_target_group=await get_val("whatsapp_target_group") or ""
     )
 
 @router.post("/telegram")
 async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depends(get_db)):
     # Validar WhatsApp Target
-    if config.whatsapp_enabled and not config.whatsapp_target:
-        # Se ativou zap mas nao pos numero, apenas ignoramos ou deixamos salvar vazio (frontend valida melhor)
-        pass
+    # Pelo menos um target deve existir se estiver ativado, mas frontend valida melhor
+    pass
 
     async def upsert(key, value):
         # Se value for None, nao faz nada, assumindo opcional nao enviado
@@ -75,6 +76,7 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     await upsert("telegram_enabled", "true" if config.telegram_enabled else "false")
     await upsert("whatsapp_enabled", "true" if config.whatsapp_enabled else "false")
     await upsert("whatsapp_target", config.whatsapp_target)
+    await upsert("whatsapp_target_group", config.whatsapp_target_group)
 
     await db.commit()
     return {"message": "Configurações de alerta atualizadas"}

@@ -155,7 +155,7 @@ async def monitor_job_fast():
                 # 1. Refresh Config Cache (Every 60s)
                 if time.time() - config_cache["last_update"] > 60:
                     try:
-                        keys = ["telegram_token", "telegram_chat_id", "telegram_template_down", "telegram_template_up", "whatsapp_enabled", "whatsapp_target", "telegram_enabled"]
+                        keys = ["telegram_token", "telegram_chat_id", "telegram_template_down", "telegram_template_up", "whatsapp_enabled", "whatsapp_target", "whatsapp_target_group", "telegram_enabled"]
                         res = await session.execute(select(Parameters).where(Parameters.key.in_(keys)))
                         params = {p.key: p.value for p in res.scalars().all()}
                         
@@ -166,6 +166,7 @@ async def monitor_job_fast():
                         config_cache["tg_enabled"] = (params.get("telegram_enabled", "true") != "false")
                         config_cache["wa_enabled"] = (params.get("whatsapp_enabled", "false") == "true")
                         config_cache["wa_target"] = params.get("whatsapp_target", "")
+                        config_cache["wa_target_group"] = params.get("whatsapp_target_group", "")
 
                         config_cache["tmpl_down"] = params.get("telegram_template_down", "🔴 [Device.Name] caiu! IP=[Device.IP]")
                         config_cache["tmpl_up"] = params.get("telegram_template_up", "🟢 [Device.Name] voltou! IP=[Device.IP]")
@@ -319,7 +320,8 @@ async def monitor_job_fast():
                             telegram_chat_id=cfg.get("chat_id"),
                             telegram_enabled=cfg.get("tg_enabled", True),
                             whatsapp_enabled=cfg.get("wa_enabled", False),
-                            whatsapp_target=cfg.get("wa_target", "")
+                            whatsapp_target=cfg.get("wa_target", ""),
+                            whatsapp_target_group=cfg.get("wa_target_group", "")
                         ))
                     
                     if tasks:

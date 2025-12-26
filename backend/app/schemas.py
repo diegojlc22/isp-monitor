@@ -85,6 +85,7 @@ class TelegramConfig(BaseModel):
     telegram_enabled: Optional[bool] = True
     whatsapp_enabled: Optional[bool] = False
     whatsapp_target: Optional[str] = None 
+    whatsapp_target_group: Optional[str] = None
     # ex: 120363029253788824@g.us
 
 # Auth Schemas

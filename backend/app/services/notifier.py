@@ -1,3 +1,4 @@
+import asyncio
 import os
 import aiohttp
 import logging
@@ -21,7 +22,8 @@ async def send_notification(
     telegram_chat_id: str = None,
     telegram_enabled: bool = True,
     whatsapp_enabled: bool = False,
-    whatsapp_target: str = None
+    whatsapp_target: str = None,
+    whatsapp_target_group: str = None
 ):
     """
     Envia notificação baseada na configuração passada.
@@ -43,10 +45,14 @@ async def send_notification(
     # 2. WhatsApp
     # Verifica habilitacao
     should_send_wa = whatsapp_enabled
-    target = whatsapp_target or WHATSAPP_NUMBER
+    target_1 = whatsapp_target or WHATSAPP_NUMBER
+    target_2 = whatsapp_target_group
     
-    if should_send_wa and target:
-        tasks.append(send_whatsapp(message, target))
+    if should_send_wa:
+        if target_1:
+            tasks.append(send_whatsapp(message, target_1))
+        if target_2:
+             tasks.append(send_whatsapp(message, target_2))
         
     # Execute Async
     if tasks:
