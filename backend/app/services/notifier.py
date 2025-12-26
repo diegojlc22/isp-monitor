@@ -15,29 +15,42 @@ TELEGRAM_CHAT_ID_ENV = os.getenv("TELEGRAM_CHAT_ID")
 WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "http://localhost:3000/send")
 WHATSAPP_NUMBER = os.getenv("WHATSAPP_TARGET_NUMBER", "") # Numero do admin
 
-async def send_notification(message: str, telegram_token: str = None, telegram_chat_id: str = None):
+async def send_notification(
+    message: str, 
+    telegram_token: str = None, 
+    telegram_chat_id: str = None,
+    telegram_enabled: bool = True,
+    whatsapp_enabled: bool = False,
+    whatsapp_target: str = None
+):
     """
-    Envia notificação baseada na configuração ALERT_TYPE.
-    Aceita credenciais do Telegram dinamicamente (do banco de dados) ou usa do .env.
+    Envia notificação baseada na configuração passada.
     """
     tasks = []
     
     # 1. Telegram
-    if ALERT_TYPE in ["telegram", "both"]:
-        token = telegram_token or TELEGRAM_TOKEN_ENV
-        chat_id = telegram_chat_id or TELEGRAM_CHAT_ID_ENV
+    # Verifica se esta habilitado explicitamente OU se ALERT_TYPE diz "telegram" (fallback legado)
+    legacy_alert_type = ALERT_TYPE
+    should_send_tg = telegram_enabled
+    
+    # Se params forem None/Default, tenta fallback para ENV
+    token = telegram_token or TELEGRAM_TOKEN_ENV
+    chat_id = telegram_chat_id or TELEGRAM_CHAT_ID_ENV
         
-        if token and chat_id:
-            await send_telegram(message, token, chat_id)
-        else:
-            logger.warning("Telegram ativado mas credenciais não fornecidas (nem DB nem ENV).")
+    if should_send_tg and token and chat_id:
+        tasks.append(send_telegram(message, token, chat_id))
 
     # 2. WhatsApp
-    if ALERT_TYPE in ["whatsapp", "both"]:
-        if WHATSAPP_NUMBER:
-            await send_whatsapp(message)
-        else:
-            logger.warning("WhatsApp ativado mas número de destino (WHATSAPP_TARGET_NUMBER) não configurado.")
+    # Verifica habilitacao
+    should_send_wa = whatsapp_enabled
+    target = whatsapp_target or WHATSAPP_NUMBER
+    
+    if should_send_wa and target:
+        tasks.append(send_whatsapp(message, target))
+        
+    # Execute Async
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 async def send_telegram(message: str, token: str, chat_id: str):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -54,9 +67,11 @@ async def send_telegram(message: str, token: str, chat_id: str):
     except Exception as e:
         logger.error(f"Falha ao enviar Telegram: {e}")
 
-async def send_whatsapp(message: str):
+async def send_whatsapp(message: str, target: str):
+    # Remove sufixo se tiver duplicado ou garante formato correto se necessario
+    # Se o target contiver @g.us ou @c.us, o server.js ja lida
     payload = {
-        "number": WHATSAPP_NUMBER,
+        "number": target,
         "message": message
     }
     try:

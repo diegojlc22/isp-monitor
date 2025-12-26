@@ -155,11 +155,18 @@ async def monitor_job_fast():
                 # 1. Refresh Config Cache (Every 60s)
                 if time.time() - config_cache["last_update"] > 60:
                     try:
-                        keys = ["telegram_token", "telegram_chat_id", "telegram_template_down", "telegram_template_up"]
+                        keys = ["telegram_token", "telegram_chat_id", "telegram_template_down", "telegram_template_up", "whatsapp_enabled", "whatsapp_target", "telegram_enabled"]
                         res = await session.execute(select(Parameters).where(Parameters.key.in_(keys)))
                         params = {p.key: p.value for p in res.scalars().all()}
+                        
                         config_cache["token"] = params.get("telegram_token", "")
                         config_cache["chat_id"] = params.get("telegram_chat_id", "")
+                        
+                        # Multi-Channel Parsing
+                        config_cache["tg_enabled"] = (params.get("telegram_enabled", "true") != "false")
+                        config_cache["wa_enabled"] = (params.get("whatsapp_enabled", "false") == "true")
+                        config_cache["wa_target"] = params.get("whatsapp_target", "")
+
                         config_cache["tmpl_down"] = params.get("telegram_template_down", "🔴 [Device.Name] caiu! IP=[Device.IP]")
                         config_cache["tmpl_up"] = params.get("telegram_template_up", "🟢 [Device.Name] voltou! IP=[Device.IP]")
                         config_cache["last_update"] = time.time()
@@ -279,7 +286,7 @@ async def monitor_job_fast():
                                       .replace("[Service.Name]", "Ping")\
                                       .replace("[Device.FirstAddress]", device.ip)
                             
-                            notifications_to_send.append((config_cache["token"], config_cache["chat_id"], msg))
+                            notifications_to_send.append((msg, config_cache.copy()))
                             alerts_to_add.append(Alert(
                                 device_type=device_type, 
                                 device_name=device.name, 
@@ -305,8 +312,15 @@ async def monitor_job_fast():
                 # Notifications
                 if notifications_to_send:
                     tasks = []
-                    for token, chat_id, msg in notifications_to_send:
-                        tasks.append(send_notification(msg, telegram_token=token, telegram_chat_id=chat_id))
+                    for msg_text, cfg in notifications_to_send:
+                        tasks.append(send_notification(
+                            message=msg_text, 
+                            telegram_token=cfg.get("token"), 
+                            telegram_chat_id=cfg.get("chat_id"),
+                            telegram_enabled=cfg.get("tg_enabled", True),
+                            whatsapp_enabled=cfg.get("wa_enabled", False),
+                            whatsapp_target=cfg.get("wa_target", "")
+                        ))
                     
                     if tasks:
                          for t in tasks: asyncio.create_task(t)

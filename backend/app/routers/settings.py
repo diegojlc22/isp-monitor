@@ -29,69 +29,55 @@ async def update_system_name(data: dict, db: AsyncSession = Depends(get_db), cur
 
 @router.get("/telegram", response_model=TelegramConfig)
 async def get_telegram_config(db: AsyncSession = Depends(get_db)):
-    token_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_token"))
-    chat_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
-    backup_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_backup_chat_id"))
-    down_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))
-    up_res = await db.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))
-    
-    token = token_res.scalar_one_or_none()
-    chat_id = chat_res.scalar_one_or_none()
-    backup = backup_res.scalar_one_or_none()
-    down = down_res.scalar_one_or_none()
-    up = up_res.scalar_one_or_none()
-    
+    # Helper interno para buscar valor
+    async def get_val(key):
+        res = await db.execute(select(Parameters).where(Parameters.key == key))
+        obj = res.scalar_one_or_none()
+        return obj.value if obj else None
+
     return TelegramConfig(
-        bot_token=token.value if token else "",
-        chat_id=chat_id.value if chat_id else "",
-        backup_chat_id=backup.value if backup else "",
-        template_down=down.value if down else None,
-        template_up=up.value if up else None
+        bot_token=await get_val("telegram_token") or "",
+        chat_id=await get_val("telegram_chat_id") or "",
+        backup_chat_id=await get_val("telegram_backup_chat_id") or "",
+        template_down=await get_val("telegram_template_down"),
+        template_up=await get_val("telegram_template_up"),
+        # Multi-Channel
+        telegram_enabled=(await get_val("telegram_enabled") != "false"), # Default True
+        whatsapp_enabled=(await get_val("whatsapp_enabled") == "true"),  # Default False
+        whatsapp_target=await get_val("whatsapp_target") or ""
     )
 
 @router.post("/telegram")
 async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depends(get_db)):
-    # Upsert Token
-    token_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_token"))).scalar_one_or_none()
-    if not token_obj:
-        token_obj = Parameters(key="telegram_token", value=config.bot_token)
-        db.add(token_obj)
-    else:
-        token_obj.value = config.bot_token
-        
-    # Upsert Chat ID
-    chat_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))).scalar_one_or_none()
-    if not chat_obj:
-        chat_obj = Parameters(key="telegram_chat_id", value=config.chat_id)
-        db.add(chat_obj)
-    else:
-        chat_obj.value = config.chat_id
+    # Validar WhatsApp Target
+    if config.whatsapp_enabled and not config.whatsapp_target:
+        # Se ativou zap mas nao pos numero, apenas ignoramos ou deixamos salvar vazio (frontend valida melhor)
+        pass
 
-    # Upsert Backup Chat ID
-    if config.backup_chat_id is not None:
-        backup_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_backup_chat_id"))).scalar_one_or_none()
-        if not backup_obj:
-            db.add(Parameters(key="telegram_backup_chat_id", value=config.backup_chat_id))
-        else:
-            backup_obj.value = config.backup_chat_id
+    async def upsert(key, value):
+        # Se value for None, nao faz nada, assumindo opcional nao enviado
+        # Mas para booleanos e strings vazias, queremos salvar.
+        if value is None: return 
         
-    # Upsert Templates
-    if config.template_down:
-        down_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_template_down"))).scalar_one_or_none()
-        if not down_obj:
-            db.add(Parameters(key="telegram_template_down", value=config.template_down))
+        obj = (await db.execute(select(Parameters).where(Parameters.key == key))).scalar_one_or_none()
+        if not obj:
+            db.add(Parameters(key=key, value=str(value)))
         else:
-            down_obj.value = config.template_down
-            
-    if config.template_up:
-        up_obj = (await db.execute(select(Parameters).where(Parameters.key == "telegram_template_up"))).scalar_one_or_none()
-        if not up_obj:
-            db.add(Parameters(key="telegram_template_up", value=config.template_up))
-        else:
-            up_obj.value = config.template_up
-        
+            obj.value = str(value)
+
+    await upsert("telegram_token", config.bot_token)
+    await upsert("telegram_chat_id", config.chat_id)
+    await upsert("telegram_backup_chat_id", config.backup_chat_id)
+    await upsert("telegram_template_down", config.template_down)
+    await upsert("telegram_template_up", config.template_up)
+    
+    # Novos Campos
+    await upsert("telegram_enabled", "true" if config.telegram_enabled else "false")
+    await upsert("whatsapp_enabled", "true" if config.whatsapp_enabled else "false")
+    await upsert("whatsapp_target", config.whatsapp_target)
+
     await db.commit()
-    return {"message": "Settings updated"}
+    return {"message": "Configurações de alerta atualizadas"}
 
 from backend.app.schemas import LatencyThresholds
 
@@ -272,6 +258,39 @@ async def test_telegram_message(db: AsyncSession = Depends(get_db)):
         return {"message": "Mensagem de teste enviada com sucesso!"}
     except Exception as e:
         return {"error": f"Erro ao enviar teste: {str(e)}"}
+
+# Teste WhatsApp
+@router.post("/whatsapp/test-message")
+async def test_whatsapp_message_route(db: AsyncSession = Depends(get_db)):
+    try:
+        import aiohttp
+        res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target"))
+        target = res.scalar_one_or_none()
+        
+        if not target or not target.value:
+             return {"error": "Número/Grupo do WhatsApp não configurado."}
+             
+        alert_msg = "🔔 *[WhatsApp]* Teste de Notificação: *Sucesso!* 🚀"
+        
+        url = "http://127.0.0.1:3001/send"
+        async with aiohttp.ClientSession() as session:
+            try:
+                # Timeout curto pois é localhost
+                async with session.post(url, json={"number": target.value, "message": alert_msg}, timeout=10) as resp:
+                    if resp.status == 200:
+                        return {"message": "Enviado WhatsApp"}
+                    elif resp.status == 404:
+                         return {"error": "Número não encontrado no WhatsApp."}
+                    elif resp.status == 503:
+                         return {"error": "WhatsApp sincronizando/carregando. Tente em breve."}
+                    else:
+                        text = await resp.text()
+                        return {"error": f"Erro Gateway: {text}"}
+            except Exception as conn_err:
+                 return {"error": f"Falha ao conectar no Gateway Zap (Porta 3001): {conn_err}"}
+
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.post("/telegram/test-backup")
 async def test_telegram_backup():

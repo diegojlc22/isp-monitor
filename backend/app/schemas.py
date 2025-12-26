@@ -80,6 +80,12 @@ class TelegramConfig(BaseModel):
     backup_chat_id: Optional[str] = None
     template_down: Optional[str] = None
     template_up: Optional[str] = None
+    
+    # Config Multi-Canal
+    telegram_enabled: Optional[bool] = True
+    whatsapp_enabled: Optional[bool] = False
+    whatsapp_target: Optional[str] = None 
+    # ex: 120363029253788824@g.us
 
 # Auth Schemas
 class UserBase(BaseModel):
