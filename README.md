@@ -4,6 +4,28 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 
 ---
 
+## ⚡ Instalação Automática (Primeira Vez)
+
+**Novo usuário? Execute o instalador inteligente:**
+
+1. **Clique com o botão direito** em `SETUP.bat`
+2. Selecione **"Executar como Administrador"**
+3. Aguarde a instalação automática (15-30 min)
+4. Pronto! Tudo estará configurado automaticamente 🎉
+
+**O instalador verifica e instala:**
+- ✅ Python 3.12
+- ✅ Node.js 22 LTS
+- ✅ PostgreSQL 17
+- ✅ Git
+- ✅ Todas as dependências do projeto
+- ✅ Banco de dados configurado
+- ✅ Ngrok
+
+📖 **Documentação completa**: [`docs/GUIA_INSTALACAO.md`](docs/GUIA_INSTALACAO.md)
+
+---
+
 ## 🚀 Início Rápido
 
 ### **1. Iniciar o Sistema**

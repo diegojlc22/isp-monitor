@@ -164,6 +164,22 @@ async def approve_tower_request(req_id: int, db: AsyncSession = Depends(get_db))
     await db.commit()
     return {"message": f"Torre {new_tower.name} criada com sucesso!"}
 
+@router.post("/requests/{req_id}/reject")
+async def reject_tower_request(req_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Admin: Rejeita a solicitaçao
+    """
+    req = await db.get(TowerRequest, req_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+        
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Solicitação já processada")
+        
+    req.status = "rejected"
+    await db.commit()
+    return {"message": "Solicitação rejeitada."}
+
 # --- Tracking ---
 
 class LocationUpdate(BaseModel):

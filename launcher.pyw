@@ -41,6 +41,8 @@ class ModernLauncher:
         
         # Estado
         self.is_running = False
+        self.should_be_running = False # Monitoramento de auto-cura
+        self.restart_attempts = 0
         self.expo_logs = []  # Armazenar logs do Expo
         
         # Estilos TTK
@@ -274,6 +276,13 @@ class ModernLauncher:
 
     def check_status_loop(self):
         self.check_status()
+        
+        # --- AUTO HEAL ---
+        try:
+            if getattr(self, 'should_be_running', False) and not self.is_running:
+                 self.handle_crash()
+        except: pass
+        
         self.root.after(2000, self.check_status_loop)
 
     def check_status(self):
@@ -336,9 +345,68 @@ class ModernLauncher:
         except Exception:
             pass
 
+    def handle_crash(self):
+        """Gerencia falhas e aciona o Doctor"""
+        if self.restart_attempts >= 3:
+            self.should_be_running = False # Desiste
+            self.root.after(0, lambda: messagebox.showerror("Erro Crítico", 
+                "O sistema falhou repetidamente e o reparo automático não resolveu.\nVerifique os LOGS."))
+            return
+
+        print(f"[LAUNCHER] Crash detectado! Tentativa de cura {self.restart_attempts + 1}/3...")
+        self.info_label.config(text=f"Autocura em andamento ({self.restart_attempts+1}/3)...")
+        
+        # Ler logs para diagnóstico
+        log_content = ""
+        for log_file in ["startup.log", "api.log", "collector.log"]:
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, "r") as f:
+                        log_content += f"\n--- {log_file} ---\n"
+                        log_content += "".join(f.readlines()[-50:]) # Ultimas 50 linhas
+                except: pass
+        
+        # Chamar Doctor
+        try:
+            from backend.doctor import healer
+            healed = healer.diagnose_and_heal(log_content)
+            
+            if healed:
+                print("[LAUNCHER] Doctor reportou sucesso. Reiniciando...")
+                self.restart_attempts += 1
+                time.sleep(2)
+                self.start_system() 
+            else:
+                print("[LAUNCHER] Doctor não encontrou cura.")
+                self.should_be_running = False # Para de tentar
+                self.root.after(0, lambda: messagebox.showwarning("Atenção", "O sistema parou e não há correção automática conhecida."))
+                
+        except Exception as e:
+            print(f"[LAUNCHER] Erro ao chamar Doctor: {e}")
+            self.should_be_running = False
+
     def start_system(self):
         if self.is_running: return
         
+        self.should_be_running = True
+        self.restart_attempts = 0 # Reset ao iniciar manual
+        
+        # --- DOCTOR CHECKUP ---
+        # Roda verificações proativas (Otimização DB, etc)
+        try:
+            from backend.doctor import checkup
+            # Roda checkup em thread separada para não travar UI? 
+            # Como é rápido, pode ser aqui. Mas se precisar de admin, vai aparecer no console.
+            # O ideal seria mostrar na UI, mas por enquanto console serve.
+            checkup.run_system_checkup()
+        except Exception as e:
+            print(f"[LAUNCHER] Erro no checkup: {e}")
+        # ----------------------
+        
+        # Verificar Frontend antes de iniciar
+        if not self.check_and_rebuild_frontend():
+             return
+
         script = "iniciar_postgres.bat"
         if not os.path.exists(script):
             messagebox.showerror("Erro", f"Script {script} não encontrado!")
@@ -361,6 +429,107 @@ class ModernLauncher:
             
         except Exception as e:
             messagebox.showerror("Erro", str(e))
+            
+    # --- SMART BUILD SYSTEM ---
+    
+    def calculate_frontend_hash(self):
+        """Calcula hash do diretório src do frontend"""
+        import hashlib
+        src_path = os.path.join("frontend", "src")
+        total_hash = hashlib.md5()
+        
+        if not os.path.exists(src_path):
+            return "0"
+            
+        for root, dirs, files in os.walk(src_path):
+            files.sort() # Garantir ordem
+            for file in files:
+                if file.endswith(('.tsx', '.ts', '.css', '.html')):
+                    file_path = os.path.join(root, file)
+                    try:
+                        # Hash do caminho + mtime + size (muito rápido)
+                        stat = os.stat(file_path)
+                        info = f"{file_path}{stat.st_mtime}{stat.st_size}".encode()
+                        total_hash.update(info)
+                    except: pass
+                    
+        return total_hash.hexdigest()
+
+    def check_and_rebuild_frontend(self):
+        """Verifica se precisa rebuildar o frontend"""
+        # Se nao tiver npm (node), nao tenta
+        try:
+           subprocess.run(["npm", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        except:
+           return True # Pula se nao tiver node
+
+        hash_file = os.path.join("frontend", ".build_hash")
+        current_hash = self.calculate_frontend_hash()
+        saved_hash = ""
+        
+        if os.path.exists(hash_file):
+            try:
+                with open(hash_file, "r") as f:
+                    saved_hash = f.read().strip()
+            except: pass
+            
+        if current_hash != saved_hash:
+            # Precisa rebuildar
+            msg = "Alterações detectadas no Frontend!\nO sistema precisa atualizar a interface.\n\nIsso levará alguns segundos.\nDeseja atualizar agora?"
+            if messagebox.askyesno("Atualização Automática", msg):
+                return self.run_frontend_build(current_hash, hash_file)
+            else:
+                return True # Continua com versao antiga se usuario negar
+        return True
+
+    def run_frontend_build(self, new_hash, hash_file):
+        # Janela de Progresso
+        build_win = tk.Toplevel(self.root)
+        build_win.title("Atualizando Interface...")
+        build_win.geometry("400x150")
+        build_win.configure(bg=COLORS['bg'])
+        
+        # Centralizar
+        x = (self.root.winfo_screenwidth() - 400) // 2
+        y = (self.root.winfo_screenheight() - 150) // 2
+        build_win.geometry(f"+{x}+{y}")
+        
+        tk.Label(build_win, text="Otimizando e Compilando...", 
+                fg=COLORS['text'], bg=COLORS['bg'], font=("Segoe UI", 12)).pack(pady=20)
+        
+        bar = ttk.Progressbar(build_win, mode='indeterminate')
+        bar.pack(fill=tk.X, padx=30, pady=10)
+        bar.start(10)
+        build_win.update()
+        
+        # Executar npm run build
+        success = False
+        try:
+            frontend_dir = os.path.join(os.getcwd(), "frontend")
+            
+            # Usar shell=True para 'npm' ser reconhecido
+            process = subprocess.Popen("npm run build", shell=True, cwd=frontend_dir, 
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+            
+            while process.poll() is None:
+                build_win.update()
+                time.sleep(0.1)
+            
+            if process.returncode == 0:
+                # Salvar novo hash
+                with open(hash_file, "w") as f:
+                    f.write(new_hash)
+                success = True
+            else:
+                out, err = process.communicate()
+                messagebox.showerror("Erro no Build", f"Falha ao compilar:\n{err.decode(errors='ignore')}")
+                
+        except Exception as e:
+             messagebox.showerror("Erro Crítico", str(e))
+             
+        build_win.destroy()
+        return success
 
     def wait_for_start(self):
         """Aguarda inicialização verificando logs"""
@@ -378,6 +547,7 @@ class ModernLauncher:
 
     def stop_system(self):
         """Mata API e Coletor"""
+        self.should_be_running = False # Desativa monitoramento de crash
         killed = []
         try:
             # 1. API (Porta 8080)

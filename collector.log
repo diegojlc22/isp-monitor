@@ -1,0 +1,2 @@
+C:\diegolima\isp-monitor\backend\app\services\snmp.py:1: RuntimeWarning: The 'pysnmp-lextudio' package is deprecated and will be removed in future releases.Please use 'pysnmp' instead.
+  from pysnmp.hlapi import *

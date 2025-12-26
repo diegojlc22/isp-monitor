@@ -55,6 +55,25 @@ export default function RequestsPage() {
         }
     };
 
+    const handleReject = async (id: number, name: string) => {
+        if (!confirm(`Tem certeza que deseja REJEITAR a torre ${name}?`)) return;
+
+        try {
+            const res = await fetch(`${API_Base}/mobile/requests/${id}/reject`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                alert("Solicitação rejeitada.");
+                setRequests(prev => prev.filter(r => r.id !== id));
+            } else {
+                throw new Error("Falha ao rejeitar");
+            }
+        } catch (error) {
+            alert("Erro ao rejeitar solicitação.");
+        }
+    };
+
     if (loading) return <div className="p-8 text-white">Carregando...</div>;
 
     return (
@@ -83,9 +102,14 @@ export default function RequestsPage() {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <MapPin size={14} />
-                                            <span className="font-mono text-xs text-yellow-200">
-                                                {req.lat.toFixed(6)}, {req.lon.toFixed(6)}
-                                            </span>
+                                            <a
+                                                href={`https://www.google.com/maps?q=${req.lat},${req.lon}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="font-mono text-xs text-yellow-400 hover:text-yellow-300 hover:underline cursor-pointer flex items-center gap-1"
+                                            >
+                                                {req.lat.toFixed(6)}, {req.lon.toFixed(6)} (Ver no Mapa ↗)
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -93,7 +117,7 @@ export default function RequestsPage() {
                                 <div className="flex gap-2">
                                     <button
                                         className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-3 py-2 rounded-md flex items-center text-sm font-medium transition-colors"
-                                        onClick={() => alert("Função Rejeitar ainda não implementada (aprove para excluir depois).")}
+                                        onClick={() => handleReject(req.id, req.name)}
                                     >
                                         <X className="h-4 w-4 mr-1" /> Rejeitar
                                     </button>

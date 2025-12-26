@@ -1,125 +1,86 @@
 # -----------------------------
 # PostgreSQL configuration file
-# OTIMIZADO PARA ISP MONITOR
+# OTIMIZADO PARA ISP MONITOR (TURBO EDITION)
 # -----------------------------
 # 
-# Este arquivo foi otimizado para:
-# - Hardware: 16GB RAM, SSD, CPU i5+
-# - Workload: ISP Monitor (1000 devices)
-# - Ganho esperado: +30% performance
+# Alterações v2:
+# - Synchronous Commit OFF (Velocidade Extrema)
+# - Locales Automaticos (Compatibilidade Windows Universal)
 #
-# BACKUP: Sempre faça backup antes de aplicar!
-# copy postgresql.conf postgresql.conf.backup
 
 #------------------------------------------------------------------------------
-# RESOURCE USAGE (except WAL) - OTIMIZADO
+# RESOURCE USAGE (except WAL)
 #------------------------------------------------------------------------------
 
-# - Memory - OTIMIZADO PARA 16GB RAM
+shared_buffers = 2GB			# 25% da RAM
+work_mem = 16MB				# Otimizado para conexões simultaneas
+maintenance_work_mem = 512MB		# Acelera VACUUM e CREATE INDEX
 
-shared_buffers = 2GB			# 25% da RAM (OTIMIZADO)
-					# (change requires restart)
-work_mem = 16MB				# min 64kB (OTIMIZADO)
-maintenance_work_mem = 512MB		# min 64kB (OTIMIZADO)
-
-# Mantém configurações padrão do Windows
 dynamic_shared_memory_type = windows
 
 #------------------------------------------------------------------------------
-# I/O - OTIMIZADO PARA SSD
+# I/O & PERFORMANCE (SSD)
 #------------------------------------------------------------------------------
 
-effective_io_concurrency = 200		# 1-1000 (OTIMIZADO para SSD)
-					# 0 disables issuing multiple simultaneous IO requests
+effective_io_concurrency = 200		# SSD Optimization
+random_page_cost = 1.1			# SSD Cost Model
+
+# --- TURBO MODE ---
+# Aumenta drasticamente a velocidade de logs e inserts.
+# Em caso de crash DO SO (tela azul/falta de luz), pode-se perder 
+# uma fração de segundo de dados. Aceitável para monitoramento.
+synchronous_commit = off  
 
 #------------------------------------------------------------------------------
-# WRITE-AHEAD LOG - OTIMIZADO
+# WRITE-AHEAD LOG
 #------------------------------------------------------------------------------
 
-# - WAL Buffers - OTIMIZADO
-
-wal_buffers = 16MB			# min 32kB (OTIMIZADO)
-					# (change requires restart)
-
-# - Checkpoints - OTIMIZADO
-
-checkpoint_completion_target = 0.9	# checkpoint target duration (OTIMIZADO)
-max_wal_size = 4GB			# (OTIMIZADO de 1GB)
-min_wal_size = 1GB			# (OTIMIZADO de 80MB)
+wal_buffers = 16MB
+checkpoint_completion_target = 0.9
+max_wal_size = 4GB
+min_wal_size = 1GB
 
 #------------------------------------------------------------------------------
-# QUERY TUNING - OTIMIZADO
+# QUERY TUNING
 #------------------------------------------------------------------------------
 
-# - Planner Cost Constants - OTIMIZADO PARA SSD
-
-random_page_cost = 1.1			# same scale as above (OTIMIZADO para SSD)
-effective_cache_size = 6GB		# 50% da RAM (OTIMIZADO)
-
-# - Other Planner Options - OTIMIZADO
-
-default_statistics_target = 100		# range 1-10000 (OTIMIZADO)
+effective_cache_size = 6GB		# Estima cache do SO disponível
+default_statistics_target = 100
 
 #------------------------------------------------------------------------------
-# CONFIGURAÇÕES PADRÃO (NÃO MODIFICADAS)
+# CONEXOES E REDE
 #------------------------------------------------------------------------------
 
-# FILE LOCATIONS
 listen_addresses = '*'
 port = 5432
 max_connections = 100
 
-# LOGGING
+#------------------------------------------------------------------------------
+# LOGGING (Reduzido para economia de disco)
+#------------------------------------------------------------------------------
+
 log_destination = 'stderr'
 logging_collector = on
-log_file_mode = 0640
-log_line_prefix = '%t '
-log_timezone = 'America/Sao_Paulo'
-
-# VACUUMING - ✅ SPRINT 3: OTIMIZADO
-autovacuum = on				# Garante que está ativo
-autovacuum_max_workers = 4		# Padrão: 3 (OTIMIZADO)
-autovacuum_naptime = 1min		# Padrão: 1min
-autovacuum_vacuum_threshold = 50	# Padrão: 50
-autovacuum_analyze_threshold = 50	# Padrão: 50
-autovacuum_vacuum_scale_factor = 0.05	# Padrão: 0.2 (OTIMIZADO - 4x mais agressivo)
-autovacuum_analyze_scale_factor = 0.02	# Padrão: 0.1 (OTIMIZADO - 5x mais agressivo)
-autovacuum_vacuum_cost_delay = 2ms	# Padrão: 2ms
-autovacuum_vacuum_cost_limit = 200	# Padrão: 200
-autovacuum_work_mem = 256MB		# Padrão: -1 (OTIMIZADO)
-
-# LOCALE
-datestyle = 'iso, dmy'
-timezone = 'America/Sao_Paulo'
-lc_messages = 'Portuguese_Brazil.1252'
-lc_monetary = 'Portuguese_Brazil.1252'
-lc_numeric = 'Portuguese_Brazil.1252'
-lc_time = 'Portuguese_Brazil.1252'
-default_text_search_config = 'pg_catalog.portuguese'
+log_directory = 'log'
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+# log_min_duration_statement = 1000  # Logar queries lentas (>1s) se precisar debug
 
 #------------------------------------------------------------------------------
-# RESUMO DAS OTIMIZAÇÕES APLICADAS
+# AUTOTVACCUM (Manutenção Automática Agressiva)
 #------------------------------------------------------------------------------
-#
-# MEMÓRIA:
-# - shared_buffers: 128MB → 2GB (+1500%)
-# - work_mem: 4MB → 16MB (+300%)
-# - maintenance_work_mem: 64MB → 512MB (+700%)
-# - effective_cache_size: 4GB → 6GB (+50%)
-#
-# I/O (SSD):
-# - effective_io_concurrency: 16 → 200 (+1150%)
-# - random_page_cost: 4.0 → 1.1 (-72%)
-#
-# WAL:
-# - wal_buffers: auto → 16MB
-# - max_wal_size: 1GB → 4GB (+300%)
-# - min_wal_size: 80MB → 1GB (+1150%)
-# - checkpoint_completion_target: 0.5 → 0.9 (+80%)
-#
-# QUERY PLANNER:
-# - default_statistics_target: 100 (explícito)
-#
-# GANHO TOTAL ESPERADO: +20-30% performance geral
-#
+
+autovacuum = on
+autovacuum_max_workers = 4
+autovacuum_naptime = 1min
+autovacuum_vacuum_scale_factor = 0.05	# Limpa tabelas com 5% de lixo (antes era 20%)
+autovacuum_analyze_scale_factor = 0.02
+autovacuum_vacuum_cost_delay = 2ms
+autovacuum_work_mem = 256MB
+
 #------------------------------------------------------------------------------
+# LOCALE & FORMATACAO
+#------------------------------------------------------------------------------
+# Comentados para usar o padrao detectado pelo initdb (Evita erros de startup)
+# datestyle = 'iso, dmy'
+# timezone = 'America/Sao_Paulo'
+# lc_messages = ... (USAR PADRAO DO SISTEMA)

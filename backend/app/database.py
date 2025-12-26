@@ -1,10 +1,30 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from dotenv import load_dotenv
 import os
 
+# Load .env explicitamente
+load_dotenv()
+
 # Check for DATABASE_URL env var, otherwise fallback to SQLite
-# Example Postgres: postgresql+asyncpg://user:pass@localhost/dbname
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./monitor.db")
+
+# Ensure asyncpg driver is used for Postgres
+if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+
+# Debug: Mostrar URL mascarada
+try:
+    if DATABASE_URL and "://" in DATABASE_URL:
+        masked_url = DATABASE_URL
+        if "@" in masked_url:
+            part1 = masked_url.split("@")[0] # protocol://user:pass
+            if ":" in part1.split("://")[1]:
+                user_part = part1.split("://")[1].split(":")[0]
+                masked_url = f"{part1.split('://')[0]}://{user_part}:****@{masked_url.split('@')[1]}"
+        print(f"[DATABASE] Conectando a: {masked_url}")
+except:
+    print("[DATABASE] Iniciando conexao...")
 
 # Connection Args adjustments
 connect_args = {}
@@ -16,7 +36,7 @@ engine = create_async_engine(
     connect_args=connect_args,
     pool_size=20,              # Conexões permanentes no pool
     max_overflow=10,           # Conexões extras sob demanda
-    pool_pre_ping=True,        # Testa conexão antes de usar (evita erros)
+    pool_pre_ping=False,       # DESATIVADO TEMPORARIAMENTE para evitar erro de startup no Windows
     pool_recycle=3600          # Recicla conexões a cada 1h (evita timeouts)
 )
 

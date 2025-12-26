@@ -5,7 +5,7 @@ cd /d "%~dp0"
 title ISP Monitor - POSTGRES SERVER
 
 :: Configuração do Banco
-set "DATABASE_URL=postgresql+asyncpg://postgres:110812@localhost:5432/monitor_prod"
+:: As configuracoes sao carregadas automaticamente do arquivo .env (backend/.env)
 
 :: Setup Python e Venv
 if exist ".venv\Scripts\python.exe" (
