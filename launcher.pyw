@@ -324,16 +324,22 @@ class ModernLauncher:
                  self.handle_crash()
         except: pass
         
-        self.root.after(2000, self.check_status_loop)
+        self.root.after(4000, self.check_status_loop)
 
     def check_status(self):
-        """Verifica se API está rodando na porta 8080"""
+        """Verifica se API está rodando na porta 8080 (Otimizado)"""
         try:
+            # 1. Check Port 8080 (Lightweight Socket Check)
             is_up = False
-            for conn in psutil.net_connections():
-                if conn.laddr.port == 8080 and conn.status == 'LISTEN':
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)
+                result = sock.connect_ex(('127.0.0.1', 8080))
+                if result == 0:
                     is_up = True
-                    break
+                sock.close()
+            except:
+                is_up = False
             
             self.is_running = is_up
             if is_up:
@@ -347,99 +353,95 @@ class ModernLauncher:
                 self.btn_stop.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
                 self.info_label.config(text="Sistema parado. Clique em INICIAR para começar.")
             
-            # Verificar status do Ngrok
-            ngrok_is_running = any('ngrok' in p.name().lower() for p in psutil.process_iter(['name']))
+            # 2. Check Processes (Single Pass - Low CPU)
+            ngrok_is_running = False
+            expo_is_running = False
+            zap_is_running = False
+            
+            for p in psutil.process_iter(['name', 'cmdline']):
+                try:
+                    name = p.info['name'].lower()
+                    cmd = ' '.join(p.info['cmdline'] or []).lower()
+                    
+                    if 'ngrok' in name:
+                        ngrok_is_running = True
+                    
+                    if 'node' in name:
+                        if 'expo' in cmd:
+                            expo_is_running = True
+                        if 'server.js' in cmd:
+                            zap_is_running = True
+                except: pass
+
+            # Update Ngrok UI
             if ngrok_is_running != self.ngrok_running:
                 self.ngrok_running = ngrok_is_running
                 if ngrok_is_running:
-                    self.btn_ngrok.config(
-                        text="🌐 NGROK: LIGADO",
-                        bg=COLORS['success'],
-                        fg='#1e1e2e'
-                    )
+                    self.btn_ngrok.config(text="🌐 NGROK: LIGADO", bg=COLORS['success'], fg='#1e1e2e')
                 else:
-                    self.btn_ngrok.config(
-                        text="🌐 NGROK: DESLIGADO",
-                        bg='#45475a',
-                        fg=COLORS['subtext']
-                    )
+                    self.btn_ngrok.config(text="🌐 NGROK: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
             
-            # Verificar status do Expo
-            expo_is_running = any('node' in p.name().lower() and 'expo' in ' '.join(p.cmdline()).lower() for p in psutil.process_iter(['name', 'cmdline']))
+            # Update Expo UI
             if expo_is_running != self.expo_running:
                 self.expo_running = expo_is_running
                 if expo_is_running:
-                    self.btn_expo.config(
-                        text="📱 EXPO: LIGADO (Clique p/ QR)",
-                        bg=COLORS['success'],
-                        fg='#1e1e2e'
-                    )
+                    self.btn_expo.config(text="📱 EXPO: LIGADO (Clique p/ QR)", bg=COLORS['success'], fg='#1e1e2e')
                     self.btn_expo_stop.config(state=tk.NORMAL, bg=COLORS['danger'])
                 else:
-                    self.btn_expo.config(
-                        text="📱 EXPO: DESLIGADO",
-                        bg='#45475a',
-                        fg=COLORS['subtext']
-                    )
+                    self.btn_expo.config(text="📱 EXPO: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
                     self.btn_expo_stop.config(state=tk.DISABLED, bg='#45475a')
                 
-                # Verificar status do WhatsApp
-                zap_is_running = False
-                for p in psutil.process_iter(['name', 'cmdline']):
-                    try:
-                        if 'node' in p.name().lower():
-                            cmd = ' '.join(p.cmdline() or [])
-                            # Relaxei a verificacao para detectar 'node server.js' mesmo sem path completo
-                            if 'server.js' in cmd:
-                                zap_is_running = True
-                                break
-                    except: pass
-                
-                if zap_is_running:
-                    # Verificar se está PRONTO via SINAL DE ARQUIVO (Mais robusto que HTTP)
-                    status_text = "💛 ZAP: INICIANDO..."
-                    is_ready = False
-                    
-                    wa_dir = os.path.join(os.getcwd(), "tools", "whatsapp")
-                    ready_file = os.path.join(wa_dir, "whatsapp_is_ready.txt")
-                    qr_file = os.path.join(wa_dir, "whatsapp-qr.png")
+            # Update WhatsApp UI
+            # Logic here is complex because of status text, only update if significant change
+            # But we must update if process state changed OR if we see the 'ready' file update
+            
+            # Check ZAP File Status
+            status_text = "💛 ZAP: INICIANDO..."
+            is_ready = False
+            wa_dir = os.path.join(os.getcwd(), "tools", "whatsapp")
+            ready_file = os.path.join(wa_dir, "whatsapp_is_ready.txt")
+            qr_file = os.path.join(wa_dir, "whatsapp-qr.png")
 
-                    if os.path.exists(ready_file):
-                        status_text = "💚 ZAP: PRONTO"
-                        is_ready = True
-                    elif os.path.exists(qr_file):
-                        status_text = "📷 ZAP: ESCANEAR QR"
-                    else:
-                        status_text = "💛 ZAP: CARREGANDO..."
-
-
-                    if zap_is_running != self.whatsapp_running or self.btn_whatsapp['text'] != status_text:
-                            self.whatsapp_running = zap_is_running
-                            self.btn_whatsapp.config(text=status_text, bg=COLORS['success'] if is_ready else COLORS['warning'], fg='#1e1e2e')
-                            
-                            if is_ready:
-                                self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                                self.btn_whatsapp_test.config(state=tk.NORMAL)
-                                self.btn_whatsapp_groups.config(state=tk.NORMAL)
-                            else:
-                                # Se tiver QR, habilita o botao QR
-                                if "QR" in status_text:
-                                    self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
-                                else:
-                                    self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                                    
-                                self.btn_whatsapp_test.config(state=tk.DISABLED)
-                                self.btn_whatsapp_groups.config(state=tk.DISABLED)
-
+            if zap_is_running:
+                if os.path.exists(ready_file):
+                    status_text = "💚 ZAP: PRONTO"
+                    is_ready = True
+                elif os.path.exists(qr_file):
+                    status_text = "📷 ZAP: ESCANEAR QR"
                 else:
-                    if zap_is_running != self.whatsapp_running:
-                        self.whatsapp_running = zap_is_running
-                        self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
+                    status_text = "💛 ZAP: CARREGANDO..."
+            else:
+                 status_text = "💚 ZAP: DESLIGADO"
+
+            # Should update UI?
+            should_update_zap_ui = (zap_is_running != self.whatsapp_running) or (self.btn_whatsapp['text'] != status_text)
+            
+            if should_update_zap_ui:
+                self.whatsapp_running = zap_is_running
+                
+                if not zap_is_running:
+                     self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
+                     self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                     self.btn_whatsapp_test.config(state=tk.DISABLED)
+                     self.btn_whatsapp_groups.config(state=tk.DISABLED)
+                else:
+                    self.btn_whatsapp.config(text=status_text, bg=COLORS['success'] if is_ready else COLORS['warning'], fg='#1e1e2e')
+                    
+                    if is_ready:
                         self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                        self.btn_whatsapp_test.config(state=tk.NORMAL)
+                        self.btn_whatsapp_groups.config(state=tk.NORMAL)
+                    else:
+                        if "QR" in status_text:
+                            self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
+                        else:
+                            self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                            
                         self.btn_whatsapp_test.config(state=tk.DISABLED)
                         self.btn_whatsapp_groups.config(state=tk.DISABLED)
 
-        except Exception:
+        except Exception as e:
+            # print(f"Status Check Fail: {e}") 
             pass
 
     def handle_crash(self):
@@ -1010,8 +1012,26 @@ class ModernLauncher:
         import webbrowser
         webbrowser.open("http://localhost:8080")
 
+    def read_last_lines(self, file_path, n=50):
+        """Lê as últimas n linhas de um arquivo de forma eficiente (sem ler tudo)"""
+        if not os.path.exists(file_path): return []
+        try:
+            with open(file_path, 'rb') as f:
+                try:
+                    # Estima tamanho: 200 chars por linha * n
+                    f.seek(-200 * n, 2) 
+                except IOError:
+                    # Arquivo menor que o seek, vai pro inicio
+                    f.seek(0)
+                
+                lines = f.readlines()
+                decoded_lines = [l.decode('utf-8', errors='ignore') for l in lines]
+                return decoded_lines[-n:]
+        except Exception:
+            return []
+
     def refresh_logs(self):
-        """Carrega logs coloridos"""
+        """Carrega logs coloridos (Otimizado)"""
         self.log_text.config(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
         
@@ -1019,13 +1039,12 @@ class ModernLauncher:
         
         for fname in files:
             self.log_text.insert(tk.END, f"\n┏━━ {fname.upper()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", "title")
-            if os.path.exists(fname):
-                try:
-                    with open(fname, "r") as f:
-                        lines = f.readlines()[-30:] # Last 30 lines
-                        self.log_text.insert(tk.END, "".join(lines) if lines else "[Arquivo Vazio]\n")
-                except:
-                    self.log_text.insert(tk.END, "[Erro ao ler]\n", "error")
+            
+            lines = self.read_last_lines(fname, 50)
+            if lines:
+                self.log_text.insert(tk.END, "".join(lines))
+            elif os.path.exists(fname):
+                 self.log_text.insert(tk.END, "[Arquivo Vazio ou Erro de Leitura]\n")
             else:
                 self.log_text.insert(tk.END, "[Não encontrado]\n", "error")
         
