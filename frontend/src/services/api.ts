@@ -61,5 +61,5 @@ export const migrateData = (postgres_url: string) => api.post('/settings/migrate
 
 // Testing
 export const testTelegramMessage = () => api.post('/settings/telegram/test-message').then(res => res.data);
-export const testWhatsappMessage = () => api.post('/settings/whatsapp/test-message').then(res => res.data);
+export const testWhatsappMessage = (target?: string) => api.post('/settings/whatsapp/test-message', { target }).then(res => res.data);
 export const testBackup = () => api.post('/settings/telegram/test-backup').then(res => res.data);

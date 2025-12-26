@@ -260,15 +260,34 @@ async def test_telegram_message(db: AsyncSession = Depends(get_db)):
         return {"error": f"Erro ao enviar teste: {str(e)}"}
 
 # Teste WhatsApp
+from fastapi import Body
+
+class WhatsAppTestRequest(BaseModel):
+    target: Optional[str] = None
+
 @router.post("/whatsapp/test-message")
-async def test_whatsapp_message_route(db: AsyncSession = Depends(get_db)):
+async def test_whatsapp_message_route(
+    req: WhatsAppTestRequest = Body(default=None),
+    db: AsyncSession = Depends(get_db)
+):
     try:
         import aiohttp
-        res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target"))
-        target = res.scalar_one_or_none()
         
-        if not target or not target.value:
-             return {"error": "Número/Grupo do WhatsApp não configurado."}
+        target_value = None
+        
+        # 1. Prioridade: Target informado no Request (Teste rápido)
+        if req and req.target:
+            target_value = req.target
+            
+        # 2. Fallback: Target salvo no Banco
+        if not target_value:
+            res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target"))
+            target_obj = res.scalar_one_or_none()
+            if target_obj:
+                target_value = target_obj.value
+        
+        if not target_value:
+             return {"error": "Nenhum destino informado (nem na requisição, nem salvo no banco)."}
              
         alert_msg = "🔔 *[WhatsApp]* Teste de Notificação: *Sucesso!* 🚀"
         
@@ -276,9 +295,9 @@ async def test_whatsapp_message_route(db: AsyncSession = Depends(get_db)):
         async with aiohttp.ClientSession() as session:
             try:
                 # Timeout curto pois é localhost
-                async with session.post(url, json={"number": target.value, "message": alert_msg}, timeout=10) as resp:
+                async with session.post(url, json={"number": target_value, "message": alert_msg}, timeout=10) as resp:
                     if resp.status == 200:
-                        return {"message": "Enviado WhatsApp"}
+                        return {"message": f"Mensagem enviada para {target_value}"}
                     elif resp.status == 404:
                          return {"error": "Número não encontrado no WhatsApp."}
                     elif resp.status == 503:

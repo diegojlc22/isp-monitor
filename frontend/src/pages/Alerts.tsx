@@ -72,8 +72,9 @@ export function Alerts() {
     async function handleTestWhatsapp() {
         setMsg(''); setConfigLoading(true);
         try {
-            await testWhatsappMessage();
-            setMsg('Teste WhatsApp enviado!');
+            // Usa o valor do input (state) para o teste
+            await testWhatsappMessage(config.whatsapp_target);
+            setMsg('Teste WhatsApp enviado com sucesso!');
         } catch (e: any) {
             setMsg('Erro WhatsApp: ' + (e.response?.data?.error || e.message));
         } finally {
