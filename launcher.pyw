@@ -219,6 +219,15 @@ class ModernLauncher:
         self.expo_process = None
         self.expo_running = False
 
+    def run_doctor(self):
+        """Executa o sistema de diagnostico e reparo"""
+        script_path = os.path.join(os.getcwd(), "tools", "reparo", "diagnostico.py")
+        if os.path.exists(script_path):
+            # Executa em nova janela para o usuario ver o processo
+            subprocess.Popen(f'start "SISTEMA DE REPARO AUTOMATICO" cmd /c "python {script_path} && pause"', shell=True)
+        else:
+            messagebox.showerror("Erro", "Modulo de reparo nao encontrado.\nVerifique tools/reparo")
+
     def build_logs_tab(self, parent):
         """Constrói a aba de logs com Terminal"""
         # Toolbar
@@ -230,6 +239,12 @@ class ModernLauncher:
             command=self.refresh_logs,
             bg=COLORS['card'], fg=COLORS['text'], relief="flat", padx=15, pady=5
         ).pack(side=tk.RIGHT)
+
+        tk.Button(
+            toolbar, text="🚑 REPARO INTELIGENTE (IA)", 
+            command=self.run_doctor,
+            bg=COLORS['warning'], fg='#1e1e2e', relief="flat", padx=15, pady=5, font=("Segoe UI", 9, "bold")
+        ).pack(side=tk.RIGHT, padx=10)
         
         tk.Label(
             toolbar, text="Monitoramento de Processos (startup.log, api.log, collector.log)",
@@ -374,19 +389,51 @@ class ModernLauncher:
                     try:
                         if 'node' in p.name().lower():
                             cmd = ' '.join(p.cmdline() or [])
-                            if 'whatsapp' in cmd and 'server.js' in cmd:
+                            # Relaxei a verificacao para detectar 'node server.js' mesmo sem path completo
+                            if 'server.js' in cmd:
                                 zap_is_running = True
                                 break
                     except: pass
                 
-                if zap_is_running != self.whatsapp_running:
-                    self.whatsapp_running = zap_is_running
-                    if zap_is_running:
-                        self.btn_whatsapp.config(text="💚 ZAP: LIGADO", bg=COLORS['success'], fg='#1e1e2e')
-                        self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['primary'])
-                        self.btn_whatsapp_test.config(state=tk.NORMAL)
-                        self.btn_whatsapp_groups.config(state=tk.NORMAL)
+                if zap_is_running:
+                    # Verificar se está PRONTO via SINAL DE ARQUIVO (Mais robusto que HTTP)
+                    status_text = "💛 ZAP: INICIANDO..."
+                    is_ready = False
+                    
+                    wa_dir = os.path.join(os.getcwd(), "tools", "whatsapp")
+                    ready_file = os.path.join(wa_dir, "whatsapp_is_ready.txt")
+                    qr_file = os.path.join(wa_dir, "whatsapp-qr.png")
+
+                    if os.path.exists(ready_file):
+                        status_text = "💚 ZAP: PRONTO"
+                        is_ready = True
+                    elif os.path.exists(qr_file):
+                        status_text = "📷 ZAP: ESCANEAR QR"
                     else:
+                        status_text = "💛 ZAP: CARREGANDO..."
+
+
+                    if zap_is_running != self.whatsapp_running or self.btn_whatsapp['text'] != status_text:
+                            self.whatsapp_running = zap_is_running
+                            self.btn_whatsapp.config(text=status_text, bg=COLORS['success'] if is_ready else COLORS['warning'], fg='#1e1e2e')
+                            
+                            if is_ready:
+                                self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                                self.btn_whatsapp_test.config(state=tk.NORMAL)
+                                self.btn_whatsapp_groups.config(state=tk.NORMAL)
+                            else:
+                                # Se tiver QR, habilita o botao QR
+                                if "QR" in status_text:
+                                    self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
+                                else:
+                                    self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                                    
+                                self.btn_whatsapp_test.config(state=tk.DISABLED)
+                                self.btn_whatsapp_groups.config(state=tk.DISABLED)
+
+                else:
+                    if zap_is_running != self.whatsapp_running:
+                        self.whatsapp_running = zap_is_running
                         self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
                         self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
                         self.btn_whatsapp_test.config(state=tk.DISABLED)
@@ -754,6 +801,54 @@ class ModernLauncher:
         # 3. Ligar novamente
         self.root.after(1000, self.toggle_whatsapp)
 
+    def send_test_to_target(self, target, name=None):
+        """Envia teste para um alvo específico"""
+        try:
+            # Salvar número novo
+            try:
+                last_num_file = os.path.join(os.getcwd(), "tools", "whatsapp", "last_number.txt")
+                with open(last_num_file, "w") as f:
+                    f.write(target)
+            except: pass
+
+            import json
+            import urllib.request
+            import urllib.error
+            
+            url = "http://127.0.0.1:3001/send"
+            msg = f"🔔 *Teste ISP Monitor*\n\nEnviado para: {name or target}\nStatus: OPERACIONAL! 🚀"
+            
+            data = json.dumps({
+                "number": target,
+                "message": msg
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+            
+            with urllib.request.urlopen(req, timeout=30) as response:
+                if response.getcode() == 200:
+                    messagebox.showinfo("Sucesso", f"Mensagem enviada para {name or target}!")
+                else:
+                    messagebox.showerror("Erro", "O servidor retornou erro.")
+                    
+        except urllib.error.HTTPError as e:
+            try:
+                error_body = e.read().decode('utf-8')
+                error_json = json.loads(error_body)
+                error_msg = error_json.get('error', error_body)
+            except:
+                error_msg = "Detalhes indisponiveis"
+
+            if e.code == 404:
+                messagebox.showerror("Erro 404", f"Número nao registrado no WhatsApp:\n{error_msg}")
+            elif e.code == 503:
+                messagebox.showwarning("Aguarde", f"O WhatsApp ainda está sincronizando.\n{error_msg}")
+            else:
+                messagebox.showerror("Erro no Servidor", f"Erro {e.code}: {e.reason}\n\nMotivo: {error_msg}")
+
+        except Exception as e:
+            messagebox.showerror("Falha no Teste", f"Erro: {e}")
+
     def test_whatsapp_msg(self):
         # 1. Tentar ler último número salvo
         last_num_file = os.path.join(os.getcwd(), "tools", "whatsapp", "last_number.txt")
@@ -769,71 +864,82 @@ class ModernLauncher:
         target = simpledialog.askstring("Teste WhatsApp", 
                                       "Qual número receberá o teste?\nFormatos: 5511999999999 ou 1203...@g.us", 
                                       initialvalue=default_val)
-        if not target: return
-
-        # 3. Salvar número novo
-        try:
-            with open(last_num_file, "w") as f:
-                f.write(target)
-        except: pass
-
-        try:
-            import json
-            import urllib.request
-            
-            url = "http://localhost:3001/send"
-            data = json.dumps({
-                "number": target,
-                "message": "🔔 *Teste ISP Monitor*\n\nO gateway de WhatsApp está OPERACIONAL! 🚀"
-            }).encode('utf-8')
-            
-            req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-            
-            with urllib.request.urlopen(req, timeout=5) as response:
-                if response.getcode() == 200:
-                    messagebox.showinfo("Sucesso", "Mensagem enviada com sucesso!")
-                else:
-                    messagebox.showerror("Erro", "O servidor retornou erro.")
-                    
-        except Exception as e:
-            messagebox.showerror("Falha no Teste", f"Erro: {e}\n\nO servidor do Zap está rodando?")
+        if target:
+            self.send_test_to_target(target)
 
     def list_whatsapp_groups(self):
-        """Busca e exibe grupos do WhatsApp"""
+        """Busca e exibe grupos do WhatsApp com UI interativa"""
         try:
             import urllib.request
             import json
-            from tkinter import scrolledtext
+            from tkinter import ttk
             
-            url = "http://localhost:3001/groups"
-            with urllib.request.urlopen(url, timeout=10) as response:
+            url = "http://127.0.0.1:3001/groups"
+            with urllib.request.urlopen(url, timeout=15) as response:
                 if response.getcode() == 200:
                     data = json.loads(response.read().decode())
+                    # Ordenar
+                    try: data.sort(key=lambda x: x['name'].lower())
+                    except: pass
                     
-                    # Criar janela de exibição
                     win = tk.Toplevel(self.root)
-                    win.title("Meus Grupos WhatsApp")
-                    win.geometry("600x400")
+                    win.title("Selecione um Grupo")
+                    win.geometry("750x550")
                     win.configure(bg=COLORS['bg'])
                     
-                    lbl = tk.Label(win, text="Copie o ID do grupo desejado (ex: 123...@g.us) e coloque no .env", 
-                                 bg=COLORS['bg'], fg=COLORS['text'], font=("Segoe UI", 10))
-                    lbl.pack(pady=10)
+                    tk.Label(win, text="Duplo clique para enviar teste ou selecione para copiar ID", 
+                             bg=COLORS['bg'], fg=COLORS['text'], font=("Segoe UI", 11)).pack(pady=10)
                     
-                    txt = scrolledtext.ScrolledText(win, width=70, height=20, font=("Consolas", 10))
-                    txt.pack(padx=10, pady=10)
+                    # Estilo Dark para Treeview
+                    style = ttk.Style()
+                    try: style.theme_use('clam')
+                    except: pass
+                    style.configure("Treeview", background="#2a2b3c", fieldbackground="#2a2b3c", foreground="white", rowheight=25)
+                    style.configure("Treeview.Heading", background="#4a4b5c", foreground="white", font=("Segoe UI", 10, "bold"))
+                    style.map("Treeview", background=[('selected', COLORS['primary'])])
                     
-                    # Formatar saída
-                    output = ""
+                    columns = ('nome', 'id')
+                    tree = ttk.Treeview(win, columns=columns, show='headings')
+                    tree.heading('nome', text='Nome do Grupo')
+                    tree.heading('id', text='ID (Copiável)')
+                    tree.column('nome', width=450)
+                    tree.column('id', width=250)
+                    
+                    # Scrollbar
+                    scrollbar = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
+                    tree.configure(yscrollcommand=scrollbar.set)
+                    
+                    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10,0), pady=10)
+                    scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=10, padx=(0,10))
+                    
                     for group in data:
-                        output += f"NOME: {group['name']}\n"
-                        output += f"ID:   {group['id']}\n"
-                        output += "-" * 40 + "\n"
+                        tree.insert('', tk.END, values=(group['name'], group['id']))
+                        
+                    def on_action(event=None):
+                        sel = tree.selection()
+                        if not sel: return
+                        item = tree.item(sel[0])
+                        target_id = item['values'][1]
+                        name = item['values'][0]
+                        
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(target_id)
+                        
+                        resp = messagebox.askyesno("Confirmar Envio", 
+                                                 f"Grupo: {name}\nID: {target_id}\n\nTudo certo! Deseja enviar o teste agora?")
+                        if resp:
+                            win.destroy()
+                            self.send_test_to_target(target_id, name)
+                            
+                    tree.bind("<Double-1>", on_action)
                     
-                    txt.insert(tk.END, output)
-                    txt.config(state=tk.DISABLED) # Read-only
+                    # Botao inferior
+                    btn_agora = tk.Button(win, text="✅ Selecionar e Testar", command=on_action,
+                                        bg=COLORS['primary'], fg='white', font=("Segoe UI", 12, "bold"), height=2)
+                    btn_agora.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=20)
+
                 else:
-                    messagebox.showerror("Erro", "Erro ao buscar grupos.")
+                    messagebox.showerror("Erro", "Erro ao buscar grupos (Status != 200).")
         except Exception as e:
             messagebox.showerror("Erro", f"Não foi possível listar grupos.\nO Zap está conectado?\n\nErro: {e}")
 

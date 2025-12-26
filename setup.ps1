@@ -42,7 +42,7 @@ $State = @{
 $MinVersions = @{
     Python     = [version]"3.11.0"
     NodeJS     = [version]"20.0.0"
-    PostgreSQL = [version]"15.0"
+    PostgreSQL = [version]"15.0.0"
     Git        = [version]"2.30.0"
 }
 
@@ -180,42 +180,77 @@ function Install-NodeJS {
 function Test-PostgreSQL {
     Write-Step "Verificando PostgreSQL..."
     
-    $psqlPath = "psql"
-    # Se nao estiver no path, procurar
-    if (-not (Get-Command "psql" -ErrorAction SilentlyContinue)) {
+    $psqlPath = $null
+    $psqlFound = $false
+    
+    # Verificar se psql esta no PATH
+    $psqlCommand = Get-Command "psql" -ErrorAction SilentlyContinue
+    if ($psqlCommand) {
+        $psqlPath = $psqlCommand.Source
+        $psqlFound = $true
+        Write-Log "psql encontrado no PATH: $psqlPath" "INFO"
+    }
+    else {
+        # Se nao estiver no path, procurar em locais comuns
         $possiblePaths = @(
+            "C:\Program Files\PostgreSQL\18\bin\psql.exe",
             "C:\Program Files\PostgreSQL\17\bin\psql.exe",
             "C:\Program Files\PostgreSQL\16\bin\psql.exe",
-            "C:\Program Files\PostgreSQL\15\bin\psql.exe"
+            "C:\Program Files\PostgreSQL\15\bin\psql.exe",
+            "C:\Program Files (x86)\PostgreSQL\18\bin\psql.exe",
+            "C:\Program Files (x86)\PostgreSQL\17\bin\psql.exe",
+            "C:\Program Files (x86)\PostgreSQL\16\bin\psql.exe",
+            "C:\Program Files (x86)\PostgreSQL\15\bin\psql.exe"
         )
         foreach ($path in $possiblePaths) {
             if (Test-Path $path) {
                 $psqlPath = $path
+                $psqlFound = $true
+                Write-Log "psql encontrado em: $path" "INFO"
                 break
             }
         }
     }
 
-    try {
-        if ($psqlPath -ne "psql") {
-            $pgVersion = & $psqlPath --version 2>&1 | Select-String -Pattern "(\d+\.\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        }
-        else {
-            $pgVersion = psql --version 2>&1 | Select-String -Pattern "(\d+\.\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        }
+    # Se nao encontrou psql, retornar false
+    if (-not $psqlFound) {
+        Write-Log "PostgreSQL nao encontrado (psql.exe nao localizado)" "WARNING"
+        return $false
+    }
 
-        if ($pgVersion) {
+    try {
+        # Executar psql --version e capturar a saida
+        $versionOutput = & $psqlPath --version 2>&1
+        
+        # Extrair versao no formato X.Y ou X.Y.Z
+        if ($versionOutput -match "(\d+)\.(\d+)(?:\.(\d+))?") {
+            $major = $matches[1]
+            $minor = $matches[2]
+            $patch = if ($matches[3]) { $matches[3] } else { "0" }
+            
+            $pgVersion = "$major.$minor.$patch"
             $version = [version]$pgVersion
+            
+            Write-Log "PostgreSQL versao detectada: $pgVersion" "INFO"
+            
             if ($version -ge $MinVersions.PostgreSQL) {
-                Write-Log "PostgreSQL $pgVersion encontrado" "SUCCESS"
+                Write-Log "PostgreSQL $pgVersion encontrado (versao compativel)" "SUCCESS"
                 return $true
             }
+            else {
+                Write-Log "PostgreSQL $pgVersion encontrado, mas versao minima eh $($MinVersions.PostgreSQL)" "WARNING"
+                return $false
+            }
+        }
+        else {
+            Write-Log "Nao foi possivel extrair a versao do PostgreSQL da saida: $versionOutput" "WARNING"
+            return $false
         }
     }
     catch {
-        Write-Log "PostgreSQL nao encontrado" "WARNING"
+        Write-Log "Erro ao verificar versao do PostgreSQL: $_" "WARNING"
+        return $false
     }
-    return $false
 }
 
 # Funcao para instalar PostgreSQL
@@ -334,6 +369,24 @@ function Install-MobilePackages {
     $State.MobilePackages = $true
 }
 
+# Funcao para instalar pacotes do WhatsApp
+function Install-WhatsappPackages {
+    Write-Step "Instalando pacotes do WhatsApp..."
+    
+    $whatsappDir = Join-Path $ProjectRoot "tools\whatsapp"
+    if (-not (Test-Path $whatsappDir)) {
+        Write-Log "Diretorio whatsapp nao encontrado!" "WARNING"
+        return
+    }
+    
+    Push-Location $whatsappDir
+    Write-Log "Instalando dependencias do whatsapp..."
+    npm install --silent
+    Pop-Location
+    
+    Write-Log "Pacotes do WhatsApp instalados com sucesso!" "SUCCESS"
+}
+
 # Funcao para configurar Ngrok
 function Install-Ngrok {
     Write-Step "Configurando Ngrok..."
@@ -389,6 +442,7 @@ function Initialize-Database {
     $psqlPath = "psql"
     if (-not (Get-Command "psql" -ErrorAction SilentlyContinue)) {
         $possiblePaths = @(
+            "C:\Program Files\PostgreSQL\18\bin\psql.exe",
             "C:\Program Files\PostgreSQL\17\bin\psql.exe",
             "C:\Program Files\PostgreSQL\16\bin\psql.exe",
             "C:\Program Files\PostgreSQL\15\bin\psql.exe"
@@ -537,6 +591,7 @@ function Main {
         Install-PythonPackages
         Install-FrontendPackages
         Install-MobilePackages
+        Install-WhatsappPackages  # Adicionado
         Install-Ngrok
         Initialize-Database
         Save-InstallationState

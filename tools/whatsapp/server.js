@@ -38,10 +38,10 @@ const client = new Client({
     authStrategy: new LocalAuth({ dataPath: './session' }),
     authTimeoutMs: 60000,
 
-    // Forçar versão mais recente do Zap Web para evitar conflito
+    // Travando em versão estavel (Fev 2024) para evitar LIDs bugs da nova versao
     webVersionCache: {
         type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2407.3.html',
     },
 
     puppeteer: {
@@ -57,7 +57,8 @@ const client = new Client({
             '--disable-gpu',
             // Camuflagem de Bot 🥷
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-        ]
+        ],
+        bypassCSP: true, // Importante para evitar erros de injeção em versões novas
     }
 });
 
@@ -82,9 +83,21 @@ client.on('ready', () => {
     console.log('[WHATSAPP] Cliente conectado e pronto!');
     isReady = true;
     qrCodeUrl = null;
+
     // Apagar o QR code se existir
     if (fs.existsSync('./whatsapp-qr.png')) {
         fs.unlinkSync('./whatsapp-qr.png');
+    }
+
+    // CRIAR ARQUIVO DE SINAL PARA O LAUNCHER
+    fs.writeFileSync('./whatsapp_is_ready.txt', 'READY');
+});
+
+client.on('disconnected', () => {
+    console.log('[WHATSAPP] Cliente desconectado!');
+    isReady = false;
+    if (fs.existsSync('./whatsapp_is_ready.txt')) {
+        fs.unlinkSync('./whatsapp_is_ready.txt');
     }
 });
 
@@ -121,18 +134,38 @@ app.post('/send', async (req, res) => {
     try {
         // Formatar número (Brasil)
         // Se vier apenas números, tenta formatar para 55DDD...
-        let formattedNumber = number.replace(/\D/g, '');
+        // Limpar caracteres não numéricos se não for ID de grupo
+        let chatId = number.trim();
 
-        if (!formattedNumber.endsWith('@c.us')) {
-            if (formattedNumber.length <= 11) {
-                formattedNumber = '55' + formattedNumber;
+        // Lógica inteligente de ID
+        if (chatId.includes('@g.us')) {
+            // É um grupo, usar como está
+        } else if (chatId.includes('@c.us')) {
+            // Já tem sufixo de contato, usar como está
+        } else {
+            // É apenas número telefônico
+            let cleanNumber = chatId.replace(/\D/g, '');
+
+            // Brasil: Adicionar 55 se estiver sem DDI e tiver tamanho de DDD+CEL (10 ou 11)
+            if (cleanNumber.length >= 10 && cleanNumber.length <= 11) {
+                cleanNumber = '55' + cleanNumber;
             }
-            formattedNumber += '@c.us';
+
+            chatId = cleanNumber + '@c.us';
         }
 
-        const response = await client.sendMessage(formattedNumber, message);
-        res.json({ success: true, id: response.id._serialized });
-        console.log(`[WHATSAPP] Mensagem enviada para ${number}`);
+        // Se for contato, verificar se existe antes de enviar para evitar crash "No LID"
+        if (chatId.includes('@c.us')) {
+            const user = await client.getNumberId(chatId.split('@')[0]);
+            if (!user) {
+                return res.status(404).json({ error: 'Número não registrado no WhatsApp.' });
+            }
+            chatId = user._serialized; // Usa o ID oficial retornado pelo Zap
+        }
+
+        const response = await client.sendMessage(chatId, message);
+        res.json({ success: true, id: response.id._serialized, target: chatId });
+        console.log(`[WHATSAPP] Mensagem enviada para ${chatId}`);
 
     } catch (error) {
         console.error('[WHATSAPP] Erro ao enviar mensagem:', error);
@@ -169,6 +202,12 @@ app.get('/groups', async (req, res) => {
 // Inicializar Servidor
 app.listen(PORT, () => {
     console.log(`[GATEWAY] Servidor API WhatsApp rodando na porta ${PORT}`);
+
+    // Limpar arquivo de flag antigo
+    if (fs.existsSync('./whatsapp_is_ready.txt')) {
+        try { fs.unlinkSync('./whatsapp_is_ready.txt'); } catch (e) { }
+    }
+
     console.log(`[GATEWAY] Iniciando cliente WhatsApp Web... aguarde.`);
     client.initialize();
 });
