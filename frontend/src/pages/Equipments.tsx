@@ -104,6 +104,11 @@ export function Equipments() {
     const [showWirelessModal, setShowWirelessModal] = useState(false);
     const [selectedWirelessEq, setSelectedWirelessEq] = useState<Equipment | null>(null);
 
+    // Templates
+    const [templates, setTemplates] = useState<Record<string, Partial<FormData>>>({});
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [templateName, setTemplateName] = useState('');
+
     // --- Actions ---
     const load = useCallback(async () => {
         try {
@@ -127,6 +132,66 @@ export function Equipments() {
             }
         };
     }, []);
+
+    // Load templates from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem('equipment_templates');
+        if (saved) {
+            try {
+                setTemplates(JSON.parse(saved));
+            } catch (e) {
+                console.error('Error loading templates:', e);
+            }
+        }
+    }, []);
+
+    // Template functions
+    function saveTemplate() {
+        if (!templateName.trim()) {
+            alert('Digite um nome para o template');
+            return;
+        }
+
+        const newTemplates = {
+            ...templates,
+            [templateName]: {
+                brand: formData.brand,
+                equipment_type: formData.equipment_type,
+                ssh_user: formData.ssh_user,
+                ssh_port: formData.ssh_port,
+                snmp_community: formData.snmp_community,
+                snmp_version: formData.snmp_version,
+                snmp_port: formData.snmp_port,
+                snmp_interface_index: formData.snmp_interface_index,
+                is_mikrotik: formData.is_mikrotik,
+                mikrotik_interface: formData.mikrotik_interface,
+                api_port: formData.api_port
+            }
+        };
+
+        setTemplates(newTemplates);
+        localStorage.setItem('equipment_templates', JSON.stringify(newTemplates));
+        setShowTemplateModal(false);
+        setTemplateName('');
+        alert(`Template "${templateName}" salvo com sucesso!`);
+    }
+
+    function loadTemplate(name: string) {
+        const template = templates[name];
+        if (template) {
+            setFormData({ ...formData, ...template });
+            alert(`Template "${name}" carregado!`);
+        }
+    }
+
+    function deleteTemplate(name: string) {
+        if (!confirm(`Deseja realmente excluir o template "${name}"?`)) return;
+
+        const newTemplates = { ...templates };
+        delete newTemplates[name];
+        setTemplates(newTemplates);
+        localStorage.setItem('equipment_templates', JSON.stringify(newTemplates));
+    }
 
     const filteredEquipments = useMemo(() => {
         let result = equipments;
@@ -579,7 +644,46 @@ export function Equipments() {
             {showModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
-                        <h3 className="text-xl font-bold text-white mb-6 border-b border-slate-800 pb-2">{editingEquipment ? 'Editar Equipamento' : 'Novo Equipamento'}</h3>
+                        <h3 className="text-xl font-bold text-white mb-4 border-b border-slate-800 pb-2">{editingEquipment ? 'Editar Equipamento' : 'Novo Equipamento'}</h3>
+
+                        {/* Templates Section */}
+                        {!editingEquipment && Object.keys(templates).length > 0 && (
+                            <div className="mb-4 p-3 bg-slate-950/50 rounded-lg border border-slate-800">
+                                <label className="block text-xs font-medium text-slate-400 mb-2">📋 Carregar Template</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                        onChange={(e) => { if (e.target.value) loadTemplate(e.target.value); e.target.value = ''; }}
+                                    >
+                                        <option value="">Selecione um template...</option>
+                                        {Object.keys(templates).map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowTemplateModal(true)}
+                                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
+                                        title="Salvar configuração atual como template"
+                                    >
+                                        💾 Salvar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {!editingEquipment && Object.keys(templates).length === 0 && (
+                            <div className="mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTemplateModal(true)}
+                                    className="w-full px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-sm rounded-lg transition-colors border border-purple-500/30"
+                                >
+                                    💾 Salvar configuração como template
+                                </button>
+                            </div>
+                        )}
+
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -1001,6 +1105,66 @@ export function Equipments() {
                         <div className="p-4 border-t border-slate-800 flex justify-end bg-slate-900 rounded-b-xl">
                             <button onClick={() => setShowWirelessModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors border border-slate-700">
                                 Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Template Save Modal */}
+            {showTemplateModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-md shadow-2xl p-6">
+                        <h3 className="text-xl font-bold text-white mb-4">💾 Salvar Template</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-2">Nome do Template</label>
+                                <input
+                                    type="text"
+                                    value={templateName}
+                                    onChange={(e) => setTemplateName(e.target.value)}
+                                    placeholder="Ex: Ubiquiti Padrão"
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    autoFocus
+                                />
+                            </div>
+
+                            {Object.keys(templates).length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-2">Templates Salvos</label>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                                        {Object.keys(templates).map(name => (
+                                            <div key={name} className="flex items-center justify-between bg-slate-950 rounded px-3 py-2">
+                                                <span className="text-sm text-slate-300">{name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => deleteTemplate(name)}
+                                                    className="text-rose-400 hover:text-rose-300 text-xs"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => { setShowTemplateModal(false); setTemplateName(''); }}
+                                className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={saveTemplate}
+                                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                            >
+                                Salvar Template
                             </button>
                         </div>
                     </div>
