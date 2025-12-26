@@ -152,8 +152,8 @@ async def monitor_job_fast():
         cycle_start = time.time()
         try:
             async with AsyncSessionLocal() as session:
-                # 1. Refresh Config Cache (Every 60s)
-                if time.time() - config_cache["last_update"] > 60:
+                # 1. Refresh Config Cache (Every 5s - Faster response to settings changes)
+                if time.time() - config_cache["last_update"] > 5:
                     try:
                         keys = ["telegram_token", "telegram_chat_id", "telegram_template_down", "telegram_template_up", "whatsapp_enabled", "whatsapp_target", "whatsapp_target_group", "telegram_enabled"]
                         res = await session.execute(select(Parameters).where(Parameters.key.in_(keys)))

@@ -75,6 +75,10 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     # Novos Campos
     await upsert("telegram_enabled", "true" if config.telegram_enabled else "false")
     await upsert("whatsapp_enabled", "true" if config.whatsapp_enabled else "false")
+    
+    print(f"[DEBUG SAVE] whatsapp_target = '{config.whatsapp_target}'")
+    print(f"[DEBUG SAVE] whatsapp_target_group = '{config.whatsapp_target_group}'")
+    
     await upsert("whatsapp_target", config.whatsapp_target)
     await upsert("whatsapp_target_group", config.whatsapp_target_group)
 
@@ -274,30 +278,46 @@ async def test_whatsapp_message_route(
 ):
     try:
         import aiohttp
+        print(f"[DEBUG SETTINGS] Teste WhatsApp solicitado via Painel.")
         
         target_value = None
         
         # 1. Prioridade: Target informado no Request (Teste rápido)
         if req and req.target:
             target_value = req.target
+            print(f"[DEBUG SETTINGS] Alvo informado no request: {target_value}")
             
-        # 2. Fallback: Target salvo no Banco
+        # 2. Fallback: Target salvo no Banco (Busca AMBOS: individual E grupo)
         if not target_value:
-            res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target"))
+            # Tenta buscar o grupo primeiro
+            res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target_group"))
             target_obj = res.scalar_one_or_none()
-            if target_obj:
+            if target_obj and target_obj.value:
                 target_value = target_obj.value
+                print(f"[DEBUG SETTINGS] Alvo do banco (GRUPO): {target_value}")
+            
+            # Se não tiver grupo, tenta individual
+            if not target_value:
+                res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target"))
+                target_obj = res.scalar_one_or_none()
+                if target_obj and target_obj.value:
+                    target_value = target_obj.value
+                    print(f"[DEBUG SETTINGS] Alvo do banco (INDIVIDUAL): {target_value}")
         
         if not target_value:
+             print("[DEBUG SETTINGS] ERRO: Nenhum alvo encontrado.")
              return {"error": "Nenhum destino informado (nem na requisição, nem salvo no banco)."}
              
         alert_msg = "🔔 *[WhatsApp]* Teste de Notificação: *Sucesso!* 🚀"
         
         url = "http://127.0.0.1:3001/send"
+        print(f"[DEBUG SETTINGS] Enviando POST para {url}...")
+        
         async with aiohttp.ClientSession() as session:
             try:
                 # Timeout curto pois é localhost
                 async with session.post(url, json={"number": target_value, "message": alert_msg}, timeout=10) as resp:
+                    print(f"[DEBUG SETTINGS] Resposta Gateway: Status {resp.status}")
                     if resp.status == 200:
                         return {"message": f"Mensagem enviada para {target_value}"}
                     elif resp.status == 404:
@@ -306,8 +326,10 @@ async def test_whatsapp_message_route(
                          return {"error": "WhatsApp sincronizando/carregando. Tente em breve."}
                     else:
                         text = await resp.text()
+                        print(f"[DEBUG SETTINGS] Erro Corpo: {text}")
                         return {"error": f"Erro Gateway: {text}"}
             except Exception as conn_err:
+                 print(f"[DEBUG SETTINGS] Exception Conexão: {conn_err}")
                  return {"error": f"Falha ao conectar no Gateway Zap (Porta 3001): {conn_err}"}
 
     except Exception as e:

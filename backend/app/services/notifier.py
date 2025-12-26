@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 ALERT_TYPE = os.getenv("ALERT_TYPE", "telegram").lower() # telegram, whatsapp, both
 TELEGRAM_TOKEN_ENV = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID_ENV = os.getenv("TELEGRAM_CHAT_ID")
-WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "http://localhost:3000/send")
+WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "http://localhost:3001/send")
 WHATSAPP_NUMBER = os.getenv("WHATSAPP_TARGET_NUMBER", "") # Numero do admin
 
 async def send_notification(
@@ -43,16 +43,18 @@ async def send_notification(
         tasks.append(send_telegram(message, token, chat_id))
 
     # 2. WhatsApp
-    # Verifica habilitacao
     should_send_wa = whatsapp_enabled
     target_1 = whatsapp_target or WHATSAPP_NUMBER
     target_2 = whatsapp_target_group
     
     if should_send_wa:
-        if target_1:
-            tasks.append(send_whatsapp(message, target_1))
+        print(f"[DEBUG NOTIFIER] WA Enabled. Target1(Num)={target_1}, Target2(Group)={target_2}")
         if target_2:
+             print(f"[DEBUG NOTIFIER] -> Enviando para GRUPO: {target_2}")
              tasks.append(send_whatsapp(message, target_2))
+        elif target_1:
+            print(f"[DEBUG NOTIFIER] -> Enviando para INDIVIDUAL: {target_1}")
+            tasks.append(send_whatsapp(message, target_1))
         
     # Execute Async
     if tasks:

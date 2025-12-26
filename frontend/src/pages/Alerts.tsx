@@ -71,11 +71,11 @@ export function Alerts() {
         }
     }
 
-    async function handleTestWhatsapp() {
+    async function handleTestWhatsapp(targetOverride?: string) {
         setMsg(''); setConfigLoading(true);
         try {
-            // Usa o valor do input (state) para o teste
-            await testWhatsappMessage(config.whatsapp_target);
+            // Usa o valor passado pelo botão
+            await testWhatsappMessage(targetOverride || config.whatsapp_target);
             setMsg('Teste WhatsApp enviado com sucesso!');
         } catch (e: any) {
             setMsg('Erro WhatsApp: ' + (e.response?.data?.error || e.message));
@@ -149,22 +149,32 @@ export function Alerts() {
                             <div className={`space-y-4 ${!config.whatsapp_enabled && 'opacity-50 pointer-events-none'}`}>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-400 mb-1">Destino Individual (Número)</label>
-                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
-                                        value={config.whatsapp_target} onChange={e => setConfig({ ...config, whatsapp_target: e.target.value })}
-                                        placeholder="551199..." />
+                                    <div className="flex gap-2">
+                                        <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
+                                            value={config.whatsapp_target} onChange={e => setConfig({ ...config, whatsapp_target: e.target.value })}
+                                            placeholder="551199..." />
+                                        <button type="button" onClick={() => handleTestWhatsapp(config.whatsapp_target)}
+                                            disabled={!config.whatsapp_target}
+                                            className="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-600 text-xs disabled:opacity-50">
+                                            Testar
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div>
                                     <label className="block text-xs font-medium text-slate-400 mb-1">ID do Grupo (Copie do Launcher)</label>
-                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
-                                        value={(config as any).whatsapp_target_group || ''}
-                                        onChange={e => setConfig({ ...config, whatsapp_target_group: e.target.value } as any)}
-                                        placeholder="12036...@g.us" />
+                                    <div className="flex gap-2">
+                                        <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
+                                            value={(config as any).whatsapp_target_group || ''}
+                                            onChange={e => setConfig({ ...config, whatsapp_target_group: e.target.value } as any)}
+                                            placeholder="12036...@g.us" />
+                                        <button type="button" onClick={() => handleTestWhatsapp((config as any).whatsapp_target_group)}
+                                            disabled={!(config as any).whatsapp_target_group}
+                                            className="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-600 text-xs disabled:opacity-50">
+                                            Testar
+                                        </button>
+                                    </div>
                                 </div>
-
-                                <button type="button" onClick={handleTestWhatsapp} className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
-                                    <MessageCircle size={12} /> Testar Envio WhatsApp
-                                </button>
                             </div>
                         </div>
 

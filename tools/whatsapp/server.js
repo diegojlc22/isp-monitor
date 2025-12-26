@@ -121,51 +121,51 @@ app.get('/status', (req, res) => {
 
 // 2. Enviar Mensagem
 app.post('/send', async (req, res) => {
-    if (!isReady) {
-        return res.status(503).json({ error: 'WhatsApp ainda não está conectado/pronto.' });
-    }
-
-    const { number, message } = req.body;
-
-    if (!number || !message) {
-        return res.status(400).json({ error: 'Número e mensagem são obrigatórios.' });
-    }
-
     try {
-        // Formatar número (Brasil)
-        // Se vier apenas números, tenta formatar para 55DDD...
-        // Limpar caracteres não numéricos se não for ID de grupo
+        const { number, message } = req.body;
+        console.log(`[API /send] Recebido: Target='${number}', Message='${message}'`);
+
+        if (!number || !message) {
+            return res.status(400).json({ error: 'Número e mensagem são obrigatórios' });
+        }
+
+        if (!isReady) {
+            return res.status(503).json({ error: 'WhatsApp ainda não está pronto.' });
+        }
+
         let chatId = number.trim();
 
         // Lógica inteligente de ID
         if (chatId.includes('@g.us')) {
-            // É um grupo, usar como está
+            console.log(`[API /send] Detectado GRUPO: ${chatId}`);
+            // É um grupo, confiar no ID passado
         } else if (chatId.includes('@c.us')) {
-            // Já tem sufixo de contato, usar como está
+            // Já tem sufixo de contato
         } else {
-            // É apenas número telefônico
+            // É apenas número telefônico -> Formatar
             let cleanNumber = chatId.replace(/\D/g, '');
-
             // Brasil: Adicionar 55 se estiver sem DDI e tiver tamanho de DDD+CEL (10 ou 11)
             if (cleanNumber.length >= 10 && cleanNumber.length <= 11) {
                 cleanNumber = '55' + cleanNumber;
             }
-
             chatId = cleanNumber + '@c.us';
         }
 
-        // Se for contato, verificar se existe antes de enviar para evitar crash "No LID"
+        // Se for contato, verificar validação. Se for grupo, tenta enviar direto.
         if (chatId.includes('@c.us')) {
             const user = await client.getNumberId(chatId.split('@')[0]);
             if (!user) {
+                console.warn(`[API /send] Número inválido/não registrado: ${chatId}`);
                 return res.status(404).json({ error: 'Número não registrado no WhatsApp.' });
             }
-            chatId = user._serialized; // Usa o ID oficial retornado pelo Zap
+            chatId = user._serialized;
         }
 
+        console.log(`[API /send] Enviando para: ${chatId}`);
         const response = await client.sendMessage(chatId, message);
+
         res.json({ success: true, id: response.id._serialized, target: chatId });
-        console.log(`[WHATSAPP] Mensagem enviada para ${chatId}`);
+        console.log(`[WHATSAPP] Mensagem enviada com sucesso para ${chatId}`);
 
     } catch (error) {
         console.error('[WHATSAPP] Erro ao enviar mensagem:', error);

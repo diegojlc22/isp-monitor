@@ -15,6 +15,8 @@ import threading
 import qrcode
 from PIL import Image, ImageTk
 import socket
+import requests
+
 
 # Cores (Tema Dark Moderno)
 COLORS = {
@@ -140,10 +142,27 @@ class ModernLauncher:
         force_frame = tk.Frame(parent, bg=COLORS['bg'])
         force_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
 
-        tk.Label(force_frame, text="Controle do Sistema", font=("Segoe UI", 12, "bold"), bg=COLORS['bg'], fg=COLORS['text']).pack(pady=(0,20))
+        # --- STATUS DO FRONTEND ---
+        self.frontend_frame = tk.Frame(force_frame, bg=COLORS['card'], padx=10, pady=5)
+        self.frontend_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        lbl_fe = tk.Label(self.frontend_frame, text="Interface Web:", font=("Segoe UI", 10, "bold"), bg=COLORS['card'], fg=COLORS['text'])
+        lbl_fe.pack(side=tk.LEFT)
+        
+        self.btn_update_front = tk.Button(self.frontend_frame, text="✔ Sistema Atualizado", 
+                                          command=self.run_frontend_build_manual,
+                                          bg=COLORS['card'], fg=COLORS['success'], relief="flat", state="disabled", font=("Segoe UI", 9))
+        self.btn_update_front.pack(side=tk.RIGHT)
 
-        self.btn_start = self.create_button(force_frame, "▶ INICIAR MONITORAMENTO", self.start_system, bg=COLORS['success'], fg='#1e1e2e', height=2, font=("Segoe UI", 11, "bold"))
-        self.btn_start.pack(fill=tk.X, pady=10)
+        # --- CONTROLES GERAIS ---
+        tk.Label(force_frame, text="Controle do Servidor", font=("Segoe UI", 12, "bold"), bg=COLORS['bg'], fg=COLORS['text']).pack(pady=(0,10))
+
+        self.btn_start = self.create_button(force_frame, "▶ INICIAR SERVIDOR (Prod)", self.start_system, bg=COLORS['success'], fg='#1e1e2e', height=2, font=("Segoe UI", 11, "bold"))
+        self.btn_start.pack(fill=tk.X, pady=5)
+        
+        # Botão Modo DEV
+        self.btn_dev_mode = self.create_button(force_frame, "⚡ MODO EDIÇÃO (Hot Reload)", self.start_dev_mode, bg='#9b59b6', fg='#ffffff', height=1, font=("Segoe UI", 10))
+        self.btn_dev_mode.pack(fill=tk.X, pady=5)
 
         self.btn_stop = self.create_button(force_frame, "⏹ PARAR SISTEMA", self.stop_system, bg='#45475a', fg=COLORS['danger'], height=2)
         self.btn_stop.pack(fill=tk.X, pady=10)
@@ -151,13 +170,61 @@ class ModernLauncher:
         self.btn_restart = self.create_button(force_frame, "🔄 REINICIAR TUDO", self.restart_system, bg=COLORS['warning'], fg='#1e1e2e')
         self.btn_restart.pack(fill=tk.X, pady=10)
 
-        tk.Frame(force_frame, bg=COLORS['bg'], height=20).pack() # Spacer
+        tk.Frame(force_frame, bg=COLORS['bg'], height=10).pack() # Spacer
 
         self.btn_kill = self.create_button(force_frame, "💀 FORCE KILL (Emergência)", self.force_kill, bg='#2a2a2a', fg=COLORS['danger'])
         self.btn_kill.pack(fill=tk.X, pady=10)
         
-        btn_dash = self.create_button(force_frame, "🌐 Abrir Navegador", self.open_dashboard, bg=COLORS['primary'], fg='#ffffff')
+        btn_dash = self.create_button(force_frame, "🌐 Abrir Navegador (Produção)", self.open_dashboard, bg=COLORS['primary'], fg='#ffffff')
         btn_dash.pack(fill=tk.X, pady=10)
+        
+        # Start background check
+        threading.Thread(target=self.check_frontend_updates_async, daemon=True).start()
+
+    def check_frontend_updates_async(self):
+        """Verifica atualizações em background sem travar UI"""
+        try:
+            current = self.calculate_frontend_hash()
+            
+            hash_file = os.path.join("frontend", ".build_hash")
+            saved = ""
+            if os.path.exists(hash_file):
+                with open(hash_file, "r") as f: saved = f.read().strip()
+            
+            if current != saved:
+                self.root.after(0, self.notify_update_available)
+        except: pass
+
+    def notify_update_available(self):
+        """Atualiza UI para avisar que precisa de build"""
+        self.btn_update_front.config(text="⚠ Atualização Disponível (Clique p/ Compilar)", 
+                                     bg=COLORS['warning'], fg='#1e1e2e', state="normal", cursor="hand2")
+
+    def run_frontend_build_manual(self):
+        current = self.calculate_frontend_hash()
+        hash_file = os.path.join("frontend", ".build_hash")
+        if self.run_frontend_build(current, hash_file):
+            self.btn_update_front.config(text="✔ Sistema Atualizado", bg=COLORS['card'], fg=COLORS['success'], state="disabled")
+
+    def start_dev_mode(self):
+        """Inicia servidor Vite para desenvolvimento rápido"""
+        if self.is_running:
+            if not messagebox.askyesno("Servidor Rodando", "O servidor de produção está rodando. Deseja parar ele para rodar o modo DEV?"):
+                return
+            self.stop_system()
+            
+        # Iniciar Backend (Sem frontend estático, apenas API)
+        script = "iniciar_postgres.bat"
+        if os.path.exists(script):
+             subprocess.Popen([script], creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Iniciar Vite
+        frontend_dir = os.path.join(os.getcwd(), "frontend")
+        cmd = "start cmd /k npm run dev"
+        subprocess.Popen(cmd, shell=True, cwd=frontend_dir)
+        
+        self.info_label.config(text="Modo DEV iniciado! API na 8000, Frontend na 5173.")
+
 
     def build_whatsapp_tab(self, parent):
         """Aba WhatsApp Gateway"""
@@ -395,21 +462,29 @@ class ModernLauncher:
             # Logic here is complex because of status text, only update if significant change
             # But we must update if process state changed OR if we see the 'ready' file update
             
-            # Check ZAP File Status
+            # Check ZAP API Status
             status_text = "💛 ZAP: INICIANDO..."
             is_ready = False
-            wa_dir = os.path.join(os.getcwd(), "tools", "whatsapp")
-            ready_file = os.path.join(wa_dir, "whatsapp_is_ready.txt")
-            qr_file = os.path.join(wa_dir, "whatsapp-qr.png")
-
+            qr_available = False
+            
             if zap_is_running:
-                if os.path.exists(ready_file):
-                    status_text = "💚 ZAP: PRONTO"
-                    is_ready = True
-                elif os.path.exists(qr_file):
-                    status_text = "📷 ZAP: ESCANEAR QR"
-                else:
+                try:
+                    # 500ms timeout para não travar a UI
+                    resp = requests.get("http://localhost:3001/status", timeout=0.5)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("ready"):
+                            status_text = "💚 ZAP: PRONTO"
+                            is_ready = True
+                        elif data.get("qr_code_available"):
+                            status_text = "📷 ZAP: ESCANEAR QR"
+                            qr_available = True
+                        else:
+                            status_text = "💛 ZAP: CARREGANDO..."
+                except:
+                    # Se der erro de conexão mas o processo tá rodando, é porque ainda tá subindo o express
                     status_text = "💛 ZAP: CARREGANDO..."
+
             else:
                  status_text = "💚 ZAP: DESLIGADO"
 
@@ -432,7 +507,7 @@ class ModernLauncher:
                         self.btn_whatsapp_test.config(state=tk.NORMAL)
                         self.btn_whatsapp_groups.config(state=tk.NORMAL)
                     else:
-                        if "QR" in status_text:
+                        if qr_available:
                             self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
                         else:
                             self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
@@ -502,9 +577,9 @@ class ModernLauncher:
             print(f"[LAUNCHER] Erro no checkup: {e}")
         # ----------------------
         
-        # Verificar Frontend antes de iniciar
-        if not self.check_and_rebuild_frontend():
-             return
+        # Verificar Frontend antes de iniciar (Removido - Agora é Async)
+        # if not self.check_and_rebuild_frontend():
+        #      return
 
         script = "iniciar_postgres.bat"
         if not os.path.exists(script):
@@ -528,6 +603,49 @@ class ModernLauncher:
             
         except Exception as e:
             messagebox.showerror("Erro", str(e))
+            
+    def force_kill(self):
+        """Limpeza AGRESSIVA de todos os processos (Botão de Emergência)"""
+        if not messagebox.askyesno("⚠ FORCE KILL", 
+            "Isso vai MATAR TODOS os processos do sistema:\n\n"
+            "• Node.js (WhatsApp)\n"
+            "• Python (Backend/Launcher)\n"
+            "• PostgreSQL (Banco)\n\n"
+            "Use apenas se algo travou.\n\n"
+            "Deseja continuar?"):
+            return
+        
+        self.info_label.config(text="🔥 FORCE KILL em andamento...")
+        self.root.update()
+        
+        try:
+            print("[FORCE KILL] Executando limpeza agressiva...")
+            
+            # 1. Taskkill padrão
+            os.system("taskkill /F /IM node.exe /T >nul 2>&1")
+            os.system("taskkill /F /IM python.exe /T >nul 2>&1")
+            os.system("taskkill /F /IM pythonw.exe /T >nul 2>&1")
+            os.system("taskkill /F /IM postgres.exe /T >nul 2>&1")
+            
+            # 2. WMIC para processos órfãos (força bruta)
+            os.system('wmic process where "name=\'node.exe\'" delete >nul 2>&1')
+            os.system('wmic process where "name=\'python.exe\'" delete >nul 2>&1')
+            os.system('wmic process where "name=\'pythonw.exe\'" delete >nul 2>&1')
+            
+            print("[FORCE KILL] Limpeza completa.")
+            
+            self.info_label.config(text="✅ FORCE KILL concluído. Arquivos liberados.")
+            self.status_badge.config(text=" ● OFFLINE ", fg=COLORS['danger'])
+            self.is_running = False
+            self.whatsapp_running = False
+            
+            messagebox.showinfo("Sucesso", 
+                "Todos os processos foram eliminados.\n\n"
+                "Você pode iniciar o sistema novamente.")
+            
+        except Exception as e:
+            print(f"[FORCE KILL] Erro: {e}")
+            messagebox.showerror("Erro", f"Erro ao executar Force Kill:\n{e}")
             
     # --- SMART BUILD SYSTEM ---
     
@@ -659,14 +777,31 @@ class ModernLauncher:
         else:
             # Ligar
             try:
+                 # 1. Matar Zumbis (Prevenir EADDRINUSE)
+                 for proc in psutil.process_iter(['name', 'cmdline']):
+                    try:
+                        if 'node' in proc.info['name'].lower():
+                            cmd = ' '.join(proc.info['cmdline'] or [])
+                            if 'whatsapp' in cmd and 'server.js' in cmd:
+                                proc.kill()
+                    except: pass
+                 time.sleep(1) # Dar tempo para liberar porta
+            
                  script_path = os.path.join(os.getcwd(), "tools", "whatsapp", "server.js")
                  if not os.path.exists(script_path):
                      messagebox.showerror("Erro", "Gateway não instalado.\nRode INSTALAR_ZAP.bat primeiro.")
                      return
                  
-                 # Iniciar Node em background
+                 # Iniciar Node em background (LOGGING ATIVADO)
                  cwd = os.path.join(os.getcwd(), "tools", "whatsapp")
+                 log_file = os.path.join(cwd, "whatsapp.log")
+                 
+                 # Usar um arquivo para capturar stdout/stderr
+                 # Importante: Não usar 'with open' aqui pois o file handle precisa ficar aberto para o subprocesso
+                 f_log = open(log_file, "w")
+                 
                  subprocess.Popen(["node", "server.js"], cwd=cwd, 
+                                  stdout=f_log, stderr=f_log,
                                   creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
                  
                  self.whatsapp_running = True
@@ -676,22 +811,15 @@ class ModernLauncher:
                  self.btn_whatsapp_groups.config(state=tk.NORMAL)
                  self.info_label.config(text="Iniciando WhatsApp... Aguarde QR Code.")
                  
-                 # Verificar QR code em loop
-                 self.root.after(2000, self.check_whatsapp_qr)
+                 # Verificar QR code em loop (via API agora checada no main loop)
+                 # self.root.after(2000, self.check_whatsapp_qr)
                  
             except Exception as e:
                  messagebox.showerror("Erro", f"Erro ao ligar Zap: {e}")
 
     def check_whatsapp_qr(self):
-        if not self.whatsapp_running: return
-        qr_path = os.path.join("tools", "whatsapp", "whatsapp-qr.png")
-        # Se o arquivo existe e é recente (evitar abrir antigo)
-        if os.path.exists(qr_path):
-            self.btn_whatsapp_qr.config(text="📷 ESCANEAR QR!", bg=COLORS['danger'])
-            # Não forcar popup modal, apenas avisar no label
-            self.info_label.config(text="QR Code pronto! Clique em 📷 QR para escanear.")
-        elif self.whatsapp_running:
-            self.root.after(3000, self.check_whatsapp_qr)
+        # Deprecated: Logic moved to check_status API call
+        pass
 
     def open_whatsapp_qr(self):
         qr_path = os.path.join(os.getcwd(), "tools", "whatsapp", "whatsapp-qr.png")
@@ -1332,7 +1460,34 @@ class ModernLauncher:
             self.root.after(2000, self.refresh_expo_logs)
 
 
+    def on_closing(self):
+        """Handler para fechar a janela com limpeza agressiva"""
+        if messagebox.askokcancel("Sair", "Deseja realmente sair? O monitoramento será interrompido."):
+            self.stop_system()
+            self.root.destroy()
+            
+            # Limpeza AGRESSIVA de processos (Force Kill Total)
+            print("[LAUNCHER] Executando limpeza agressiva de processos...")
+            try:
+                # 1. Taskkill padrão
+                os.system("taskkill /F /IM node.exe /T >nul 2>&1")
+                os.system("taskkill /F /IM python.exe /T >nul 2>&1")
+                os.system("taskkill /F /IM pythonw.exe /T >nul 2>&1")
+                os.system("taskkill /F /IM postgres.exe /T >nul 2>&1")
+                
+                # 2. WMIC para processos órfãos (força bruta)
+                os.system('wmic process where "name=\'node.exe\'" delete >nul 2>&1')
+                os.system('wmic process where "name=\'python.exe\'" delete >nul 2>&1')
+                os.system('wmic process where "name=\'pythonw.exe\'" delete >nul 2>&1')
+                
+                print("[LAUNCHER] Limpeza completa. Arquivos liberados.")
+            except Exception as e:
+                print(f"[LAUNCHER] Erro na limpeza: {e}")
+            
+            sys.exit(0)
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = ModernLauncher(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
