@@ -256,3 +256,114 @@ async def get_traffic_history(
     }
 
 
+# ===== CSV IMPORT/EXPORT =====
+import csv
+import io
+from fastapi.responses import Response
+
+@router.get("/export/csv")
+async def export_equipments_csv(db: AsyncSession = Depends(get_db)):
+    """Exporta todos os equipamentos para CSV"""
+    result = await db.execute(select(Equipment))
+    equipments = result.scalars().all()
+    
+    # Criar CSV em memória
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        'name', 'ip', 'tower_id', 'parent_id', 'brand', 'equipment_type',
+        'ssh_user', 'ssh_port', 'snmp_community', 'snmp_version', 'snmp_port',
+        'snmp_interface_index', 'is_mikrotik', 'mikrotik_interface', 'api_port'
+    ])
+    
+    # Data
+    for eq in equipments:
+        writer.writerow([
+            eq.name, eq.ip, eq.tower_id or '', eq.parent_id or '', eq.brand or 'generic',
+            eq.equipment_type or 'station', eq.ssh_user or 'admin', eq.ssh_port or 22,
+            eq.snmp_community or 'public', eq.snmp_version or 1, eq.snmp_port or 161,
+            eq.snmp_interface_index or 1, eq.is_mikrotik or False,
+            eq.mikrotik_interface or '', eq.api_port or 8728
+        ])
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=equipments_export.csv"}
+    )
+
+
+from fastapi import UploadFile, File
+
+@router.post("/import/csv")
+async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Importa equipamentos de um arquivo CSV"""
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Arquivo deve ser CSV")
+    
+    content = await file.read()
+    decoded = content.decode('utf-8')
+    reader = csv.DictReader(io.StringIO(decoded))
+    
+    results = {
+        'success': [],
+        'failed': [],
+        'skipped': []
+    }
+    
+    for row in reader:
+        try:
+            # Validar IP obrigatório
+            if not row.get('ip'):
+                results['failed'].append({'row': row, 'reason': 'IP obrigatório'})
+                continue
+            
+            # Verificar se já existe
+            existing = await db.execute(select(Equipment).where(Equipment.ip == row['ip']))
+            if existing.scalar_one_or_none():
+                results['skipped'].append({'ip': row['ip'], 'reason': 'IP já existe'})
+                continue
+            
+            # Criar equipamento
+            eq_data = {
+                'name': row.get('name') or f"Dispositivo {row['ip']}",
+                'ip': row['ip'],
+                'tower_id': int(row['tower_id']) if row.get('tower_id') and row['tower_id'].strip() else None,
+                'parent_id': int(row['parent_id']) if row.get('parent_id') and row['parent_id'].strip() else None,
+                'brand': row.get('brand') or 'generic',
+                'equipment_type': row.get('equipment_type') or 'station',
+                'ssh_user': row.get('ssh_user') or 'admin',
+                'ssh_port': int(row.get('ssh_port', 22)),
+                'snmp_community': row.get('snmp_community') or 'public',
+                'snmp_version': int(row.get('snmp_version', 1)),
+                'snmp_port': int(row.get('snmp_port', 161)),
+                'snmp_interface_index': int(row.get('snmp_interface_index', 1)),
+                'is_mikrotik': row.get('is_mikrotik', '').lower() in ['true', '1', 'yes'],
+                'mikrotik_interface': row.get('mikrotik_interface') or '',
+                'api_port': int(row.get('api_port', 8728))
+            }
+            
+            db_eq = Equipment(**eq_data)
+            db.add(db_eq)
+            results['success'].append(row['ip'])
+            
+        except Exception as e:
+            results['failed'].append({'row': row, 'reason': str(e)})
+    
+    # Commit all successful imports
+    if results['success']:
+        await db.commit()
+        await cache.delete("equipments_list_0_100")
+    
+    return {
+        'imported': len(results['success']),
+        'skipped': len(results['skipped']),
+        'failed': len(results['failed']),
+        'details': results
+    }
+

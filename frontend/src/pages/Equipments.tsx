@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig, rebootEquipment } from '../services/api';
-import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power, Wifi, Info } from 'lucide-react';
+import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, getLatencyConfig, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV } from '../services/api';
+import { Plus, Trash2, Search, Server, MonitorPlay, Save, CheckSquare, Square, Edit2, Activity, Power, Wifi, Info, Download, Upload } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
@@ -370,6 +370,54 @@ export function Equipments() {
         }
     }
 
+    async function handleExportCSV() {
+        try {
+            const blob = await exportEquipmentsCSV();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `equipments_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao exportar CSV');
+        }
+    }
+
+    async function handleImportCSV(event: React.ChangeEvent<HTMLInputElement>) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const result = await importEquipmentsCSV(file);
+            let message = `✅ Importação concluída!\n\n`;
+            message += `• ${result.imported} equipamento(s) importado(s)\n`;
+            if (result.skipped > 0) message += `• ${result.skipped} ignorado(s) (já existem)\n`;
+            if (result.failed > 0) message += `• ${result.failed} falhou(ram)\n`;
+
+            if (result.details.failed.length > 0) {
+                message += `\nErros:\n` + result.details.failed.slice(0, 5).map((f: any) =>
+                    `• ${f.row?.ip || 'N/A'}: ${f.reason}`
+                ).join('\n');
+                if (result.details.failed.length > 5) {
+                    message += `\n... e mais ${result.details.failed.length - 5} erros`;
+                }
+            }
+
+            alert(message);
+            if (result.imported > 0) load();
+        } catch (e: any) {
+            console.error(e);
+            alert('Erro ao importar CSV: ' + (e.response?.data?.detail || e.message));
+        }
+
+        // Reset input
+        event.target.value = '';
+    }
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -379,6 +427,20 @@ export function Equipments() {
                         <MonitorPlay size={20} />
                         Scan Rede
                     </button>
+
+                    {/* Export CSV */}
+                    <button onClick={handleExportCSV} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-purple-900/20">
+                        <Download size={20} />
+                        Exportar CSV
+                    </button>
+
+                    {/* Import CSV */}
+                    <label className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-orange-900/20 cursor-pointer">
+                        <Upload size={20} />
+                        Importar CSV
+                        <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
+                    </label>
+
                     <button onClick={openNewModal} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-blue-900/20">
                         <Plus size={20} />
                         Novo Equipamento

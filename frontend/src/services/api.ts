@@ -63,3 +63,13 @@ export const migrateData = (postgres_url: string) => api.post('/settings/migrate
 export const testTelegramMessage = () => api.post('/settings/telegram/test-message').then(res => res.data);
 export const testWhatsappMessage = (target?: string) => api.post('/settings/whatsapp/test-message', { target }).then(res => res.data);
 export const testBackup = () => api.post('/settings/telegram/test-backup').then(res => res.data);
+
+// CSV Import/Export
+export const exportEquipmentsCSV = () => api.get('/equipments/export/csv', { responseType: 'blob' }).then(res => res.data);
+export const importEquipmentsCSV = (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/equipments/import/csv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+};
