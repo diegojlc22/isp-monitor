@@ -78,3 +78,7 @@ backup_*/
 # Setup / Instalador
 setup.log
 .setup-state.json
+
+tools/whatsapp/session/
+tools/whatsapp/.wwebjs_auth/
+tools/whatsapp/.wwebjs_cache/

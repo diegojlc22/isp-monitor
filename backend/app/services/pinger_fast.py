@@ -9,8 +9,10 @@ from backend.app.database import AsyncSessionLocal
 from backend.app.models import Tower, Equipment, Parameters, PingLog, Alert
 
 
-from backend.app.services.telegram import send_telegram_alert
+from backend.app.services.notifier import send_notification
 from backend.app.config import PING_TIMEOUT_SECONDS, PING_CONCURRENT_LIMIT
+
+
 
 try:
     from icmplib import async_ping, async_multiping
@@ -302,7 +304,10 @@ async def monitor_job_fast():
                 
                 # Notifications
                 if notifications_to_send:
-                    tasks = [send_telegram_alert(token, chat_id, msg) for token, chat_id, msg in notifications_to_send if token and chat_id]
+                    tasks = []
+                    for token, chat_id, msg in notifications_to_send:
+                        tasks.append(send_notification(msg, telegram_token=token, telegram_chat_id=chat_id))
+                    
                     if tasks:
                          for t in tasks: asyncio.create_task(t)
 

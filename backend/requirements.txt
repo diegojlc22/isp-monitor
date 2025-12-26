@@ -21,3 +21,4 @@ pysnmp>=7.0.0
 librouteros>=3.2.1
 psutil>=5.9.0
 qrcode>=7.0.0
+aiohttp

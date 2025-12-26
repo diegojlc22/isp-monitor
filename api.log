@@ -1,4 +1,28 @@
-INFO:     Started server process [632]
+INFO:     Started server process [13676]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+[DATABASE] Conectando a: postgresql+asyncpg://postgres:****@127.0.0.1:5432/isp_monitor
+[INFO] Using ULTRA-FAST pinger (icmplib)
+[INFO] Serving Frontend from C:\diegolima\isp-monitor\frontend\dist
+Starting up...
+🔧 [MIGRATION] Verificando esquema do banco...
+✅ [MIGRATION] Colunas de rastreamento (users) aplicadas.
+✅ [MIGRATION] Colunas de painéis (equipments) aplicadas.
+[INFO] API Started (Collector Running in Separate Process)
+INFO:     127.0.0.1:53133 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53133 - "GET /assets/index-BUYlnMLG.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53133 - "GET /assets/index-B5ZY_yge.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53133 - "GET /api/settings/system-name HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53135 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53135 - "GET /assets/Dashboard-CFVdq_N5.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53133 - "GET /assets/triangle-alert-SxWbGMZ_.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53136 - "GET /assets/AreaChart-C6VR3GNZ.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53135 - "GET /assets/index-BEchvp3C.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53133 - "GET /assets/ReferenceLine-JuWvJd84.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53133 - "GET /api/towers/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53136 - "GET /api/settings/latency HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53135 - "GET /api/equipments/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53136 - "GET /assets/save-DXfiAvwl.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53135 - "GET /assets/Alerts-CGUbcPmA.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53135 - "GET /api/settings/telegram HTTP/1.1" 200 OK
