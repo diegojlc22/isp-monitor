@@ -287,6 +287,9 @@ async def monitor_job_fast():
                                       .replace("[Service.Name]", "Ping")\
                                       .replace("[Device.FirstAddress]", device.ip)
                             
+                            status_label = "DOWN" if not is_online else "UP"
+                            print(f"[ALERT {status_label}] {device.name} ({device.ip}) - Enviando notificação")
+                            
                             notifications_to_send.append((msg, config_cache.copy()))
                             alerts_to_add.append(Alert(
                                 device_type=device_type, 

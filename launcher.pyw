@@ -49,6 +49,7 @@ class ModernLauncher:
         self.should_be_running = False 
         self.restart_attempts = 0
         self.expo_logs = []  # Armazenar logs do Expo
+        self.child_processes = []  # Rastrear PIDs dos processos criados
 
         # Estilos Customizados
         self.setup_styles()
@@ -588,7 +589,8 @@ class ModernLauncher:
             
         try:
             # Launcher silencioso
-            subprocess.Popen([script], creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc = subprocess.Popen([script], creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.child_processes.append(proc)  # Rastrear processo
             
             # Switch to logs tab
             self.notebook.select(1)
@@ -626,11 +628,13 @@ class ModernLauncher:
             os.system("taskkill /F /IM python.exe /T >nul 2>&1")
             os.system("taskkill /F /IM pythonw.exe /T >nul 2>&1")
             os.system("taskkill /F /IM postgres.exe /T >nul 2>&1")
+            os.system("taskkill /F /IM conhost.exe /T >nul 2>&1")
             
             # 2. WMIC para processos órfãos (força bruta)
             os.system('wmic process where "name=\'node.exe\'" delete >nul 2>&1')
             os.system('wmic process where "name=\'python.exe\'" delete >nul 2>&1')
             os.system('wmic process where "name=\'pythonw.exe\'" delete >nul 2>&1')
+            os.system('wmic process where "name=\'conhost.exe\'" delete >nul 2>&1')
             
             print("[FORCE KILL] Limpeza completa.")
             
@@ -1088,35 +1092,62 @@ class ModernLauncher:
         messagebox.showwarning("Timeout", "O sistema demorou a responder.\nVerifique a aba de LOGS para detalhes.")
 
     def stop_system(self):
-        """Mata API e Coletor"""
+        """Mata API, Coletor e processos relacionados"""
         self.should_be_running = False # Desativa monitoramento de crash
         killed = []
         try:
-            # 1. API (Porta 8080)
-            for conn in psutil.net_connections():
-                if conn.laddr.port == 8080:
-                    psutil.Process(conn.pid).terminate()
-                    killed.append("API")
-            
-            # 2. Coletor (Processo python collector.py)
             my_pid = os.getpid()
-            for proc in psutil.process_iter(['pid', 'cmdline']):
+            
+            # Matar TODOS os processos relacionados ao projeto
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
-                    if proc.info['pid'] == my_pid: continue
-                    cmd = str(proc.info['cmdline'])
-                    if 'collector.py' in cmd:
-                        proc.terminate()
-                        killed.append("Coletor")
-                except: pass
-                
+                    if proc.info['pid'] == my_pid: 
+                        continue
+                    
+                    proc_name = proc.info['name'].lower()
+                    cmdline = ' '.join(proc.info['cmdline']).lower()
+                    
+                    # Critérios para matar:
+                    # 1. Processos do projeto (python com collector, node com whatsapp, postgres)
+                    # 2. Conhost que tenha postgres ou isp-monitor no caminho
+                    should_kill = False
+                    reason = ""
+                    
+                    if 'collector.py' in cmdline:
+                        should_kill = True
+                        reason = "Coletor"
+                    elif proc_name == 'node.exe' and 'whatsapp' in cmdline:
+                        should_kill = True
+                        reason = "WhatsApp Gateway"
+                    elif proc_name == 'postgres.exe' and 'isp-monitor' in cmdline:
+                        should_kill = True
+                        reason = "PostgreSQL"
+                    elif proc_name == 'conhost.exe' and ('postgres' in cmdline or 'isp-monitor' in cmdline):
+                        should_kill = True
+                        reason = "Console Host (Projeto)"
+                    elif proc_name == 'python.exe' and 'uvicorn' in cmdline and '8080' in cmdline:
+                        should_kill = True
+                        reason = "API (Uvicorn)"
+                    
+                    if should_kill:
+                        print(f"[STOP] Matando {reason}: {proc_name} (PID {proc.info['pid']})")
+                        proc.kill()
+                        killed.append(reason)
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+                except Exception as e:
+                    print(f"[STOP] Erro ao processar {proc.info.get('name', '?')}: {e}")
+            
+            self.child_processes.clear()
             time.sleep(1)
             self.check_status()
-            
+        
             if killed:
-                messagebox.showinfo("Parado", f"Processos encerrados: {', '.join(killed)}")
+                messagebox.showinfo("Parado", f"Processos encerrados: {', '.join(set(killed))}")
             else:
                 messagebox.showinfo("Info", "Nenhum processo ativo encontrado.")
-                
+            
         except Exception as e:
             messagebox.showerror("Erro", str(e))
 
@@ -1461,29 +1492,24 @@ class ModernLauncher:
 
 
     def on_closing(self):
-        """Handler para fechar a janela com limpeza agressiva"""
+        """Handler para fechar a janela"""
         if messagebox.askokcancel("Sair", "Deseja realmente sair? O monitoramento será interrompido."):
+            # Usar stop_system que já tem a lógica de limpeza
             self.stop_system()
-            self.root.destroy()
             
-            # Limpeza AGRESSIVA de processos (Force Kill Total)
-            print("[LAUNCHER] Executando limpeza agressiva de processos...")
+            # Aguardar um pouco para garantir que processos morreram
+            time.sleep(0.5)
+            
+            # Limpeza final agressiva (fallback)
+            print("[LAUNCHER] Limpeza final...")
             try:
-                # 1. Taskkill padrão
                 os.system("taskkill /F /IM node.exe /T >nul 2>&1")
-                os.system("taskkill /F /IM python.exe /T >nul 2>&1")
-                os.system("taskkill /F /IM pythonw.exe /T >nul 2>&1")
-                os.system("taskkill /F /IM postgres.exe /T >nul 2>&1")
-                
-                # 2. WMIC para processos órfãos (força bruta)
-                os.system('wmic process where "name=\'node.exe\'" delete >nul 2>&1')
-                os.system('wmic process where "name=\'python.exe\'" delete >nul 2>&1')
-                os.system('wmic process where "name=\'pythonw.exe\'" delete >nul 2>&1')
-                
-                print("[LAUNCHER] Limpeza completa. Arquivos liberados.")
-            except Exception as e:
-                print(f"[LAUNCHER] Erro na limpeza: {e}")
+                os.system("taskkill /F /IM conhost.exe /FI \"WINDOWTITLE eq *postgres*\" >nul 2>&1")
+                os.system("taskkill /F /IM conhost.exe /FI \"WINDOWTITLE eq *isp-monitor*\" >nul 2>&1")
+            except:
+                pass
             
+            self.root.destroy()
             sys.exit(0)
 
 if __name__ == "__main__":

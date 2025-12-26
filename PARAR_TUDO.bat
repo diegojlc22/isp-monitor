@@ -16,10 +16,15 @@ echo 3. Parando postgres.exe (Banco de Dados)...
 taskkill /F /IM postgres.exe /T >nul 2>&1
 if %errorlevel%==0 (echo    [OK] PostgreSQL Parado.) else (echo    [--] Nenhum processo PostgreSQL encontrado.)
 echo.
-echo 4. Limpando processos órfãos (force kill)...
+echo 4. Parando conhost.exe (Console Host)...
+taskkill /F /IM conhost.exe /T >nul 2>&1
+if %errorlevel%==0 (echo    [OK] Console Host Parado.) else (echo    [--] Nenhum processo Console Host encontrado.)
+echo.
+echo 5. Limpando processos órfãos (force kill)...
 wmic process where "name='node.exe'" delete >nul 2>&1
 wmic process where "name='python.exe'" delete >nul 2>&1
 wmic process where "name='pythonw.exe'" delete >nul 2>&1
+wmic process where "name='conhost.exe'" delete >nul 2>&1
 echo    [OK] Limpeza completa.
 echo.
 echo ===================================================
