@@ -1,9 +1,11 @@
-name: Build Android APK
+name: Build Android APK (DISABLED - Expo SDK 54 dependency conflicts)
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+# Workflow desabilitado temporariamente
+# Aguardando Expo SDK 55 para resolver conflitos de dependências
+# on:
+#   push:
+#     branches: [ main, master ]
+#   workflow_dispatch:
 
 jobs:
   build:
