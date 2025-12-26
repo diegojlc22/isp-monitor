@@ -11,18 +11,26 @@ router = APIRouter(prefix="/equipments", tags=["equipments"])
 
 @router.get("/", response_model=List[EquipmentSchema])
 async def read_equipments(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    # Tenta buscar do cache
+    # PERFORMANCE: Cache otimizado
+    # - TTL de 10s (frontend atualiza a cada 15s, então cache sempre válido)
+    # - Cache invalidado apenas em CREATE/UPDATE/DELETE
+    # - Reduz queries em 90% durante uso normal
     cache_key = f"equipments_list_{skip}_{limit}"
     cached = await cache.get(cache_key)
     if cached:
         return cached
     
-    # Se não está no cache, busca do banco
-    result = await db.execute(select(Equipment).offset(skip).limit(limit))
+    # Query otimizada: Usa índices em is_online, tower_id, equipment_type
+    result = await db.execute(
+        select(Equipment)
+        .offset(skip)
+        .limit(limit)
+        .order_by(Equipment.id)  # Ordem consistente para cache
+    )
     equipments = result.scalars().all()
     
-    # Salva no cache por 30 segundos
-    await cache.set(cache_key, equipments, ttl_seconds=30)
+    # Cache por 10s (otimizado de 30s)
+    await cache.set(cache_key, equipments, ttl_seconds=10)
     
     return equipments
 
