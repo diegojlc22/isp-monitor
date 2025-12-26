@@ -79,6 +79,9 @@ export function Equipments() {
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
     const [formData, setFormData] = useState<FormData>(INITIAL_FORM_STATE);
     const [filterText, setFilterText] = useState('');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
+    const [filterTower, setFilterTower] = useState<string>('all');
+    const [filterType, setFilterType] = useState<string>('all');
 
     // Scanner States
     const [showScanner, setShowScanner] = useState(false);
@@ -126,13 +129,38 @@ export function Equipments() {
     }, []);
 
     const filteredEquipments = useMemo(() => {
-        if (!filterText) return equipments;
-        const lower = filterText.toLowerCase();
-        return equipments.filter(eq =>
-            eq.name.toLowerCase().includes(lower) ||
-            eq.ip.includes(lower)
-        );
-    }, [equipments, filterText]);
+        let result = equipments;
+
+        // Text filter
+        if (filterText) {
+            const lower = filterText.toLowerCase();
+            result = result.filter(eq =>
+                eq.name.toLowerCase().includes(lower) ||
+                eq.ip.includes(lower)
+            );
+        }
+
+        // Status filter
+        if (filterStatus !== 'all') {
+            result = result.filter(eq =>
+                filterStatus === 'online' ? eq.is_online : !eq.is_online
+            );
+        }
+
+        // Tower filter
+        if (filterTower !== 'all') {
+            result = result.filter(eq =>
+                eq.tower_id === parseInt(filterTower)
+            );
+        }
+
+        // Type filter
+        if (filterType !== 'all') {
+            result = result.filter(eq => eq.equipment_type === filterType);
+        }
+
+        return result;
+    }, [equipments, filterText, filterStatus, filterTower, filterType]);
 
     async function handleShowHistory(eq: Equipment) {
         setSelectedEqHistory(eq);
@@ -359,16 +387,68 @@ export function Equipments() {
             </div>
 
             <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-xl">
-                <div className="p-4 border-b border-slate-800 flex gap-4">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Buscar equipamentos por nome ou IP..."
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
-                            value={filterText}
-                            onChange={e => setFilterText(e.target.value)}
-                        />
+                <div className="p-4 border-b border-slate-800">
+                    <div className="flex flex-wrap gap-3">
+                        {/* Search Input */}
+                        <div className="relative flex-1 min-w-[250px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome ou IP..."
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                value={filterText}
+                                onChange={e => setFilterText(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Status Filter */}
+                        <select
+                            value={filterStatus}
+                            onChange={e => setFilterStatus(e.target.value as 'all' | 'online' | 'offline')}
+                            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        >
+                            <option value="all">📊 Todos os Status</option>
+                            <option value="online">🟢 Online</option>
+                            <option value="offline">🔴 Offline</option>
+                        </select>
+
+                        {/* Tower Filter */}
+                        <select
+                            value={filterTower}
+                            onChange={e => setFilterTower(e.target.value)}
+                            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        >
+                            <option value="all">📍 Todas as Torres</option>
+                            {towers.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+
+                        {/* Type Filter */}
+                        <select
+                            value={filterType}
+                            onChange={e => setFilterType(e.target.value)}
+                            className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        >
+                            <option value="all">🔧 Todos os Tipos</option>
+                            <option value="station">📡 Station (CPE)</option>
+                            <option value="transmitter">📶 Transmitter (AP)</option>
+                        </select>
+
+                        {/* Clear Filters Button */}
+                        {(filterText || filterStatus !== 'all' || filterTower !== 'all' || filterType !== 'all') && (
+                            <button
+                                onClick={() => {
+                                    setFilterText('');
+                                    setFilterStatus('all');
+                                    setFilterTower('all');
+                                    setFilterType('all');
+                                }}
+                                className="px-4 py-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700"
+                            >
+                                Limpar Filtros
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -626,7 +706,31 @@ export function Equipments() {
                                 <div className="space-y-2 mt-6 animate-in slide-in-from-bottom-2 duration-300">
                                     <div className="flex items-center justify-between text-sm text-slate-400 px-2 mb-2">
                                         <span>{scannedIps.length} Dispositivos Encontrados</span>
-                                        <span>{selectedIps.length} Selecionados</span>
+                                        <div className="flex items-center gap-3">
+                                            <span>{selectedIps.length} Selecionados</span>
+                                            <button
+                                                onClick={() => {
+                                                    if (selectedIps.length === scannedIps.length) {
+                                                        setSelectedIps([]);
+                                                    } else {
+                                                        setSelectedIps([...scannedIps]);
+                                                    }
+                                                }}
+                                                className="text-blue-400 hover:text-blue-300 font-medium transition-colors flex items-center gap-1.5 px-3 py-1 rounded-md hover:bg-blue-500/10 border border-blue-500/20"
+                                            >
+                                                {selectedIps.length === scannedIps.length ? (
+                                                    <>
+                                                        <Square size={14} />
+                                                        Desmarcar Todos
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckSquare size={14} />
+                                                        Marcar Todos
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="bg-slate-950 rounded-lg border border-slate-800 divide-y divide-slate-800 max-h-[400px] overflow-y-auto custom-scrollbar">
                                         {scannedIps.map(ip => (
