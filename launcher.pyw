@@ -395,13 +395,13 @@ class ModernLauncher:
         self.root.after(4000, self.check_status_loop)
 
     def check_status(self):
-        """Verifica se API está rodando na porta 8080 (Otimizado)"""
+        """Verifica se API está rodando na porta 8080 (OTIMIZADO v2)"""
         try:
             # 1. Check Port 8080 (Lightweight Socket Check)
             is_up = False
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(0.5)
+                sock.settimeout(0.3)  # Reduzido de 0.5s para 0.3s
                 result = sock.connect_ex(('127.0.0.1', 8080))
                 if result == 0:
                     is_up = True
@@ -409,112 +409,105 @@ class ModernLauncher:
             except:
                 is_up = False
             
-            self.is_running = is_up
-            if is_up:
-                self.status_badge.config(text=" ● ONLINE ", fg=COLORS['success'], highlightbackground=COLORS['success'])
-                self.btn_start.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
-                self.btn_stop.config(state=tk.NORMAL, bg=COLORS['danger'], fg='#1e1e2e')
-                self.info_label.config(text="Sistema operando normalmente na porta 8080")
-            else:
-                self.status_badge.config(text=" ● OFFLINE ", fg=COLORS['danger'], highlightbackground=COLORS['danger'])
-                self.btn_start.config(state=tk.NORMAL, bg=COLORS['success'], fg='#1e1e2e')
-                self.btn_stop.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
-                self.info_label.config(text="Sistema parado. Clique em INICIAR para começar.")
-            
-            # 2. Check Processes (Single Pass - Low CPU)
-            ngrok_is_running = False
-            expo_is_running = False
-            zap_is_running = False
-            
-            for p in psutil.process_iter(['name', 'cmdline']):
-                try:
-                    name = p.info['name'].lower()
-                    cmd = ' '.join(p.info['cmdline'] or []).lower()
-                    
-                    if 'ngrok' in name:
-                        ngrok_is_running = True
-                    
-                    if 'node' in name:
-                        if 'expo' in cmd:
-                            expo_is_running = True
-                        if 'server.js' in cmd:
-                            zap_is_running = True
-                except: pass
-
-            # Update Ngrok UI
-            if ngrok_is_running != self.ngrok_running:
-                self.ngrok_running = ngrok_is_running
-                if ngrok_is_running:
-                    self.btn_ngrok.config(text="🌐 NGROK: LIGADO", bg=COLORS['success'], fg='#1e1e2e')
+            # Update main status (sempre rápido)
+            if self.is_running != is_up:  # Só atualiza se mudou
+                self.is_running = is_up
+                if is_up:
+                    self.status_badge.config(text=" ● ONLINE ", fg=COLORS['success'], highlightbackground=COLORS['success'])
+                    self.btn_start.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
+                    self.btn_stop.config(state=tk.NORMAL, bg=COLORS['danger'], fg='#1e1e2e')
+                    self.info_label.config(text="Sistema operando normalmente na porta 8080")
                 else:
-                    self.btn_ngrok.config(text="🌐 NGROK: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
+                    self.status_badge.config(text=" ● OFFLINE ", fg=COLORS['danger'], highlightbackground=COLORS['danger'])
+                    self.btn_start.config(state=tk.NORMAL, bg=COLORS['success'], fg='#1e1e2e')
+                    self.btn_stop.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
+                    self.info_label.config(text="Sistema parado. Clique em INICIAR para começar.")
             
-            # Update Expo UI
-            if expo_is_running != self.expo_running:
-                self.expo_running = expo_is_running
-                if expo_is_running:
-                    self.btn_expo.config(text="📱 EXPO: LIGADO (Clique p/ QR)", bg=COLORS['success'], fg='#1e1e2e')
-                    self.btn_expo_stop.config(state=tk.NORMAL, bg=COLORS['danger'])
-                else:
-                    self.btn_expo.config(text="📱 EXPO: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-                    self.btn_expo_stop.config(state=tk.DISABLED, bg='#45475a')
+            # 2. Check Processes (OTIMIZADO: Só a cada 3 ciclos = 12 segundos)
+            if not hasattr(self, '_check_counter'):
+                self._check_counter = 0
+            
+            self._check_counter += 1
+            
+            # Processos auxiliares: verificar menos frequentemente
+            if self._check_counter % 3 == 0:  # A cada 12 segundos
+                ngrok_is_running = False
+                expo_is_running = False
+                zap_is_running = False
                 
-            # Update WhatsApp UI
-            # Logic here is complex because of status text, only update if significant change
-            # But we must update if process state changed OR if we see the 'ready' file update
-            
-            # Check ZAP API Status
-            status_text = "💛 ZAP: INICIANDO..."
-            is_ready = False
-            qr_available = False
-            
-            if zap_is_running:
-                try:
-                    # 500ms timeout para não travar a UI
-                    resp = requests.get("http://localhost:3001/status", timeout=0.5)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        if data.get("ready"):
-                            status_text = "💚 ZAP: PRONTO"
-                            is_ready = True
-                        elif data.get("qr_code_available"):
-                            status_text = "📷 ZAP: ESCANEAR QR"
-                            qr_available = True
-                        else:
-                            status_text = "💛 ZAP: CARREGANDO..."
-                except:
-                    # Se der erro de conexão mas o processo tá rodando, é porque ainda tá subindo o express
-                    status_text = "💛 ZAP: CARREGANDO..."
+                # OTIMIZAÇÃO: Filtrar por nome primeiro (muito mais rápido)
+                for p in psutil.process_iter(['name']):
+                    try:
+                        name = p.info['name'].lower()
+                        
+                        if 'ngrok' in name:
+                            ngrok_is_running = True
+                        elif 'node' in name:
+                            # Só pega cmdline se for node (evita overhead)
+                            try:
+                                cmd = ' '.join(p.cmdline()).lower()
+                                if 'expo' in cmd:
+                                    expo_is_running = True
+                                if 'server.js' in cmd:
+                                    zap_is_running = True
+                            except:
+                                pass
+                    except:
+                        pass
 
-            else:
-                 status_text = "💚 ZAP: DESLIGADO"
-
-            # Should update UI?
-            should_update_zap_ui = (zap_is_running != self.whatsapp_running) or (self.btn_whatsapp['text'] != status_text)
-            
-            if should_update_zap_ui:
-                self.whatsapp_running = zap_is_running
-                
-                if not zap_is_running:
-                     self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-                     self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                     self.btn_whatsapp_test.config(state=tk.DISABLED)
-                     self.btn_whatsapp_groups.config(state=tk.DISABLED)
-                else:
-                    self.btn_whatsapp.config(text=status_text, bg=COLORS['success'] if is_ready else COLORS['warning'], fg='#1e1e2e')
-                    
-                    if is_ready:
-                        self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                        self.btn_whatsapp_test.config(state=tk.NORMAL)
-                        self.btn_whatsapp_groups.config(state=tk.NORMAL)
+                # Update Ngrok UI (só se mudou)
+                if ngrok_is_running != self.ngrok_running:
+                    self.ngrok_running = ngrok_is_running
+                    if ngrok_is_running:
+                        self.btn_ngrok.config(text="🌐 NGROK: LIGADO", bg=COLORS['success'], fg='#1e1e2e')
                     else:
-                        if qr_available:
-                            self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
-                        else:
-                            self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                            
+                        self.btn_ngrok.config(text="🌐 NGROK: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
+                
+                # Update Expo UI (só se mudou)
+                if expo_is_running != self.expo_running:
+                    self.expo_running = expo_is_running
+                    if expo_is_running:
+                        self.btn_expo.config(text="📱 EXPO: LIGADO (Clique p/ QR)", bg=COLORS['success'], fg='#1e1e2e')
+                        self.btn_expo_stop.config(state=tk.NORMAL, bg=COLORS['danger'])
+                    else:
+                        self.btn_expo.config(text="📱 EXPO: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
+                        self.btn_expo_stop.config(state=tk.DISABLED, bg='#45475a')
+                
+                # Update WhatsApp UI (OTIMIZADO: Só verifica status HTTP se processo mudou)
+                if zap_is_running != self.whatsapp_running:
+                    self.whatsapp_running = zap_is_running
+                    
+                    if not zap_is_running:
+                        self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
+                        self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
                         self.btn_whatsapp_test.config(state=tk.DISABLED)
                         self.btn_whatsapp_groups.config(state=tk.DISABLED)
+                    else:
+                        # Processo rodando, verificar status (só quando necessário)
+                        try:
+                            resp = requests.get("http://localhost:3001/status", timeout=0.3)
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                if data.get("ready"):
+                                    self.btn_whatsapp.config(text="� ZAP: PRONTO", bg=COLORS['success'], fg='#1e1e2e')
+                                    self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                                    self.btn_whatsapp_test.config(state=tk.NORMAL)
+                                    self.btn_whatsapp_groups.config(state=tk.NORMAL)
+                                elif data.get("qr_code_available"):
+                                    self.btn_whatsapp.config(text="� ZAP: ESCANEAR QR", bg=COLORS['warning'], fg='#1e1e2e')
+                                    self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
+                                    self.btn_whatsapp_test.config(state=tk.DISABLED)
+                                    self.btn_whatsapp_groups.config(state=tk.DISABLED)
+                                else:
+                                    self.btn_whatsapp.config(text="💛 ZAP: CARREGANDO...", bg=COLORS['warning'], fg='#1e1e2e')
+                                    self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                                    self.btn_whatsapp_test.config(state=tk.DISABLED)
+                                    self.btn_whatsapp_groups.config(state=tk.DISABLED)
+                        except:
+                            self.btn_whatsapp.config(text="💛 ZAP: CARREGANDO...", bg=COLORS['warning'], fg='#1e1e2e')
+                            self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
+                            self.btn_whatsapp_test.config(state=tk.DISABLED)
+                            self.btn_whatsapp_groups.config(state=tk.DISABLED)
 
         except Exception as e:
             # print(f"Status Check Fail: {e}") 
