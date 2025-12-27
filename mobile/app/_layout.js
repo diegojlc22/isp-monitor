@@ -34,11 +34,16 @@ const MainLayout = () => {
     return <Slot />;
 }
 
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../lib/queryClient';
+
 export default function Root() {
     return (
-        <AuthProvider>
-            <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-            <MainLayout />
-        </AuthProvider>
+        <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+                <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+                <MainLayout />
+            </AuthProvider>
+        </QueryClientProvider>
     );
 }

@@ -1,41 +1,50 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, StatusBar, RefreshControl, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
-import { RefreshCw, Plus, Signal, Server, MapPin, LogOut, Settings, Navigation, Wifi } from 'lucide-react-native';
+import { RefreshCw, Plus, Signal, Server, MapPin, LogOut, Settings, Navigation, Wifi, CloudOff } from 'lucide-react-native';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { useLocationQueue } from '../../hooks/useLocationQueue';
 
 export default function TechDashboard() {
     const router = useRouter();
     const { user } = useAuth();
-    const [loading, setLoading] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
-    const [towers, setTowers] = useState([]);
     const [location, setLocation] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
     const [lastUpdate, setLastUpdate] = useState(null);
-    const [isSendingLocation, setIsSendingLocation] = useState(false);
 
     const isMounted = useRef(true);
-    const retryTimeout = useRef(null);
-
     const locationSubscription = useRef(null);
-    const lastSentLocation = useRef(null);
+
+    // Hook de Fila Offline (Robustez Nível 1)
+    const { sendLocation, queueSize } = useLocationQueue();
+
+    // React Query para Torres (Robustez Nível 2 + Cache)
+    const { data: towers = [], isLoading, isRefetching, refetch } = useQuery({
+        queryKey: ['nearby-towers', location?.latitude, location?.longitude],
+        queryFn: async () => {
+            if (!location) return [];
+            const response = await api.post('/mobile/nearby-towers', {
+                latitude: location.latitude,
+                longitude: location.longitude
+            });
+            return response.data;
+        },
+        enabled: !!location,
+        staleTime: 1000 * 60 * 2,
+        refetchInterval: 1000 * 60 * 5,
+    });
 
     useEffect(() => {
         isMounted.current = true;
-
         startLocationTracking();
 
         return () => {
             isMounted.current = false;
             if (locationSubscription.current) {
                 locationSubscription.current.remove();
-            }
-            if (retryTimeout.current) {
-                clearTimeout(retryTimeout.current);
             }
         };
     }, []);
@@ -68,96 +77,20 @@ export default function TechDashboard() {
     const handleLocationUpdate = async (newLocation) => {
         const coords = newLocation.coords;
         setLocation(coords);
-        if (shouldSendLocation(coords)) {
-            await sendLocationToBackend(coords);
-            lastSentLocation.current = coords;
-        }
-        if (!towers.length || shouldRefreshTowers()) {
-            fetchNearbyTowers(coords);
-        }
-    };
 
-    const shouldSendLocation = (coords) => {
-        if (!lastSentLocation.current) return true;
-        const distance = getDistanceFromLatLonInMeters(
-            lastSentLocation.current.latitude, lastSentLocation.current.longitude,
-            coords.latitude, coords.longitude
-        );
-        return distance > 50;
-    };
+        const sent = await sendLocation(coords);
 
-    const shouldRefreshTowers = () => {
-        if (!lastUpdate) return true;
-        return (Date.now() - lastUpdate) > (5 * 60 * 1000);
-    };
-
-    const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
-        const R = 6371000;
-        const dLat = deg2rad(lat2 - lat1);
-        const dLon = deg2rad(lon2 - lon1);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    };
-
-    const deg2rad = (deg) => deg * (Math.PI / 180);
-
-    const sendLocationToBackend = async (coords) => {
-        if (!isMounted.current) return;
-        setIsSendingLocation(true);
-        try {
-            await api.post('/mobile/location', {
-                latitude: coords.latitude,
-                longitude: coords.longitude
-            });
-            if (isMounted.current) setLastUpdate(Date.now());
-        } catch (error) {
-            console.log("Falha Location:", error);
-
-            // Check for 401 Unauthorized
-            if (error.response && error.response.status === 401) {
-                console.log("Sessão expirada. Parando rastreamento.");
-                // Stop trying to send location if authorized failed
-                return;
-            }
-
-            // Retry seguro para outros erros
-            if (isMounted.current) {
-                retryTimeout.current = setTimeout(() => sendLocationToBackend(coords), 5000);
-            }
-        } finally {
-            if (isMounted.current) setIsSendingLocation(false);
-        }
-    };
-
-    const fetchNearbyTowers = async (coords) => {
-        if (!isMounted.current) return;
-        setLoading(true);
-        try {
-            const response = await api.post('/mobile/nearby-towers', {
-                latitude: coords.latitude,
-                longitude: coords.longitude
-            });
-            if (isMounted.current) setTowers(response.data);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            if (isMounted.current) {
-                setLoading(false);
-                setRefreshing(false);
-            }
+        if (isMounted.current && sent) {
+            setLastUpdate(Date.now());
         }
     };
 
     const onRefresh = async () => {
-        setRefreshing(true);
         if (location) {
-            await sendLocationToBackend(location);
-            await fetchNearbyTowers(location);
-        } else {
-            setRefreshing(false);
+            await Promise.all([
+                refetch(),
+                sendLocation(location)
+            ]);
         }
     };
 
@@ -228,16 +161,21 @@ export default function TechDashboard() {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
 
-            {/* Modern Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.greeting}>Olá, <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'Técnico'}</Text></Text>
                     <View style={styles.statusRow}>
-                        <View style={[styles.statusDot, { backgroundColor: isSendingLocation ? '#f9e2af' : '#a6e3a1' }]} />
+                        <View style={[styles.statusDot, { backgroundColor: location ? '#a6e3a1' : '#f9e2af' }]} />
                         <Text style={styles.statusText}>
                             {location ? "GPS Ativo" : "Buscando GPS..."} • {formatLastUpdate()}
                         </Text>
                     </View>
+                    {queueSize > 0 && (
+                        <View style={styles.offlineRow}>
+                            <CloudOff size={12} color="#f9e2af" />
+                            <Text style={styles.offlineText}>{queueSize} pontos pendentes</Text>
+                        </View>
+                    )}
                 </View>
 
                 <TouchableOpacity
@@ -248,7 +186,6 @@ export default function TechDashboard() {
                 </TouchableOpacity>
             </View>
 
-            {/* Lista Principal */}
             {errorMsg ? (
                 <View style={styles.center}>
                     <Text style={styles.errorText}>{errorMsg}</Text>
@@ -263,22 +200,17 @@ export default function TechDashboard() {
                     renderItem={renderTower}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
-                    initialNumToRender={5}
-                    maxToRenderPerBatch={5}
-                    windowSize={5}
                     refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#60a5fa" />
+                        <RefreshControl refreshing={isLoading || isRefetching} onRefresh={onRefresh} tintColor="#60a5fa" />
                     }
                     ListHeaderComponent={
-                        <Text style={styles.sectionHeader}>Torres Próximas</Text>
+                        <View style={{ marginBottom: 16 }}>
+                            <Text style={styles.sectionHeader}>Torres Próximas</Text>
+                            {isLoading && !towers.length && <Text style={{ color: '#64748b', fontSize: 12 }}>Buscando...</Text>}
+                        </View>
                     }
                     ListEmptyComponent={
-                        loading ? (
-                            <View style={styles.centerLoading}>
-                                <ActivityIndicator size="large" color="#60a5fa" />
-                                <Text style={styles.loadingText}>Escaneando perímetro...</Text>
-                            </View>
-                        ) : (
+                        !isLoading && (
                             <View style={styles.emptyContainer}>
                                 <MapPin size={48} color="#334155" />
                                 <Text style={styles.emptyText}>Nenhuma torre encontrada num raio próximo.</Text>
@@ -311,6 +243,9 @@ const styles = StyleSheet.create({
     statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
     statusText: { color: '#64748b', fontSize: 12 },
 
+    offlineRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
+    offlineText: { color: '#f9e2af', fontSize: 11, fontWeight: 'bold' },
+
     settingsBtn: {
         width: 44, height: 44, borderRadius: 22,
         backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center',
@@ -318,7 +253,7 @@ const styles = StyleSheet.create({
     },
 
     listContent: { padding: 24, paddingBottom: 100 },
-    sectionHeader: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+    sectionHeader: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold' },
 
     card: {
         backgroundColor: '#1e293b',
