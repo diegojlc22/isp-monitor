@@ -66,8 +66,19 @@ COLORS = {
 
 class ModernLauncher:
     def __init__(self, root):
-        self.root = root
-        self.root.title("ISP Monitor Enterprise | Launcher v3.0")
+        self.root = root  # <--- CORREÇÃO CRÍTICA
+        
+        # Carregar Versão do Projeto
+        self.project_version = "Unknown"
+        self.python_req = "Unknown"
+        try:
+            with open(".project_version", "r") as f:
+                for line in f:
+                    if "PROJECT_NAME" in line: self.project_name = line.split('=')[1].strip().strip('"')
+                    if "PYTHON_VERSION_REQUIRED" in line: self.python_req = line.split('=')[1].strip().strip('"')
+        except: pass
+
+        self.root.title(f"ISP Monitor | Python {self.python_req} Edition")
         
         # Configuração de Janela Inteligente
         self.center_window(700, 600)
@@ -594,6 +605,30 @@ class ModernLauncher:
         self.should_be_running = True
         self.restart_attempts = 0 # Reset ao iniciar manual
         
+        # --- AUTO-FIX: GARANTIR ESTRUTURA DE LOGS ---
+        log_dir = "logs"
+        if not os.path.exists(log_dir):
+            try:
+                os.makedirs(log_dir)
+                print(f"[LAUNCHER] Diretório '{log_dir}' recriado automaticamente.")
+            except: pass
+
+        # RESET LOGS (Limpar logs antigos dentro da pasta logs)
+        # Lista atualizada para o novo padrão
+        log_files = [
+            os.path.join(log_dir, "api.log"),
+            os.path.join(log_dir, "collector.log"),
+            os.path.join(log_dir, "frontend.log"),
+            # Startup.log muitas vezes fica na raiz pois é gerado antes do launcher saber de tudo,
+            # mas vamos tentar limpar o da raiz também por higiene.
+            "startup.log" 
+        ]
+        
+        for lf in log_files:
+            if os.path.exists(lf):
+                try: open(lf, 'w').close()
+                except: pass
+
         # --- DOCTOR CHECKUP ---
         # Roda verificações proativas (Otimização DB, etc)
         try:
@@ -1462,12 +1497,20 @@ class ModernLauncher:
         self.log_text.config(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
         
-        files = ["startup.log", "api.log", "collector.log", "frontend.log", "expo.log"]
+        # Mapeamento: Nome Exibido -> Caminho Real
+        # startup.log é especial (memória)
+        log_files = {
+            "STARTUP.LOG": "startup.log",
+            "API.LOG": os.path.join("logs", "api.log"),
+            "COLLECTOR.LOG": os.path.join("logs", "collector.log"),
+            "FRONTEND.LOG": os.path.join("logs", "frontend.log"),
+            "EXPO.LOG": os.path.join("logs", "expo.log")
+        }
         
-        for fname in files:
-            self.log_text.insert(tk.END, f"\n┏━━ {fname.upper()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", "title")
+        for display_name, real_path in log_files.items():
+            self.log_text.insert(tk.END, f"\n┏━━ {display_name} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", "title")
             
-            if fname == "startup.log":
+            if "startup.log" in real_path:
                 try:
                     # Ler da memória para evitar conflito de File Lock
                     content = "".join(sys.stdout.log_data)
@@ -1476,16 +1519,23 @@ class ModernLauncher:
                     self.log_text.insert(tk.END, "[Erro ao ler memória startup]\n", "error")
                 continue
 
-            if os.path.exists(fname):
+            if os.path.exists(real_path):
                 try:
                     # Encoding UTF-8 (ignore errors) para suportar emojis
-                    with open(fname, "r", encoding="utf-8", errors="ignore") as f:
-                        lines = f.readlines()[-50:]  # Aumentei para 50 linhas
+                    with open(real_path, "r", encoding="utf-8", errors="ignore") as f:
+                        # Lê as últimas 1000 chars e pega as ultimas linhas para ser rapido
+                        f.seek(0, 2) # Fim
+                        size = f.tell()
+                        f.seek(max(0, size - 4000), 0) # Ultimos 4KB
+                        lines = f.readlines()
+                        # Se leu do meio da linha, descarta a primeira
+                        if len(lines) > 1 and size > 4000: lines.pop(0)
+                        
                         self.log_text.insert(tk.END, "".join(lines) if lines else "[Arquivo Vazio]\n")
                 except Exception as e:
                     self.log_text.insert(tk.END, f"[Erro ao ler: {e}]\n", "error")
             else:
-                self.log_text.insert(tk.END, "[Não encontrado]\n", "error")
+                self.log_text.insert(tk.END, "[Aguardando inicio...]\n", "warning")
         
         self.log_text.see(tk.END)
         self.log_text.config(state=tk.DISABLED)

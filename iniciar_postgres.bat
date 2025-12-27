@@ -1,59 +1,39 @@
 @echo off
 cd /d "%~dp0"
-TITLE ISP Monitor - Enterprise System
-CLS
+title ISP Monitor - Backend & Services
 
-:: -------------------------------------------------------------------------
-:: AMBIENTE PURO (Standalone Mode)
-:: -------------------------------------------------------------------------
+:: Forçar uso do Python 3.12 (Blindado)
+set PYTHON_CMD=py -3.12
 
-:: 1. Limpar variáveis de ambiente tóxicas
-set PYTHONHOME=
-set PYTHONPATH=
-set PYTHONEXECUTABLE=
-set PYTHONUTF8=1
+echo [BOOT] Iniciando Servicos em Background (Modo Invisivel)...
 
-:: 2. Selecionar Python (Prioridade absoluta para python_bin portátil)
-if exist "python_bin\python.exe" (
-    :: Caminho absoluto para evitar problemas de PATH
-    for %%I in ("python_bin\python.exe") do set "PY=%%~fI"
-    echo [LAUNCHER] Usando Python Portatil: "%PY%"
+:: 1. Migracao/Setup de Banco (Rapido e Sincrono)
+%PYTHON_CMD% -c "from backend.app.database import init_db; import asyncio; asyncio.run(init_db())" >nul 2>&1
+
+:: 2. Iniciar API (Uvicorn)
+:: Usa /B para rodar na mesma janela (que ja esta oculta pelo launcher)
+echo [1/3] Iniciando API...
+start /b "" %PYTHON_CMD% -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --workers 1 > logs\api.log 2>&1
+
+:: 3. Iniciar Coletor (Pinger)
+echo [2/3] Iniciando Coletor Pinger...
+start /b "" %PYTHON_CMD% backend/app/services/pinger_fast.py > logs\collector.log 2>&1
+
+:: 4. Iniciar Frontend
+echo [3/3] Iniciando Frontend...
+cd frontend
+if exist "node_modules" (
+    start /b "" npm run dev > ..\logs\frontend.log 2>&1
 ) else (
-    if exist ".venv\Scripts\python.exe" (
-        for %%I in (".venv\Scripts\python.exe") do set "PY=%%~fI"
-        echo [LAUNCHER] Usando Python Venv: "%PY%"
-    ) else (
-        set "PY=python"
-        echo [LAUNCHER] Usando Python do Sistema
-    )
+    echo [AVISO] Node_modules faltando. Instalando...
+    call npm install
+    start /b "" npm run dev > ..\logs\frontend.log 2>&1
 )
 
-:: 3. Verificacao de Segurança (Instalar libs se faltar)
-if not exist ".boot_python_ready" (
-    echo [LAUNCHER] Garantindo integridade do ambiente Python...
-    "%PY%" -m pip install -r backend/requirements.txt --quiet --no-warn-script-location
-    
-    :: Criar flag de sucesso
-    echo OK > .boot_python_ready
-)
-
-:: 4. INICIAR SISTEMA
-echo.
-echo [1/3] Backend API (Porta 8080)...
-start "ISP Backend" /b "%PY%" -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --log-level info > api.log 2>&1
-
-echo [2/3] Pinger V2 (Turbo)...
-start "ISP Pinger" /b "%PY%" -m backend.app.services.pinger_fast > collector.log 2>&1
-
-echo [3/3] Frontend Interface...
-if not exist "frontend\node_modules" (
-    echo [INFO] Instalando modulos do Frontend...
-    cd frontend && npm install --silent && cd ..
-)
-:: Frontend em background com logs
-start "ISP Frontend" /b cmd /c "npm run dev --prefix frontend > frontend.log 2>&1"
-
-echo.
-echo [SUCESSO] Sistema Iniciado.
-timeout /t 3 >nul
-exit
+:: IMPORTANTE:
+:: Como usamos start /b, se este script fechar, os processos morrem.
+:: Mantemos ele vivo indefinidamente em loop de espera economica.
+:: O Launcher vai matar este processo (e filhos) quando fechar.
+cd ..
+echo [SISTEMA] Aguardando terminacao...
+cmd /c "exit /b" 2>nul & pause >nul

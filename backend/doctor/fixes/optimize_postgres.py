@@ -29,7 +29,7 @@ def run_fix(arg=None):
         return True # Retorna True para o sistema continuar normalmente
     
     # 1. Localizar Pasta de Dados
-    pg_versions = ["17", "16", "15"]
+    pg_versions = ["20", "19", "18", "17", "16", "15"]
     pg_data = None
     service_name = None
     

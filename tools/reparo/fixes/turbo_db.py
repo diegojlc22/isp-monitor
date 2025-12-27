@@ -2,16 +2,51 @@ import os
 import subprocess
 import shutil
 
+def find_psql_executable():
+    # Locais comuns onde o Postgres instala
+    candidates = [
+        r"C:\Program Files\PostgreSQL\20\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\19\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\18\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\17\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\16\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\15\bin\psql.exe",
+        r"C:\Program Files\PostgreSQL\14\bin\psql.exe",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return f'"{path}"' # Retorna com aspas
+    
+    # Se nao achou, tenta o padrao do path
+    return "psql"
+
 def get_pg_config_path():
+    # Definir senha para evitar prompt interativo
+    os.environ["PGPASSWORD"] = "110812"
+    
     try:
-        # Tenta pegar o caminho do arquivo de configuracao via psql
-        # Assume que psql esta no PATH (o setup.ps1 garante isso)
-        cmd = 'psql -U postgres -d isp_monitor -t -c "SHOW config_file;"'
+        psql_cmd = find_psql_executable()
+        print(f"   [DEBUG] Usando cliente Postgres: {psql_cmd}")
+        
+        # Tenta pegar o caminho do arquivo de configuracao
+        # Precisamos passar senha PGPASSWORD se nao estiver confiado, mas assumimos 'trust' local
+        cmd = f'{psql_cmd} -U postgres -d isp_monitor -t -c "SHOW config_file;"'
+        
         path = subprocess.check_output(cmd, shell=True).decode().strip()
         if os.path.exists(path):
             return path
     except Exception as e:
         print(f"Erro ao localizar config: {e}")
+        # Fallback: Tentar adivinhar caminho padrao
+        fallback_paths = [
+            r"C:\Program Files\PostgreSQL\17\data\postgresql.conf",
+            r"C:\Program Files\PostgreSQL\16\data\postgresql.conf",
+            r"C:\Program Files\PostgreSQL\15\data\postgresql.conf"
+        ]
+        for p in fallback_paths:
+            if os.path.exists(p):
+                print(f"   [AVISO] Detectado via Fallback: {p}")
+                return p
     return None
 
 def optimize_postgres():
@@ -81,15 +116,19 @@ def optimize_postgres():
         print("   ✅ Configuracoes aplicadas com sucesso.")
         print("   🔄 Reiniciando servico PostgreSQL...")
         
-        subprocess.run("net stop postgresql-x64-15", shell=True) # Tenta versao 15
-        subprocess.run("net stop postgresql-x64-16", shell=True) # Tenta versao 16
-        subprocess.run("net stop postgresql-x64-17", shell=True) # Tenta versao 17
-        subprocess.run("net stop postgresql-x64-18", shell=True) # Tenta versao 18
+        # Detectar versao baseada no caminho (Ex: .../18/data...)
+        version = "16" # Default seguro
+        if "/18/" in conf_path.replace("\\", "/"): version = "18"
+        elif "/17/" in conf_path.replace("\\", "/"): version = "17"
+        elif "/16/" in conf_path.replace("\\", "/"): version = "16"
+        elif "/15/" in conf_path.replace("\\", "/"): version = "15"
         
-        subprocess.run("net start postgresql-x64-15", shell=True)
-        subprocess.run("net start postgresql-x64-16", shell=True)
-        subprocess.run("net start postgresql-x64-17", shell=True)
-        subprocess.run("net start postgresql-x64-18", shell=True)
+        service_name = f"postgresql-x64-{version}"
+        print(f"   [INFO] Reiniciando serviço detectado: {service_name}")
+        
+        # Reiniciar apenas o servico correto
+        subprocess.run(f"net stop {service_name}", shell=True)
+        subprocess.run(f"net start {service_name}", shell=True)
         
         print("🚀 [TURBO] Otimizacao concluida! O banco esta voando agora.")
 
