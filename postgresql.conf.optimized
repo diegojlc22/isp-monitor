@@ -12,17 +12,18 @@
 # RESOURCE USAGE (except WAL)
 #------------------------------------------------------------------------------
 
-shared_buffers = 2GB			# 25% da RAM
+shared_buffers = 512MB			# Seguro para qualquer PC
 work_mem = 16MB				# Otimizado para conexões simultaneas
-maintenance_work_mem = 512MB		# Acelera VACUUM e CREATE INDEX
+maintenance_work_mem = 256MB		# Acelera VACUUM e CREATE INDEX
 
+# dynamic_shared_memory_type = windows
 dynamic_shared_memory_type = windows
 
 #------------------------------------------------------------------------------
 # I/O & PERFORMANCE (SSD)
 #------------------------------------------------------------------------------
 
-effective_io_concurrency = 200		# SSD Optimization
+effective_io_concurrency = 0		# Windows não suporta bem async IO POSIX, melhor deixar 0 (auto)
 random_page_cost = 1.1			# SSD Cost Model
 
 # --- TURBO MODE ---
@@ -44,7 +45,7 @@ min_wal_size = 1GB
 # QUERY TUNING
 #------------------------------------------------------------------------------
 
-effective_cache_size = 6GB		# Estima cache do SO disponível
+effective_cache_size = 2GB		# Estima cache do SO disponível
 default_statistics_target = 100
 
 #------------------------------------------------------------------------------
@@ -53,7 +54,7 @@ default_statistics_target = 100
 
 listen_addresses = '*'
 port = 5432
-max_connections = 100
+max_connections = 200
 
 #------------------------------------------------------------------------------
 # LOGGING (Reduzido para economia de disco)
@@ -63,7 +64,7 @@ log_destination = 'stderr'
 logging_collector = on
 log_directory = 'log'
 log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
-# log_min_duration_statement = 1000  # Logar queries lentas (>1s) se precisar debug
+log_min_duration_statement = 2000  # Logar apenas queries muito lentas (>2s)
 
 #------------------------------------------------------------------------------
 # AUTOTVACCUM (Manutenção Automática Agressiva)

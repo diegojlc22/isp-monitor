@@ -1,37 +1,59 @@
 @echo off
-set "PYTHONIOENCODING=utf-8"
-setlocal
 cd /d "%~dp0"
-title ISP Monitor - POSTGRES SERVER
+TITLE ISP Monitor - Enterprise System
+CLS
 
-:: Configuração do Banco
-:: As configuracoes sao carregadas automaticamente do arquivo .env (backend/.env)
+:: -------------------------------------------------------------------------
+:: AMBIENTE PURO (Standalone Mode)
+:: -------------------------------------------------------------------------
 
-:: Setup Python e Venv
-if exist ".venv\Scripts\python.exe" (
-    set "PYTHON_EXE=.venv\Scripts\python.exe"
+:: 1. Limpar variáveis de ambiente tóxicas
+set PYTHONHOME=
+set PYTHONPATH=
+set PYTHONEXECUTABLE=
+set PYTHONUTF8=1
+
+:: 2. Selecionar Python (Prioridade absoluta para python_bin portátil)
+if exist "python_bin\python.exe" (
+    :: Caminho absoluto para evitar problemas de PATH
+    for %%I in ("python_bin\python.exe") do set "PY=%%~fI"
+    echo [LAUNCHER] Usando Python Portatil: "%PY%"
 ) else (
-    set "PYTHON_EXE=python"
+    if exist ".venv\Scripts\python.exe" (
+        for %%I in (".venv\Scripts\python.exe") do set "PY=%%~fI"
+        echo [LAUNCHER] Usando Python Venv: "%PY%"
+    ) else (
+        set "PY=python"
+        echo [LAUNCHER] Usando Python do Sistema
+    )
 )
 
-echo [!] Iniciando ISP Monitor com POSTGRESQL
-echo [!] Banco: monitor_prod
+:: 3. Verificacao de Segurança (Instalar libs se faltar)
+if not exist ".boot_python_ready" (
+    echo [LAUNCHER] Garantindo integridade do ambiente Python...
+    "%PY%" -m pip install -r backend/requirements.txt --quiet --no-warn-script-location
+    
+    :: Criar flag de sucesso
+    echo OK > .boot_python_ready
+)
+
+:: 4. INICIAR SISTEMA
 echo.
+echo [1/3] Backend API (Porta 8080)...
+start "ISP Backend" /b "%PY%" -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --log-level info > api.log 2>&1
 
-echo [!] Iniciando Coletor (Log: collector.log)... >> startup.log
-start "ISP Collector" /B "%PYTHON_EXE%" backend/collector.py > collector.log 2>&1
+echo [2/3] Pinger V2 (Turbo)...
+start "ISP Pinger" /b "%PY%" -m backend.app.services.pinger_fast > collector.log 2>&1
 
-:: Rodar Uvicorn com otimizações
-echo [!] Iniciando API Uvicorn (Log: api.log)... >> startup.log
-"%PYTHON_EXE%" -m uvicorn backend.app.main:app ^
-  --host 0.0.0.0 ^
-  --port 8080 ^
-  --workers 1 ^
-  --http h11 ^
-  --limit-concurrency 100 ^
-  --timeout-keep-alive 30 > api.log 2>&1
-
-if %errorlevel% neq 0 (
-    echo [ERROR] O servidor caiu.
-    pause
+echo [3/3] Frontend Interface...
+if not exist "frontend\node_modules" (
+    echo [INFO] Instalando modulos do Frontend...
+    cd frontend && npm install --silent && cd ..
 )
+:: Frontend em background com logs
+start "ISP Frontend" /b cmd /c "npm run dev --prefix frontend > frontend.log 2>&1"
+
+echo.
+echo [SUCESSO] Sistema Iniciado.
+timeout /t 3 >nul
+exit
