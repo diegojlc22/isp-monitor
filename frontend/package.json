@@ -13,6 +13,7 @@
     "@tailwindcss/postcss": "^4.1.18",
     "@types/lodash": "^4.17.21",
     "@types/react-grid-layout": "^1.3.6",
+    "@types/react-window": "^1.8.8",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
@@ -24,8 +25,11 @@
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.11.0",
+    "react-virtualized-auto-sizer": "^2.0.0",
+    "react-window": "^2.2.3",
     "recharts": "^3.6.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "use-debounce": "^10.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

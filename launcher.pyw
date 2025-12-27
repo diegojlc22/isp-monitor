@@ -17,6 +17,38 @@ from PIL import Image, ImageTk
 import socket
 import requests
 
+# --- LOGGING SETUP ---
+class Unbuffered(object):
+   def __init__(self, stream):
+       self.stream = stream
+       self.log_data = [] # Espelho em memória
+
+   def write(self, data):
+       try:
+           self.stream.write(data)
+           self.stream.flush()
+           self.log_data.append(data)
+           if len(self.log_data) > 1000: # Limita memória
+               self.log_data.pop(0)
+       except: pass
+
+   def writelines(self, datas):
+       self.stream.writelines(datas)
+       self.stream.flush()
+       self.log_data.extend(datas)
+
+   def __getattr__(self, attr):
+       return getattr(self.stream, attr)
+
+try:
+    log_file = open("startup.log", "w", encoding="utf-8")
+    logger_instance = Unbuffered(log_file)
+    sys.stdout = logger_instance
+    sys.stderr = logger_instance # Compartilha o mesmo objeto/buffer
+    print("[LAUNCHER] Logging system initialized (Memory Mirror).")
+except Exception as e:
+    pass 
+# ---------------------
 
 # Cores (Tema Dark Moderno)
 COLORS = {
@@ -44,6 +76,7 @@ class ModernLauncher:
         
         # Estado
         self.is_running = False
+        self.is_starting = False # Flag para evitar falsos positivos no startup
         self.should_be_running = False # Monitoramento de auto-cura
         self.process = None
         self.should_be_running = False 
@@ -388,7 +421,8 @@ class ModernLauncher:
         
         # --- AUTO HEAL ---
         try:
-            if getattr(self, 'should_be_running', False) and not self.is_running:
+            # Ignora crash check se estiver iniciando (janela de grace period)
+            if getattr(self, 'should_be_running', False) and not self.is_running and not self.is_starting:
                  self.handle_crash()
         except: pass
         
@@ -431,11 +465,12 @@ class ModernLauncher:
             
             # Processos auxiliares: verificar menos frequentemente
             if self._check_counter % 3 == 0:  # A cada 12 segundos
-                ngrok_is_running = False
-                expo_is_running = False
+                # Verificar processos filhos controlados por nós (Mais Confiável)
+                ngrok_is_running = (self.ngrok_process is not None and self.ngrok_process.poll() is None)
+                expo_is_running = (self.expo_process is not None and self.expo_process.poll() is None)
                 zap_is_running = False
                 
-                # OTIMIZAÇÃO: Filtrar por nome primeiro (muito mais rápido)
+                # OTIMIZAÇÃO: Filtrar por nome primeiro para detectar externos ou órfãos
                 for p in psutil.process_iter(['name']):
                     try:
                         name = p.info['name'].lower()
@@ -593,8 +628,12 @@ class ModernLauncher:
             self.info_label.config(text="Iniciando... (Aguarde 5-10s)")
             self.status_badge.config(text=" ● INICIANDO ", fg=COLORS['warning'])
             
-            # Aguardar e verificar
-            self.wait_for_start()
+            # Aguardar e verificar com flag de proteção
+            self.is_starting = True
+            try:
+                self.wait_for_start()
+            finally:
+                self.is_starting = False # Libera monitoramento de crash
             
         except Exception as e:
             messagebox.showerror("Erro", str(e))
@@ -1097,8 +1136,9 @@ class ModernLauncher:
                     if proc.info['pid'] == my_pid: 
                         continue
                     
-                    proc_name = proc.info['name'].lower()
-                    cmdline = ' '.join(proc.info['cmdline']).lower()
+                    proc_name = proc.info.get('name', '').lower()
+                    # Trata cmdline None para evitar erro 'can only join an iterable'
+                    cmdline = ' '.join(proc.info.get('cmdline') or []).lower()
                     
                     # Critérios para matar:
                     # 1. Processos do projeto (python com collector, node com whatsapp, postgres)
@@ -1181,29 +1221,6 @@ class ModernLauncher:
                 return decoded_lines[-n:]
         except Exception:
             return []
-
-    def refresh_logs(self):
-        """Carrega logs coloridos (Otimizado)"""
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.delete(1.0, tk.END)
-        
-        files = ["startup.log", "api.log", "collector.log"]
-        
-        for fname in files:
-            self.log_text.insert(tk.END, f"\n┏━━ {fname.upper()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", "title")
-            
-            lines = self.read_last_lines(fname, 50)
-            if lines:
-                self.log_text.insert(tk.END, "".join(lines))
-            elif os.path.exists(fname):
-                 self.log_text.insert(tk.END, "[Arquivo Vazio ou Erro de Leitura]\n")
-            else:
-                self.log_text.insert(tk.END, "[Não encontrado]\n", "error")
-        
-        self.log_text.see(tk.END)
-        self.log_text.config(state=tk.DISABLED)
-    
-    
     def toggle_ngrok(self):
         """Liga/Desliga o Ngrok"""
         if self.ngrok_running:
@@ -1274,8 +1291,11 @@ class ModernLauncher:
                     messagebox.showerror("Erro", f"Pasta mobile não encontrada em:\n{mobile_path}")
                     return
                 
-                # Iniciar Expo em background (sem janela)
-                cmd = f'cd /d "{mobile_path}" && npx expo start'
+                # Auto-Install dependencies se necessário
+                # --offline: Evita pedir login na conta Expo e conflitos de host
+                cmd = f'cd /d "{mobile_path}" && (if not exist node_modules npm install) && npx expo start --offline'
+                
+                self.info_label.config(text="Iniciando Expo (Modo Offline)...")
                 self.expo_process = subprocess.Popen(
                     cmd,
                     shell=True,
@@ -1395,13 +1415,17 @@ class ModernLauncher:
     def capture_expo_logs(self):
         """Captura logs do processo Expo em tempo real"""
         try:
-            if self.expo_process and self.expo_process.stdout:
-                for line in iter(self.expo_process.stdout.readline, ''):
-                    if line:
-                        self.expo_logs.append(line)
-                        # Limitar a 500 linhas
-                        if len(self.expo_logs) > 500:
-                            self.expo_logs = self.expo_logs[-500:]
+            with open("expo.log", "w", encoding="utf-8") as f:
+                if self.expo_process and self.expo_process.stdout:
+                    for line in iter(self.expo_process.stdout.readline, ''):
+                        if line:
+                            self.expo_logs.append(line)
+                            f.write(line)
+                            f.flush()
+                            
+                            # Limitar a 500 linhas na memória
+                            if len(self.expo_logs) > 500:
+                                self.expo_logs = self.expo_logs[-500:]
         except:
             pass
     
@@ -1438,17 +1462,28 @@ class ModernLauncher:
         self.log_text.config(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
         
-        files = ["startup.log", "api.log", "collector.log"]
+        files = ["startup.log", "api.log", "collector.log", "frontend.log", "expo.log"]
         
         for fname in files:
             self.log_text.insert(tk.END, f"\n┏━━ {fname.upper()} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", "title")
+            
+            if fname == "startup.log":
+                try:
+                    # Ler da memória para evitar conflito de File Lock
+                    content = "".join(sys.stdout.log_data)
+                    self.log_text.insert(tk.END, content if content else "[Aguardando logs...]\n")
+                except:
+                    self.log_text.insert(tk.END, "[Erro ao ler memória startup]\n", "error")
+                continue
+
             if os.path.exists(fname):
                 try:
-                    with open(fname, "r") as f:
-                        lines = f.readlines()[-30:]  # Last 30 lines
+                    # Encoding UTF-8 (ignore errors) para suportar emojis
+                    with open(fname, "r", encoding="utf-8", errors="ignore") as f:
+                        lines = f.readlines()[-50:]  # Aumentei para 50 linhas
                         self.log_text.insert(tk.END, "".join(lines) if lines else "[Arquivo Vazio]\n")
-                except:
-                    self.log_text.insert(tk.END, "[Erro ao ler]\n", "error")
+                except Exception as e:
+                    self.log_text.insert(tk.END, f"[Erro ao ler: {e}]\n", "error")
             else:
                 self.log_text.insert(tk.END, "[Não encontrado]\n", "error")
         

@@ -17,6 +17,17 @@ def is_admin():
     except:
         return False
 
+def decode_output(bytes_data):
+    """Safely decode stdout/stderr dealing with Windows Encodings"""
+    if not bytes_data: return ""
+    try:
+        return bytes_data.decode('utf-8')
+    except:
+        try:
+            return bytes_data.decode('cp850', errors='ignore')
+        except:
+            return bytes_data.decode('mbcs', errors='ignore')
+
 def check_port_availability(host: str, port: int) -> bool:
     """
     Check if a port is available (not in use).
@@ -42,11 +53,11 @@ def check_firewall_rule(rule_name: str, port: int) -> bool:
         cmd = f"Get-NetFirewallRule -DisplayName '{rule_name}' -ErrorAction SilentlyContinue"
         result = subprocess.run(
             ["powershell", "-Command", cmd],
-            capture_output=True,
-            text=True
+            capture_output=True
         )
-        # If exit code is 0 and we have output, rule likely exists.
-        return result.returncode == 0 and len(result.stdout.strip()) > 0
+        # Decode output safely
+        stdout = decode_output(result.stdout)
+        return result.returncode == 0 and len(stdout.strip()) > 0
     except Exception as e:
         logger.error(f"Failed to check firewall rule: {e}")
         return False
@@ -73,8 +84,7 @@ def create_firewall_rule(rule_name: str, port: int):
     try:
         result = subprocess.run(
             ["powershell", "-Command", cmd],
-            capture_output=True,
-            text=True
+            capture_output=True
         )
         
         if result.returncode == 0:
@@ -82,7 +92,8 @@ def create_firewall_rule(rule_name: str, port: int):
             print(f"\n[NETWORK AUTO-FIX] ✅ Windows Firewall rule created for port {port}. Remote access enabled.\n")
             return True
         else:
-            logger.error(f"Failed to create firewall rule. Output: {result.stderr}")
+            stderr = decode_output(result.stderr)
+            logger.error(f"Failed to create firewall rule. Output: {stderr}")
             return False
     except Exception as e:
         logger.error(f"Error executing firewall creation command: {e}")

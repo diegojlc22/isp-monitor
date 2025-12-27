@@ -1,9 +1,82 @@
 """
-SSH Commander with Retry and Better Error Handling
+SSH Commander with Connection Pooling and Optimizations
 """
 import paramiko
 import asyncio
-from typing import Tuple
+import logging
+from typing import Tuple, Dict, List
+from collections import defaultdict
+import time
+
+logger = logging.getLogger(__name__)
+
+class SSHConnectionPool:
+    def __init__(self, max_connections_per_host: int = 5, pool_ttl: int = 300):
+        self.max_conn = max_connections_per_host
+        self.ttl = pool_ttl # Seconds to keep connection alive
+        # Structure: host -> List[{'client': SSHClient, 'created': timestamp, 'lock': Lock}]
+        # But sharing paramiko client across threads requires care. 
+        # Since we use run_in_executor, we treat client as exclusive to a task while in use.
+        self._pool: Dict[str, List[paramiko.SSHClient]] = defaultdict(list)
+        self._lock = asyncio.Lock()
+    
+    async def get_connection(self, ip: str, user: str, password: str, port: int, timeout: int) -> paramiko.SSHClient:
+        async with self._lock:
+            # Try to get valid existing connection
+            while self._pool[ip]:
+                client = self._pool[ip].pop()
+                if self._is_alive(client):
+                    return client
+                else:
+                    client.close()
+        
+        # Create new connection (outside lock to allow concurrency)
+        return await self._create_connection(ip, user, password, port, timeout)
+
+    async def release_connection(self, ip: str, client: paramiko.SSHClient):
+        if not self._is_alive(client):
+            client.close()
+            return
+
+        async with self._lock:
+            if len(self._pool[ip]) < self.max_conn:
+                self._pool[ip].append(client)
+            else:
+                client.close()
+
+    def _is_alive(self, client: paramiko.SSHClient) -> bool:
+        try:
+            transport = client.get_transport()
+            return transport and transport.is_active()
+        except:
+            return False
+
+    async def _create_connection(self, ip, user, password, port, timeout) -> paramiko.SSHClient:
+        def connect():
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(
+                ip, 
+                port=port, 
+                username=user, 
+                password=password, 
+                timeout=timeout,
+                banner_timeout=timeout
+            )
+            return ssh
+        
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, connect)
+
+    async def close_all(self):
+        async with self._lock:
+            for ip in self._pool:
+                for client in self._pool[ip]:
+                    client.close()
+                self._pool[ip].clear()
+
+# Global Pool
+ssh_pool = SSHConnectionPool()
 
 async def reboot_device(
     ip: str, 
@@ -13,105 +86,50 @@ async def reboot_device(
     max_retries: int = 3,
     timeout: int = 10
 ) -> Tuple[bool, str]:
-    """
-    Reboot device via SSH with retry mechanism
     
-    Args:
-        ip: Device IP address
-        user: SSH username
-        password: SSH password
-        port: SSH port (default 22)
-        max_retries: Maximum number of retry attempts (default 3)
-        timeout: Connection timeout in seconds (default 10)
-    
-    Returns:
-        Tuple of (success: bool, message: str)
-    """
-    
-    async def _reboot_attempt(attempt: int) -> Tuple[bool, str]:
-        """Single reboot attempt"""
+    for attempt in range(max_retries):
+        client = None
         try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client = await ssh_pool.get_connection(ip, user, password, port, timeout)
             
-            # Connect with timeout
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: ssh.connect(
-                    ip, 
-                    port=port, 
-                    username=user, 
-                    password=password, 
-                    timeout=timeout,
-                    banner_timeout=timeout
-                )
-            )
             
-            # Try Mikrotik/RouterOS command first
-            stdin, stdout, stderr = ssh.exec_command("/system reboot")
+            # --- Command Execution ---
+            # Try RouterOS reboot first
+            stdin, stdout, stderr = client.exec_command("/system reboot")
             
-            # Read output with timeout
+            # Non-blocking read needed? paramiko exec_command returns file-like objects.
+            # Reading them is blocking.
+            
+            # Helper to read output safely
+            async def read_stream(stream):
+                return await loop.run_in_executor(None, stream.read)
+
             try:
-                output = await asyncio.wait_for(
-                    loop.run_in_executor(None, stdout.read),
-                    timeout=5
-                )
-                error = await asyncio.wait_for(
-                    loop.run_in_executor(None, stderr.read),
-                    timeout=5
-                )
+                out = await asyncio.wait_for(read_stream(stdout), timeout=5)
+                err = await asyncio.wait_for(read_stream(stderr), timeout=5)
                 
-                # If RouterOS command failed, try Linux reboot
-                if error and b"bad command name" in error.lower():
-                    stdin, stdout, stderr = ssh.exec_command("sudo reboot")
-                    await asyncio.wait_for(
-                        loop.run_in_executor(None, stdout.read),
-                        timeout=5
-                    )
-                
+                if err and b"bad command name" in err.lower():
+                     # Fallback to Linux
+                     stdin, stdout, stderr = client.exec_command("sudo reboot")
             except asyncio.TimeoutError:
-                # Timeout is OK - device is rebooting
+                # Timeout is often expected on reboot
                 pass
             
-            ssh.close()
-            return True, f"[OK] Reboot command sent successfully (attempt {attempt + 1})"
-            
-        except paramiko.AuthenticationException:
-            return False, "[ERROR] Authentication failed - check username/password"
-        
-        except paramiko.SSHException as e:
-            if attempt < max_retries - 1:
-                # Retry on SSH errors
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                return None, str(e)  # Signal retry
-            return False, f"[ERROR] SSH error after {attempt + 1} attempts: {str(e)}"
-        
-        except asyncio.TimeoutError:
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2 ** attempt)
-                return None, "Timeout"  # Signal retry
-            return False, f"[ERROR] Connection timeout after {attempt + 1} attempts"
-        
-        except Exception as e:
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2 ** attempt)
-                return None, str(e)  # Signal retry
-            return False, f"[ERROR] Error after {attempt + 1} attempts: {str(e)}"
-    
-    # Retry loop
-    for attempt in range(max_retries):
-        success, message = await _reboot_attempt(attempt)
-        
-        if success is not None:  # Got a definitive result
-            return success, message
-        
-        # None means retry
-        print(f"[WARN] Retry {attempt + 1}/{max_retries} for {ip}: {message}")
-    
-    # Should never reach here, but just in case
-    return False, f"[ERROR] Failed after {max_retries} attempts"
+            # Return to pool? No, connection is likely dead after reboot.
+            client.close()
+            return True, f"[OK] Reboot command sent (attempt {attempt+1})"
 
+        except Exception as e:
+            if client:
+                client.close() # Don't return broken client to pool
+            
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            return False, f"[ERROR] Failed to reboot: {e}"
+
+    return False, "Max retries exceeded"
 
 async def execute_command(
     ip: str,
@@ -121,42 +139,26 @@ async def execute_command(
     port: int = 22,
     timeout: int = 10
 ) -> Tuple[bool, str, str]:
-    """
-    Execute arbitrary SSH command
     
-    Returns:
-        Tuple of (success: bool, stdout: str, stderr: str)
-    """
+    client = None
     try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client = await ssh_pool.get_connection(ip, user, password, port, timeout)
         
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: ssh.connect(
-                ip, 
-                port=port, 
-                username=user, 
-                password=password, 
-                timeout=timeout
-            )
-        )
+        # Blocking exec
+        stdin, stdout, stderr = client.exec_command(command)
         
-        stdin, stdout, stderr = ssh.exec_command(command)
+        async def read_stream(stream):
+            return await loop.run_in_executor(None, stream.read)
+            
+        out_bytes = await asyncio.wait_for(read_stream(stdout), timeout=timeout)
+        err_bytes = await asyncio.wait_for(read_stream(stderr), timeout=timeout)
         
-        output = await asyncio.wait_for(
-            loop.run_in_executor(None, stdout.read),
-            timeout=timeout
-        )
-        error = await asyncio.wait_for(
-            loop.run_in_executor(None, stderr.read),
-            timeout=timeout
-        )
+        await ssh_pool.release_connection(ip, client)
         
-        ssh.close()
-        
-        return True, output.decode('utf-8', errors='ignore'), error.decode('utf-8', errors='ignore')
-        
+        return True, out_bytes.decode('utf-8', errors='ignore'), err_bytes.decode('utf-8', errors='ignore')
+
     except Exception as e:
+        if client:
+            client.close()
         return False, "", str(e)

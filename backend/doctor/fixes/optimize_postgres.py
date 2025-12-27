@@ -1,6 +1,13 @@
 import os
 import shutil
 import subprocess
+import ctypes
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
 
 def is_optimized(conf_path):
     """Verifica se o arquivo já é a versão Turbo"""
@@ -13,6 +20,13 @@ def is_optimized(conf_path):
 
 def run_fix(arg=None):
     print("[DOCTOR] 🩺 Verificando performance do Banco de Dados...")
+    
+    # Check Admin
+    if not is_admin():
+        print("[DOCTOR] 🛡️ Modo Usuário detectado (Sem Admin).")
+        print("[DOCTOR] ⚠️ Para ativar Otimização Turbo do Banco, reinicie como Admin.")
+        print("[DOCTOR] ⏭️ Pulando otimização automática para evitar erros...")
+        return True # Retorna True para o sistema continuar normalmente
     
     # 1. Localizar Pasta de Dados
     pg_versions = ["17", "16", "15"]
@@ -39,11 +53,14 @@ def run_fix(arg=None):
 
     print("[DOCTOR] ⚠️ Configuração padrão detectada. Aplicando TURBO MODE...")
     
-    # Localizar arquivo fonte
-    # Assume que o script roda da raiz do projeto (cwd)
-    source_conf = "postgresql.conf.optimized"
+    # Localizar arquivo fonte (Caminho Absoluto)
+    # Sobe 3 níveis a partir de backend/doctor/fixes/ -> Raiz do Projeto
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, "..", "..", ".."))
+    source_conf = os.path.join(project_root, "postgresql.conf.optimized")
+    
     if not os.path.exists(source_conf):
-        print("[DOCTOR] ❌ Arquivo fonte de otimização não encontrado.")
+        print(f"[DOCTOR] ❌ Arquivo fonte não encontrado em: {source_conf}")
         return False
 
     # Backup e Aplicação
@@ -64,14 +81,17 @@ def run_fix(arg=None):
             print("[DOCTOR] ✅ Otimização aplicada com sucesso!")
             return True
         else:
-            print("[DOCTOR] ❌ Falha ao reiniciar serviço pós-otimização. Revertendo...")
+            print("[DOCTOR] ❌ Otimização FALHOU ao reiniciar serviço. O Postgres recusou a config.")
+            print("[DOCTOR] ℹ️ Verifique se tem RAM livre suficiente ou reduza 'shared_buffers'.")
+            
             shutil.copy2(os.path.join(pg_data, "postgresql.conf.backup_auto"), target_conf)
             subprocess.run(f"net start {service_name}", shell=True)
-            return False
+            print("[DOCTOR] ℹ️ Sistema restaurado para padrão.")
+            return True
             
     except Exception as e:
         print(f"[DOCTOR] 💥 Falha na otimização: {e}")
-        return False
+        return True # Retorna TRUE para continuar mesmo sem otimização
 
 if __name__ == "__main__":
     run_fix()

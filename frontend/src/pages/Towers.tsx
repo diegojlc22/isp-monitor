@@ -119,12 +119,18 @@ export function Towers() {
                                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none font-mono"
                                     onChange={e => {
                                         const val = e.target.value;
-                                        const parts = val.split(',');
-                                        if (parts.length === 2) {
+                                        // Regex inteligente para capturar Lat e Lon (suporta . ou , como decimal)
+                                        // Pega dois grupos numéricos separados por vírgula, ponto-e-vírgula ou espaço
+                                        const matches = val.match(/([+-]?\d+[.,]\d+)[^0-9-]+([+-]?\d+[.,]\d+)/);
+
+                                        if (matches && matches.length >= 3) {
+                                            const latRaw = matches[1].replace(',', '.');
+                                            const lonRaw = matches[2].replace(',', '.');
+
                                             setFormData({
                                                 ...formData,
-                                                latitude: parseFloat(parts[0].trim()),
-                                                longitude: parseFloat(parts[1].trim())
+                                                latitude: parseFloat(latRaw),
+                                                longitude: parseFloat(lonRaw)
                                             });
                                         }
                                     }}

@@ -10,7 +10,7 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 
 **Novo usuário? Execute o Launcher Inteligente:**
 
-1. **Duplo clique** em `LAUNCHER.bat`
+1. **Duplo clique** em `ABRIR_SISTEMA.bat`
 2. O sistema verificará automaticamente:
    - ✅ Python & Dependências
    - ✅ Node.js & Módulos
@@ -19,9 +19,22 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 
 ---
 
-## 🚀 Novidades da Versão (26/12/2025)
+## 🚀 Novidades da Versão 3.3 (27/12/2025)
 
-### 🏥 1. Auto-Reparo (Doctor AI + Healer)
+### 📱 1. Mobile & Expo Offline Mode
+- **Auto-Discovery**: O App Mobile detecta automaticamente o IP do servidor (`hostUri`). Chega de configurar IPs fixos!
+- **Modo Offline**: Inicialização do Expo otimizada com `--offline` para evitar falhas de login.
+- **Auto-Install Healer**: O Launcher detecta dependências ausentes e instala automaticamente na primeira execução.
+
+### 🗺️ 2. Frontend GPS Fix
+- **Parser Inteligente**: Agora aceita coordenadas em qualquer formato (ex: `-19,55` ou `-19.55`), corrigindo erro de cálculo de distância.
+
+### 🛠️ 3. Launcher 3.0 (Stability)
+- **Logs em Tempo Real**: Novo sistema "Memory Mirror" evita bloqueio de arquivos de log.
+- **Crash Shield**: Correção de bugs críticos de terminação de processos.
+- **Startup Otimizado**: Inicialização silenciosa e invisível para serviços de background.
+
+### 🏥 4. Auto-Reparo (Doctor AI + Healer)
 Reduzimos a necessidade de suporte técnico manual com um sistema de auto-cura:
 - **Diagnóstico Ativo**: O script `diagnostico.py` lê logs em busca de erros conhecidos (porta presa, queda de API).
 - **Cura Automática**: Scripts de correção (`tools/reparo/`) são acionados automaticamente para:
@@ -148,8 +161,8 @@ O sistema tenta se corrigir sozinho. Se falhar 3x, verifique a aba **LOGS** no L
 - ✅ Gateway WhatsApp: **Online**
 - ✅ App Mobile: **Online**
 
-**Última atualização:** 26/12/2025
-**Build:** v2.5.0 (Doctor AI Edition)
+**Última atualização:** 27/12/2025
+**Build:** v3.3.0 (Stability Edition)
 
 ---
 

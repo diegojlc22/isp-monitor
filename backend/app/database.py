@@ -1,52 +1,64 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from dotenv import load_dotenv
-import os
+from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy import event
+from backend.app.config import settings, logger
 
-# Load .env explicitamente
-load_dotenv()
+# Engine Creation
+is_sqlite = "sqlite" in settings.async_database_url
 
-# Check for DATABASE_URL env var, otherwise fallback to SQLite
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./monitor.db")
-
-# Ensure asyncpg driver is used for Postgres
-if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-
-# Debug: Mostrar URL mascarada
-try:
-    if DATABASE_URL and "://" in DATABASE_URL:
-        masked_url = DATABASE_URL
-        if "@" in masked_url:
-            part1 = masked_url.split("@")[0] # protocol://user:pass
-            if ":" in part1.split("://")[1]:
-                user_part = part1.split("://")[1].split(":")[0]
-                masked_url = f"{part1.split('://')[0]}://{user_part}:****@{masked_url.split('@')[1]}"
-        print(f"[DATABASE] Conectando a: {masked_url}")
-except:
-    print("[DATABASE] Iniciando conexao...")
-
-# Connection Args adjustments
 connect_args = {}
-# Note: aiosqlite doesn't need check_same_thread like sync sqlite
+pool_class = QueuePool
 
-engine = create_async_engine(
-    DATABASE_URL, 
-    echo=False, 
-    connect_args=connect_args,
-    pool_size=20,              # Conexões permanentes no pool
-    max_overflow=10,           # Conexões extras sob demanda
-    pool_pre_ping=False,       # DESATIVADO TEMPORARIAMENTE para evitar erro de startup no Windows
-    pool_recycle=3600          # Recicla conexões a cada 1h (evita timeouts)
-)
+if is_sqlite:
+    connect_args = {"check_same_thread": False}
+    pool_class = NullPool # Let aiosqlite handle connection, or use very consistent pool
+else:
+    connect_args = {"server_settings": {"application_name": "isp_monitor_backend"}}
+
+engine_kwargs = {
+    "echo": False,
+    "connect_args": connect_args,
+    "poolclass": pool_class,
+    "pool_pre_ping": True,
+    "pool_recycle": 3600
+}
+
+if not is_sqlite:
+    engine_kwargs.update({
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_max_overflow,
+        "pool_timeout": 30
+    })
+
+try:
+    engine = create_async_engine(
+        settings.async_database_url,
+        **engine_kwargs
+    )
+except Exception as e:
+    logger.critical(f"Failed to create DB engine: {e}")
+    raise
+
+# SQLite Performance Tuning (WAL Mode)
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+        except Exception as e:
+            logger.warning(f"Could not set SQLite PRAGMA: {e}")
 
 async_session_factory = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
+    autoflush=False # Performance boost for complex ops
 )
 
-# Alias for compatibility if used elsewhere as AsyncSessionLocal
 AsyncSessionLocal = async_session_factory
 
 class Base(DeclarativeBase):
@@ -54,4 +66,10 @@ class Base(DeclarativeBase):
 
 async def get_db():
     async with async_session_factory() as session:
-        yield session
+        try:
+            yield session
+        except Exception as e:
+            logger.error(f"Database Session Error: {e}")
+            raise
+        finally:
+            await session.close()

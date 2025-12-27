@@ -1,10 +1,26 @@
-
+import Constants from 'expo-constants';
 import axios from 'axios';
 
-// ⚠️ IMPORTANTE: 
-// Endereço Local (Desenvolvimento)
-// Substitua pelo IP da sua máquina se mudar
-const API_URL = 'http://192.168.0.17:8000/api';
+// 🤖 Lógica Inteligente de IP
+// Pega o IP da máquina que está rodando o Expo (seu PC) automaticamente
+const getBaseUrl = () => {
+    try {
+        const debuggerHost = Constants.expoConfig?.hostUri;
+        const localhost = debuggerHost?.split(":")[0];
+
+        if (localhost) {
+            return `http://${localhost}:8080/api`;
+        }
+    } catch (e) {
+        console.log("Erro ao detectar IP:", e);
+    }
+    // Fallback Genérico (Emuladores)
+    return 'http://localhost:8080/api';
+};
+
+const API_URL = getBaseUrl();
+
+console.log(`[MOBILE] Conectando API em: ${API_URL}`);
 
 const api = axios.create({
     baseURL: API_URL,
@@ -15,9 +31,5 @@ const api = axios.create({
         'Content-Type': 'application/json'
     }
 });
-
-// export const setBaseUrl = (ip) => {
-//     api.defaults.baseURL = `http://${ip}:8080/api`;
-// };
 
 export default api;

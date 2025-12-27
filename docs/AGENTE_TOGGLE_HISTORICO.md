@@ -1,5 +1,22 @@
 # 📜 Histórico de Melhorias - ISP Monitor
 
+## 🎯 Versão 3.3 - Platform Stability & Mobile Intelligence (27/12/2024)
+
+### 🛠️ **LAUNCHER & STABILITY**
+- ✅ **Expo Offline Mode**: Correção definitiva do erro de login do Expo. O sistema agora detecta e configura o ambiente automaticamente.
+- ✅ **Memory Mirror Logging**: Logs agora são espelhados em memória para evitar erros de leitura/escrita em disco (File Locking).
+- ✅ **Secure Process Killing**: Correção de crash crítico ao tentar finalizar processos protegidos do Windows (LsaIso, Registry).
+
+### 📱 **MOBILE APP (EXPO)**
+- ✅ **Auto-Discovery**: O App agora detecta o IP do servidor automaticamente via `hostUri`.
+- ✅ **Porta Corrigida**: Backend padronizado na porta 8080 (antes 8000).
+- ✅ **Network Healer**: Script de diagnóstico de rede acionado automaticamente se o app não conectar.
+
+### 🗺️ **FRONTEND (GPS FIX)**
+- ✅ **Smart Parser**: O campo de coordenadas agora aceita qualquer formato (Ponto ou Vírgula), corrigindo o erro de "distância totalmente errada" (truncamento de decimais).
+
+---
+
 ## 🎯 Versão 3.2 - Mobile & Network Intelligence (27/12/2024)
 
 ### 🗺️ **MOBILE MAP FIXES**

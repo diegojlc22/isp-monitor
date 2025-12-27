@@ -1,35 +1,66 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from sqlalchemy.orm import selectinload
+from typing import List, Optional
+import io
+import csv
+import json
+import ipaddress
+from datetime import datetime, timedelta, timezone
+
 from backend.app.database import get_db
-from backend.app.models import Equipment
-from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate
-from backend.app.services.cache import cache  # Cache para performance
+from backend.app.models import Equipment, PingLog, TrafficLog
+from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate, EquipmentUpdate
+from backend.app.services.cache import cache
+from backend.app.services.ssh_commander import reboot_device
+from backend.app.services.pinger_fast import scan_range_generator
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
 
+# --- Models Helpers ---
+class ScanRequest(BaseModel):
+    ip_range: str
+
+# --- Endpoints ---
+
 @router.get("/", response_model=List[EquipmentSchema])
-async def read_equipments(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    # PERFORMANCE: Cache otimizado
-    # - TTL de 10s (frontend atualiza a cada 15s, então cache sempre válido)
-    # - Cache invalidado apenas em CREATE/UPDATE/DELETE
-    # - Reduz queries em 90% durante uso normal
-    cache_key = f"equipments_list_{skip}_{limit}"
+async def read_equipments(
+    skip: int = 0, 
+    limit: int = 100, 
+    tower_id: Optional[int] = None,
+    is_online: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    # Performance: Otimização de Cache + Eager Loading
+    
+    # Cache Key inclui filtros para consistência
+    cache_key = f"eq_list_{skip}_{limit}_{tower_id}_{is_online}"
+    
     cached = await cache.get(cache_key)
     if cached:
         return cached
     
-    # Query otimizada: Usa índices em is_online, tower_id, equipment_type
-    result = await db.execute(
-        select(Equipment)
-        .offset(skip)
-        .limit(limit)
-        .order_by(Equipment.id)  # Ordem consistente para cache
+    # Query Otimizada com Eager Loading (Resolve N+1)
+    query = select(Equipment).options(
+        selectinload(Equipment.tower),
+        selectinload(Equipment.parent)
     )
+    
+    # Filtros
+    if tower_id is not None:
+        query = query.where(Equipment.tower_id == tower_id)
+    if is_online is not None:
+        query = query.where(Equipment.is_online == is_online)
+        
+    query = query.offset(skip).limit(limit).order_by(Equipment.id)
+    
+    result = await db.execute(query)
     equipments = result.scalars().all()
     
-    # Cache por 10s (otimizado de 30s)
+    # Cache valido por 10s
     await cache.set(cache_key, equipments, ttl_seconds=10)
     
     return equipments
@@ -37,7 +68,6 @@ async def read_equipments(skip: int = 0, limit: int = 100, db: AsyncSession = De
 @router.post("/", response_model=EquipmentSchema)
 async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db)):
     try:
-        # Check if IP already exists
         existing = await db.execute(select(Equipment).where(Equipment.ip == equipment.ip))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já está cadastrado")
@@ -47,8 +77,8 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
         await db.commit()
         await db.refresh(db_eq)
         
-        # Invalida o cache de equipamentos
-        await cache.delete("equipments_list_0_100")
+        # Invalida cache abrangente
+        await cache.clear() 
         
         return db_eq
     except HTTPException:
@@ -56,15 +86,19 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
     except Exception as e:
         await db.rollback()
         error_msg = str(e)
-        if "UNIQUE constraint failed" in error_msg or "duplicate key" in error_msg:
-            raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe no sistema")
-        raise HTTPException(status_code=500, detail=f"Erro ao criar equipamento: {error_msg}")
-
-from backend.app.schemas import EquipmentUpdate # Ensure this is imported
+        if "UNIQUE constraint" in error_msg or "duplicate key" in error_msg:
+            raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar: {error_msg}")
 
 @router.put("/{eq_id}", response_model=EquipmentSchema)
 async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
-    db_eq = await db.get(Equipment, eq_id)
+    result = await db.execute(
+        select(Equipment)
+        .options(selectinload(Equipment.tower), selectinload(Equipment.parent))
+        .where(Equipment.id == eq_id)
+    )
+    db_eq = result.scalar_one_or_none()
+    
     if not db_eq:
         raise HTTPException(status_code=404, detail="Equipment not found")
     
@@ -75,9 +109,7 @@ async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSess
     await db.commit()
     await db.refresh(db_eq)
     
-    # Invalida o cache de equipamentos
-    await cache.delete("equipments_list_0_100")
-    
+    await cache.clear()
     return db_eq
 
 @router.delete("/{eq_id}")
@@ -88,52 +120,37 @@ async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(db_eq)
     await db.commit()
     
-    # Invalida o cache de equipamentos
-    await cache.delete("equipments_list_0_100")
-    
+    await cache.clear()
     return {"message": "Equipment deleted"}
 
-from backend.app.services.ssh_commander import reboot_device
-
 @router.post("/{eq_id}/reboot")
-async def reboot_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
+async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_db)):
     db_eq = await db.get(Equipment, eq_id)
     if not db_eq:
         raise HTTPException(status_code=404, detail="Equipment not found")
         
     if not db_eq.ip:
-        raise HTTPException(status_code=400, detail="Equipamento sem IP configurado")
+        raise HTTPException(status_code=400, detail="Equipamento sem IP")
 
-    # Use stored credentials or defaults
     user = db_eq.ssh_user or "admin"
     password = db_eq.ssh_password
     port = db_eq.ssh_port or 22
     
     if not password:
-         raise HTTPException(status_code=400, detail="Senha SSH não configurada para este equipamento")
+         raise HTTPException(status_code=400, detail="Senha SSH não configurada")
 
     success, msg = await reboot_device(db_eq.ip, user, password, port)
     
     if not success:
-        raise HTTPException(status_code=500, detail=f"Falha no comando de reboot: {msg}")
+        raise HTTPException(status_code=500, detail=f"Falha no reboot: {msg}")
         
     return {"message": "Comando de reboot enviado com sucesso"}
-
-from pydantic import BaseModel
-class ScanRequest(BaseModel):
-    ip_range: str # e.g. "192.168.1.1-192.168.1.50"
-
-import ipaddress
-from fastapi.responses import StreamingResponse
-import json
-from backend.app.services.pinger_fast import scan_range_generator
 
 @router.get("/scan/stream/")
 async def scan_network_stream(ip_range: str):
     try:
         ips_to_scan = []
-        
-        # Parse Logic (Duplicated for now, could be refactored)
+        # Parse Logic
         if '/' in ip_range:
             net = ipaddress.ip_network(ip_range, strict=False)
             ips_to_scan = [str(ip) for ip in net.hosts()]
@@ -141,9 +158,10 @@ async def scan_network_stream(ip_range: str):
             start_ip, end_ip = ip_range.split('-')
             start = ipaddress.IPv4Address(start_ip.strip())
             end = ipaddress.IPv4Address(end_ip.strip())
-            while start <= end:
-                ips_to_scan.append(str(start))
-                start += 1
+            curr = start
+            while curr <= end:
+                ips_to_scan.append(str(curr))
+                curr += 1
         else:
             try:
                 ip_str = ip_range.strip()
@@ -163,36 +181,21 @@ async def scan_network_stream(ip_range: str):
         print(f"Scan Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-from backend.app.models import PingLog, TrafficLog
-from datetime import datetime, timedelta, timezone
-
 @router.get("/{eq_id}/latency-history")
 async def get_latency_history(
     eq_id: int, 
-    hours: int = 2,          # ✅ Padrão: últimas 2 horas
-    limit: int = 1000,       # ✅ Máximo 1000 registros
+    hours: int = 2,
+    limit: int = 1000,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Retorna histórico de latência com paginação obrigatória.
-    
-    Args:
-        hours: Janela de tempo (1-168h = 1h a 7 dias)
-        limit: Máximo de registros (1-5000)
-    """
-    # Validação
-    if hours < 1 or hours > 168:  # Max 7 dias
+    if hours < 1 or hours > 168:
         raise HTTPException(status_code=400, detail="hours deve estar entre 1 e 168")
-    
     if limit < 1 or limit > 5000:
         raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
     
-    # Calcular janela de tempo
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     start_time = now - timedelta(hours=hours)
     
-    # Query com LIMIT
     query = select(PingLog).where(
         PingLog.device_type == "equipment",
         PingLog.device_id == eq_id,
@@ -202,9 +205,8 @@ async def get_latency_history(
     result = await db.execute(query)
     logs = result.scalars().all()
     
-    # Retornar em ordem cronológica
     data = []
-    for log in reversed(logs):  # Inverter para ordem crescente
+    for log in reversed(logs):
         if log.latency_ms is not None:
             data.append({
                 "timestamp": log.timestamp.isoformat(),
@@ -216,7 +218,7 @@ async def get_latency_history(
         "count": len(data),
         "hours": hours,
         "limit": limit,
-        "truncated": len(data) == limit  # True se atingiu o limite
+        "truncated": len(data) == limit
     }
 
 @router.get("/{eq_id}/traffic-history")
@@ -226,19 +228,14 @@ async def get_traffic_history(
     limit: int = 1000,
     db: AsyncSession = Depends(get_db)
 ):
-    """Retorna histórico de tráfego com paginação obrigatória."""
-    # Validação
     if hours < 1 or hours > 168:
-        raise HTTPException(status_code=400, detail="hours deve estar entre 1 e 168")
-    
+        raise HTTPException(status_code=400, detail="hours 1-168")
     if limit < 1 or limit > 5000:
-        raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
+        raise HTTPException(status_code=400, detail="limit 1-5000")
     
-    # Calcular janela
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     start_time = now - timedelta(hours=hours)
     
-    # Query com LIMIT
     query = select(TrafficLog).where(
         TrafficLog.equipment_id == eq_id,
         TrafficLog.timestamp >= start_time
@@ -263,30 +260,21 @@ async def get_traffic_history(
         "truncated": len(data) == limit
     }
 
-
-# ===== CSV IMPORT/EXPORT =====
-import csv
-import io
-from fastapi.responses import Response
-
+# --- CSV Import/Export ---
 @router.get("/export/csv")
 async def export_equipments_csv(db: AsyncSession = Depends(get_db)):
-    """Exporta todos os equipamentos para CSV"""
     result = await db.execute(select(Equipment))
     equipments = result.scalars().all()
     
-    # Criar CSV em memória
     output = io.StringIO()
     writer = csv.writer(output)
     
-    # Header
     writer.writerow([
         'name', 'ip', 'tower_id', 'parent_id', 'brand', 'equipment_type',
         'ssh_user', 'ssh_port', 'snmp_community', 'snmp_version', 'snmp_port',
         'snmp_interface_index', 'is_mikrotik', 'mikrotik_interface', 'api_port'
     ])
     
-    # Data
     for eq in equipments:
         writer.writerow([
             eq.name, eq.ip, eq.tower_id or '', eq.parent_id or '', eq.brand or 'generic',
@@ -305,12 +293,8 @@ async def export_equipments_csv(db: AsyncSession = Depends(get_db)):
         headers={"Content-Disposition": "attachment; filename=equipments_export.csv"}
     )
 
-
-from fastapi import UploadFile, File
-
 @router.post("/import/csv")
 async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    """Importa equipamentos de um arquivo CSV"""
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Arquivo deve ser CSV")
     
@@ -318,26 +302,23 @@ async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession =
     decoded = content.decode('utf-8')
     reader = csv.DictReader(io.StringIO(decoded))
     
-    results = {
-        'success': [],
-        'failed': [],
-        'skipped': []
-    }
+    results = {'success': [], 'failed': [], 'skipped': []}
+    
+    to_add = [] # Bulk optimization candidate, but sticking to logic to validate uniqueness first
     
     for row in reader:
         try:
-            # Validar IP obrigatório
             if not row.get('ip'):
                 results['failed'].append({'row': row, 'reason': 'IP obrigatório'})
                 continue
             
-            # Verificar se já existe
+            # TODO: Otimizar verificacao de duplicatas (ex: carregar todos IPs em memoria)
+            # Por agora, mantem logica segura
             existing = await db.execute(select(Equipment).where(Equipment.ip == row['ip']))
             if existing.scalar_one_or_none():
                 results['skipped'].append({'ip': row['ip'], 'reason': 'IP já existe'})
                 continue
             
-            # Criar equipamento
             eq_data = {
                 'name': row.get('name') or f"Dispositivo {row['ip']}",
                 'ip': row['ip'],
@@ -363,10 +344,9 @@ async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession =
         except Exception as e:
             results['failed'].append({'row': row, 'reason': str(e)})
     
-    # Commit all successful imports
     if results['success']:
         await db.commit()
-        await cache.delete("equipments_list_0_100")
+        await cache.clear()
     
     return {
         'imported': len(results['success']),
@@ -374,4 +354,3 @@ async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession =
         'failed': len(results['failed']),
         'details': results
     }
-
