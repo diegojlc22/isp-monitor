@@ -36,16 +36,22 @@ async def apply_indexes():
         sql_content = f.read()
     
     # Dividir em statements individuais (separados por ;)
-    statements = [s.strip() for s in sql_content.split(';') if s.strip() and not s.strip().startswith('--')]
+    raw_statements = sql_content.split(';')
     
+    statements = []
+    for raw in raw_statements:
+        # Remover linhas de comentário e whitespace
+        lines = [line for line in raw.split('\n') if line.strip() and not line.strip().startswith('--')]
+        clean_statement = ' '.join(lines).strip()
+        if clean_statement:
+            statements.append(clean_statement)
+
     success_count = 0
     error_count = 0
     
     async with engine.begin() as conn:
         for i, statement in enumerate(statements, 1):
-            # Pular comentários e linhas vazias
-            if not statement or statement.startswith('--'):
-                continue
+             # Logica de execucao ja trata o statement limpo
             
             try:
                 # Extrair nome do índice para log
@@ -148,6 +154,14 @@ async def verify_indexes():
         print(f"📊 Total: {len(rows)} índices")
 
 
+async def main():
+    # Aplicar índices
+    success = await apply_indexes()
+    
+    if success:
+        # Verificar índices criados
+        await verify_indexes()
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 ISP Monitor - Performance Optimization")
@@ -155,12 +169,7 @@ if __name__ == "__main__":
     print()
     
     try:
-        # Aplicar índices
-        success = asyncio.run(apply_indexes())
-        
-        if success:
-            # Verificar índices criados
-            asyncio.run(verify_indexes())
+        asyncio.run(main())
         
         print()
         print("=" * 60)

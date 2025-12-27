@@ -7,35 +7,35 @@
 -- =========================================================
 
 -- =========================================================
--- 1. ÍNDICES NA TABELA EQUIPMENT
+-- 1. ÍNDICES NA TABELA EQUIPMENTS
 -- =========================================================
 
 -- Índice para filtros por status (Online/Offline)
 -- Usado em: GET /equipments/ com filtro de status
-CREATE INDEX IF NOT EXISTS idx_equipment_is_online 
-ON equipment(is_online);
+CREATE INDEX IF NOT EXISTS idx_equipments_is_online 
+ON equipments(is_online);
 
 -- Índice para filtros por torre
 -- Usado em: GET /equipments/ com filtro de torre
-CREATE INDEX IF NOT EXISTS idx_equipment_tower_id 
-ON equipment(tower_id) 
+CREATE INDEX IF NOT EXISTS idx_equipments_tower_id 
+ON equipments(tower_id) 
 WHERE tower_id IS NOT NULL;
 
 -- Índice para filtros por tipo de equipamento
 -- Usado em: GET /equipments/ com filtro de tipo
-CREATE INDEX IF NOT EXISTS idx_equipment_type 
-ON equipment(equipment_type);
+CREATE INDEX IF NOT EXISTS idx_equipments_type 
+ON equipments(equipment_type);
 
 -- Índice composto para queries que filtram múltiplos campos
 -- Usado em: Filtros combinados (torre + status)
-CREATE INDEX IF NOT EXISTS idx_equipment_tower_status 
-ON equipment(tower_id, is_online) 
+CREATE INDEX IF NOT EXISTS idx_equipments_tower_status 
+ON equipments(tower_id, is_online) 
 WHERE tower_id IS NOT NULL;
 
 -- Índice para busca por IP (usado em validações de duplicatas)
 -- Usado em: POST /equipments/ (check de IP duplicado)
-CREATE INDEX IF NOT EXISTS idx_equipment_ip 
-ON equipment(ip);
+CREATE INDEX IF NOT EXISTS idx_equipments_ip 
+ON equipments(ip);
 
 -- =========================================================
 -- 2. ÍNDICES NA TABELA PING_LOGS
@@ -71,17 +71,17 @@ ON towers(name);
 -- 5. ÍNDICES NA TABELA USERS
 -- =========================================================
 
--- Índice para login (busca por username)
+-- Índice para login (busca por email)
 -- Usado em: POST /auth/login
-CREATE INDEX IF NOT EXISTS idx_users_username 
-ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email 
+ON users(email);
 
 -- =========================================================
 -- 6. ANÁLISE E ESTATÍSTICAS
 -- =========================================================
 
 -- Atualizar estatísticas para o query planner
-ANALYZE equipment;
+ANALYZE equipments;
 ANALYZE ping_logs;
 ANALYZE traffic_logs;
 ANALYZE towers;
@@ -114,7 +114,7 @@ ORDER BY tablename, indexname;
 -- MONITORAMENTO:
 -- =========================================================
 -- Para verificar uso de índices em uma query:
--- EXPLAIN ANALYZE SELECT * FROM equipment WHERE is_online = true;
+-- EXPLAIN ANALYZE SELECT * FROM equipments WHERE is_online = true;
 
 -- Para ver tamanho dos índices:
 -- SELECT 
