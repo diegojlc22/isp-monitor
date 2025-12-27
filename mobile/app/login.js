@@ -14,7 +14,7 @@ export default function LoginScreen() {
             alert("Preencha todos os campos");
             return;
         }
-        signIn(email, password);
+        signIn(email.trim(), password);
     };
 
     return (

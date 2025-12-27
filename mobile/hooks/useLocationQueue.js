@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import NetInfo from '@react-native-community/netinfo'; // Ideal, mas vamos usar verificação de erro por enquanto se não tiver package
+
 
 const QUEUE_KEY = '@gps_queue';
 

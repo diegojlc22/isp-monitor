@@ -10,9 +10,19 @@ import os
 
 print("[INFO] Using ULTRA-FAST pinger (icmplib)")
 
+from backend.app.utils.network_diagnostics import run_diagnostics
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting up...")
+    
+    # 🧠 NETWORK INTELLIGENCE (Version 3.2)
+    # Check for firewall issues and auto-correct if possible
+    try:
+        run_diagnostics()
+    except Exception as e:
+        print(f"⚠️ [NETWORK DIAGNOSTICS] Failed to run: {e}")
+
     async with engine.begin() as conn:
         # Create Tables
         await conn.run_sync(Base.metadata.create_all)

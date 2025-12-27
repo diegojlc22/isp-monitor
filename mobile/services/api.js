@@ -2,8 +2,9 @@
 import axios from 'axios';
 
 // ⚠️ IMPORTANTE: 
-// Endereço Permanente (Ngrok Static Domain)
-const API_URL = 'https://uniconoclastic-addedly-yareli.ngrok-free.dev/api';
+// Endereço Local (Desenvolvimento)
+// Substitua pelo IP da sua máquina se mudar
+const API_URL = 'http://192.168.0.17:8000/api';
 
 const api = axios.create({
     baseURL: API_URL,

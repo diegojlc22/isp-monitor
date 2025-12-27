@@ -49,7 +49,15 @@ export function AuthProvider({ children }) {
             router.replace('/(tabs)/dashboard');
         } catch (error) {
             console.error("Login error", error);
-            alert("Email ou senha inválidos.");
+            if (error.response) {
+                // O servidor respondeu (ex: 400 Bad Request)
+                alert(error.response.data.detail || "Email ou senha incorretos.");
+            } else if (error.request) {
+                // O servidor não respondeu (ex: Network Error / IP errado)
+                alert("Erro de conexão. Verifique se o servidor está rodando e se o IP/Porta estão corretos no api.js.");
+            } else {
+                alert("Erro desconhecido: " + error.message);
+            }
         } finally {
             setLoading(false);
         }

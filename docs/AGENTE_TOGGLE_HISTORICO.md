@@ -1,5 +1,43 @@
 # 📜 Histórico de Melhorias - ISP Monitor
 
+## 🎯 Versão 3.2 - Mobile & Network Intelligence (27/12/2024)
+
+### 🗺️ **MOBILE MAP FIXES**
+
+#### **Correção de Renderização de Marcadores (Android)** ✅
+**Problema**: Marcadores personalizados sendo "cortados" ou ficando invisíveis no mapa do Android. Bug conhecido do `react-native-maps` onde a GPU otimiza áreas "vazias" da view customizada.
+
+**Solução Implementada**:
+- ✅ **Ghost Background Hack**: Adicionado um fundo `rgba(255, 255, 255, 0.001)` ao container do marcador.
+- ✅ **No Collapsing**: Propriedade `collapsable={false}` forçada na View principal.
+- ✅ **Dimensões Fixas**: Container expandido para 120x120 para garantir buffer de renderização.
+
+**Resultado**:
+- Marcadores aparecem perfeitamente sem cortes.
+- Design de "Gota Verde" com ícone de Torre restaurado.
+
+### 🧠 **NETWORK INTELLIGENCE (AUTO-FIX)**
+
+#### **Auto-Diagnóstico de Rede no Startup** ✅
+**Funcionalidade**: O sistema agora verifica proativamente problemas de conectividade ao iniciar.
+
+**Recursos**:
+- ✅ **Verificação de Porta 8000**: Detecta se a porta está em uso ou bloqueada.
+- ✅ **Verificação de Firewall (Windows)**: Analisa se existe regra de entrada para a porta 8000.
+- ✅ **Auto-Correção**: Se detectar bloqueio de firewall e tiver permissões de Admin, **cria a regra automaticamente** via PowerShell.
+- ✅ **Logs Detalhados**: Informa no console exatamente o que foi detectado e corrigido.
+
+**Benefícios**:
+- Elimina o problema comum de "App Mobile não conecta no Backend Local".
+- Remove a necessidade de configuração manual complexa do Windows Firewall.
+- Robustez: O sistema se "cura" ao iniciar.
+
+**Arquivos**:
+- `backend/app/utils/network_diagnostics.py` (Nova lógica)
+- `backend/app/main.py` (Integração no startup)
+
+---
+
 ## 🎯 Versão 3.1 - Performance & Quality of Life (26/12/2024)
 
 ### 🚀 **OTIMIZAÇÕES DE PERFORMANCE**

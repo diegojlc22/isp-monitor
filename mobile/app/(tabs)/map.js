@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Alert, StatusBar, Image } from 'react-native';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { RefreshCw, MapPin, Server, Signal } from 'lucide-react-native';
+import { RefreshCw, MapPin, Server, Signal, RadioTower } from 'lucide-react-native';
 import api from '../../services/api';
 
 export default function MapScreen() {
@@ -12,6 +12,7 @@ export default function MapScreen() {
     const [region, setRegion] = useState(null);
     const [mapType, setMapType] = useState('standard');
 
+    const mapRef = React.useRef(null);
     // Ref para garantir que não atualizaremos estado em componente desmontado
     const isMounted = React.useRef(true);
 
@@ -57,13 +58,19 @@ export default function MapScreen() {
 
     const fetchTowers = async (lat, lon) => {
         try {
+            console.log('Fetching towers for:', lat, lon);
             const response = await api.post('/mobile/nearby-towers', {
                 latitude: lat,
                 longitude: lon
             });
+            console.log('Towers response:', response.data?.length);
             if (isMounted.current) setTowers(response.data);
         } catch (error) {
-            console.error(error);
+            console.error('Fetch Towers Error:', error);
+            if (error.response) {
+                console.error('Data:', error.response.data);
+                console.error('Status:', error.response.status);
+            }
         } finally {
             if (isMounted.current) setLoading(false);
         }
@@ -73,12 +80,36 @@ export default function MapScreen() {
         setMapType(current => current === 'standard' ? 'hybrid' : 'standard');
     };
 
+    // Zoom automático para mostrar todas as torres e o usuário
+    useEffect(() => {
+        if (towers.length > 0 && mapRef.current) {
+            const coords = towers.map(t => ({
+                latitude: parseFloat(t.latitude),
+                longitude: parseFloat(t.longitude)
+            }));
+
+            // Adiciona a localização do usuário (se houver)
+            if (region) {
+                coords.push({ latitude: region.latitude, longitude: region.longitude });
+            }
+
+            // Pequeno delay para garantir que o mapa carregou
+            setTimeout(() => {
+                mapRef.current?.fitToCoordinates(coords, {
+                    edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+                    animated: true,
+                });
+            }, 1000);
+        }
+    }, [towers, region]);
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle={mapType === 'hybrid' ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
             {region ? (
                 <MapView
+                    ref={mapRef}
                     style={styles.map}
                     initialRegion={region}
                     showsUserLocation={true}
@@ -94,36 +125,51 @@ export default function MapScreen() {
                             <Marker
                                 key={tower.id}
                                 coordinate={{ latitude: parseFloat(tower.latitude), longitude: parseFloat(tower.longitude) }}
-                                tracksViewChanges={false} // OTIMIZAÇÃO CRÍTICA PARA CPU
+                                tracksViewChanges={true}
                             >
-                                <View style={styles.markerContainer}>
-                                    <View style={styles.markerIcon}>
-                                        <Server size={20} color="#fff" />
+                                <View
+                                    collapsable={false}
+                                    style={{
+                                        width: 120,
+                                        height: 120,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.001)' // Magic hack for Android
+                                    }}
+                                >
+                                    {/* Circle */}
+                                    <View style={{
+                                        backgroundColor: '#10b981',
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 24,
+                                        borderWidth: 2,
+                                        borderColor: 'white',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginBottom: 4,
+                                        elevation: 5 // Try elevation on inner only
+                                    }}>
+                                        <RadioTower size={24} color="white" />
                                     </View>
-                                    <View style={styles.markerArrow} />
+
+                                    {/* Label */}
+                                    <View style={{
+                                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                        borderRadius: 4,
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 4,
+                                    }}>
+                                        <Text style={{
+                                            color: '#cbd5e1',
+                                            fontSize: 10,
+                                            fontWeight: 'bold',
+                                            textAlign: 'center'
+                                        }}>
+                                            {tower.name}
+                                        </Text>
+                                    </View>
                                 </View>
-
-                                <Callout tooltip>
-                                    <View style={styles.calloutContainer}>
-                                        <Text style={styles.calloutTitle}>{tower.name}</Text>
-                                        <View style={styles.calloutDivider} />
-
-                                        <View style={styles.calloutRow}>
-                                            <MapPin size={12} color="#60a5fa" />
-                                            <Text style={styles.calloutText}>{tower.distance_km} km</Text>
-                                        </View>
-
-                                        <View style={styles.calloutRow}>
-                                            <Signal size={12} color="#a6e3a1" />
-                                            <Text style={styles.calloutText}>{tower.total_clients} Clientes</Text>
-                                        </View>
-
-                                        <View style={styles.calloutRow}>
-                                            <Server size={12} color="#89b4fa" />
-                                            <Text style={styles.calloutText}>{tower.panel_count} Painéis</Text>
-                                        </View>
-                                    </View>
-                                </Callout>
                             </Marker>
                         );
                     })}
@@ -168,11 +214,16 @@ const styles = StyleSheet.create({
     },
 
     // Custom Marker
+    markerWrapper: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     markerContainer: {
         alignItems: 'center',
         justifyContent: 'center',
         width: 40,
         height: 50,
+        zIndex: 2,
     },
     markerIcon: {
         backgroundColor: '#2563eb',
@@ -199,6 +250,20 @@ const styles = StyleSheet.create({
         borderTopColor: '#2563eb', // Arrow pointing down
         marginTop: -1,
         shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, elevation: 1
+    },
+    shadowLabel: {
+        backgroundColor: 'rgba(15, 23, 42, 0.8)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginTop: 4,
+        zIndex: 1,
+    },
+    labelText: {
+        color: '#f8fafc',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textAlign: 'center',
     },
 
     // Custom Callout
