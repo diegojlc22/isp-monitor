@@ -358,3 +358,20 @@ Todas j√° dispon√≠veis no frontend ap√≥s atualiza√ß√£o.
 **Mantido por**: Antigravity AI  
 **√öltima atualiza√ß√£o**: 26/12/2024  
 **Vers√£o**: 3.1
+
+## [27/12/2025] - Auto-Healing & Zero-Touch Automation (Python 3.12 Standard)
+- **Feature**: ImplementaÁ„o do sistema de Auto-Cura Completa.
+- **Launcher**: ABRIR_SISTEMA.bat reescrito como 'Guardian' (Detecta falhas e corrige).
+- **Repair**: Novo subsistema 	ools/repair/ com uto_setup.ps1 (Baixa Python 3.12 Oficial).
+- **Doctor**: Adicionado doctor_launcher.py para prÈ-validar integridade do cÛdigo.
+- **Database**: Otimizador 	urbo_db.py atualizado para detectar versıes do Postgres (15-20) automaticamente.
+- **Fix**: RemoÁ„o definitiva do python_bin (embedded) corrompido em favor do interpretador de sistema.
+- **Logs**: CentralizaÁ„o de todos os logs em logs/ com limpeza autom·tica no boot.
+
+
+## [27/12/2025] - Auto-Healing & Zero-Touch Automation
+- **Feature**: Sistema Auto-Cura Completo (Zero-Touch).
+- **Core**: Padroniza√ß√£o para Python 3.12.3 Oficial (Adeus python_bin).
+- **Launcher**: ABRIR_SISTEMA.bat agora verifica integridade e aciona reparo autom√°tico.
+- **Database**: Turbo Mode agora detecta vers√£o do Postgres automaticamente.
+- **Logs**: Centraliza√ß√£o e limpeza autom√°tica na pasta logs/.

@@ -68,8 +68,8 @@ Interface gráfica moderna (`launcher.pyw`) para controle total:
 ### **1. Iniciar o Sistema (Tudo em Um)**
 
 ```bash
-# Basta rodar o Launcher
-./LAUNCHER.bat
+# Basta rodar o Launcher (Ele instala tudo sozinho)
+./ABRIR_SISTEMA.bat
 ```
 
 ### **2. Acessar o Admin Panel**
@@ -99,7 +99,7 @@ isp_monitor/
 │   ├── reparo/            # Doctor AI & Scripts de Correção
 │   └── ngrok/             # Acesso Externo
 ├── 📊 logs/                # Logs centralizados (startup, api, collector)
-├── 🚀 LAUNCHER.bat         # Ponto de Entrada Único
+├── 🚀 ABRIR_SISTEMA.bat    # Ponto de Entrada Único (Auto-Healing)
 └── 📖 README.md            # Documentação Oficial
 ```
 
