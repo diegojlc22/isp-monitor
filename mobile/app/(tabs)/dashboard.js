@@ -1,31 +1,41 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, StatusBar } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, StatusBar, RefreshControl, Linking } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
-import { RefreshCw, Plus, Signal, Server, MapPin, LogOut } from 'lucide-react-native';
+import { RefreshCw, Plus, Signal, Server, MapPin, LogOut, Settings, Navigation, Wifi } from 'lucide-react-native';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 export default function TechDashboard() {
     const router = useRouter();
-    const { signOut, user } = useAuth();
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [towers, setTowers] = useState([]);
     const [location, setLocation] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
     const [lastUpdate, setLastUpdate] = useState(null);
     const [isSendingLocation, setIsSendingLocation] = useState(false);
 
+    const isMounted = useRef(true);
+    const retryTimeout = useRef(null);
+
     const locationSubscription = useRef(null);
     const lastSentLocation = useRef(null);
 
     useEffect(() => {
+        isMounted.current = true;
+
         startLocationTracking();
+
         return () => {
-            // Cleanup ao desmontar
+            isMounted.current = false;
             if (locationSubscription.current) {
                 locationSubscription.current.remove();
+            }
+            if (retryTimeout.current) {
+                clearTimeout(retryTimeout.current);
             }
         };
     }, []);
@@ -33,46 +43,35 @@ export default function TechDashboard() {
     const startLocationTracking = async () => {
         try {
             let { status } = await Location.requestForegroundPermissionsAsync();
+            if (!isMounted.current) return;
+
             if (status !== 'granted') {
-                setErrorMsg('Permissão de localização negada. Ative nas configurações.');
+                setErrorMsg('Permissão de localização negada.');
                 return;
             }
 
-            // Obter localização inicial
-            const initialLocation = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced // Economia de bateria
-            });
+            const initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            if (isMounted.current) handleLocationUpdate(initialLocation);
 
-            handleLocationUpdate(initialLocation);
-
-            // Monitorar mudanças de localização (GPS inteligente)
             locationSubscription.current = await Location.watchPositionAsync(
-                {
-                    accuracy: Location.Accuracy.Balanced,
-                    timeInterval: 30000, // Verificar a cada 30s
-                    distanceInterval: 50 // Só atualizar se mover 50m
-                },
+                { accuracy: Location.Accuracy.Balanced, timeInterval: 30000, distanceInterval: 50 },
                 (newLocation) => {
-                    handleLocationUpdate(newLocation);
+                    if (isMounted.current) handleLocationUpdate(newLocation);
                 }
             );
 
         } catch (e) {
-            setErrorMsg('Erro ao obter GPS: ' + e.message);
+            if (isMounted.current) setErrorMsg('Erro GPS: ' + e.message);
         }
     };
 
     const handleLocationUpdate = async (newLocation) => {
         const coords = newLocation.coords;
         setLocation(coords);
-
-        // Verificar se houve mudança significativa
         if (shouldSendLocation(coords)) {
             await sendLocationToBackend(coords);
             lastSentLocation.current = coords;
         }
-
-        // Buscar torres próximas (só na primeira vez ou a cada 5 minutos)
         if (!towers.length || shouldRefreshTowers()) {
             fetchNearbyTowers(coords);
         }
@@ -80,30 +79,23 @@ export default function TechDashboard() {
 
     const shouldSendLocation = (coords) => {
         if (!lastSentLocation.current) return true;
-
-        // Calcular distância desde o último envio
         const distance = getDistanceFromLatLonInMeters(
-            lastSentLocation.current.latitude,
-            lastSentLocation.current.longitude,
-            coords.latitude,
-            coords.longitude
+            lastSentLocation.current.latitude, lastSentLocation.current.longitude,
+            coords.latitude, coords.longitude
         );
-
-        return distance > 50; // Só enviar se moveu mais de 50m
+        return distance > 50;
     };
 
     const shouldRefreshTowers = () => {
         if (!lastUpdate) return true;
-        const fiveMinutes = 5 * 60 * 1000;
-        return (Date.now() - lastUpdate) > fiveMinutes;
+        return (Date.now() - lastUpdate) > (5 * 60 * 1000);
     };
 
     const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
-        const R = 6371000; // Raio da Terra em metros
+        const R = 6371000;
         const dLat = deg2rad(lat2 - lat1);
         const dLon = deg2rad(lon2 - lon1);
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -113,115 +105,142 @@ export default function TechDashboard() {
     const deg2rad = (deg) => deg * (Math.PI / 180);
 
     const sendLocationToBackend = async (coords) => {
+        if (!isMounted.current) return;
         setIsSendingLocation(true);
         try {
             await api.post('/mobile/location', {
                 latitude: coords.latitude,
                 longitude: coords.longitude
             });
-            console.log("📍 Localização enviada:", coords.latitude, coords.longitude);
-            setLastUpdate(Date.now());
+            if (isMounted.current) setLastUpdate(Date.now());
         } catch (error) {
-            console.log("Falha ao enviar localização:", error);
-            // Retry silencioso após 5s
-            setTimeout(() => sendLocationToBackend(coords), 5000);
+            console.log("Falha Location:", error);
+            // Retry seguro
+            if (isMounted.current) {
+                retryTimeout.current = setTimeout(() => sendLocationToBackend(coords), 5000);
+            }
         } finally {
-            setIsSendingLocation(false);
+            if (isMounted.current) setIsSendingLocation(false);
         }
     };
 
     const fetchNearbyTowers = async (coords) => {
+        if (!isMounted.current) return;
         setLoading(true);
         try {
             const response = await api.post('/mobile/nearby-towers', {
                 latitude: coords.latitude,
                 longitude: coords.longitude
             });
-            setTowers(response.data);
+            if (isMounted.current) setTowers(response.data);
         } catch (error) {
             console.error(error);
         } finally {
-            setLoading(false);
+            if (isMounted.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
     };
 
-    const handleManualRefresh = async () => {
-        if (!location) {
-            Alert.alert("Aguarde", "Obtendo localização...");
-            return;
+    const onRefresh = async () => {
+        setRefreshing(true);
+        if (location) {
+            await sendLocationToBackend(location);
+            await fetchNearbyTowers(location);
+        } else {
+            setRefreshing(false);
         }
+    };
 
-        setLoading(true);
-        await sendLocationToBackend(location);
-        await fetchNearbyTowers(location);
-        setLoading(false);
-        Alert.alert("Sucesso", "Dados atualizados!");
+    const openMaps = (lat, lon) => {
+        const scheme = Platform.OS === 'ios' ? 'maps:' : 'geo:';
+        const url = `${scheme}${lat},${lon}?q=${lat},${lon}`;
+        Linking.openURL(url);
+    };
+
+    const formatLastUpdate = () => {
+        if (!lastUpdate) return "Nunca";
+        const seconds = Math.floor((Date.now() - lastUpdate) / 1000);
+        if (seconds < 60) return "Agora mesmo";
+        const minutes = Math.floor(seconds / 60);
+        return `${minutes} min atrás`;
     };
 
     const renderTower = ({ item }) => (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
-                <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{item.distance_km} km</Text>
+                <View>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                    <View style={styles.inlineInfo}>
+                        <Wifi size={14} color="#64748b" />
+                        <Text style={styles.ipText}>{item.ip || "Sem IP"}</Text>
+                    </View>
+                </View>
+                <View style={styles.distanceBadge}>
+                    <MapPin size={12} color="#60a5fa" />
+                    <Text style={styles.distanceText}>{item.distance_km} km</Text>
                 </View>
             </View>
 
-            <View style={styles.statsRow}>
-                <View style={styles.stat}>
-                    <Server size={18} color="#89b4fa" />
-                    <Text style={styles.statText}>{item.panel_count} Painéis</Text>
-                </View>
-                <View style={styles.stat}>
-                    <Signal size={18} color="#a6e3a1" />
-                    <Text style={styles.statText}>{item.total_clients} Clientes</Text>
-                </View>
-            </View>
+            <View style={styles.divider} />
 
-            <Text style={styles.ipText}>IP: {item.ip || "N/A"}</Text>
+            <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                    <View style={[styles.iconBg, { backgroundColor: 'rgba(137, 180, 250, 0.1)' }]}>
+                        <Server size={18} color="#89b4fa" />
+                    </View>
+                    <View>
+                        <Text style={styles.statLabel}>Equipamentos</Text>
+                        <Text style={styles.statValue}>{item.panel_count}</Text>
+                    </View>
+                </View>
+
+                <View style={styles.statItem}>
+                    <View style={[styles.iconBg, { backgroundColor: 'rgba(166, 227, 161, 0.1)' }]}>
+                        <Signal size={18} color="#a6e3a1" />
+                    </View>
+                    <View>
+                        <Text style={styles.statLabel}>Clientes</Text>
+                        <Text style={styles.statValue}>{item.total_clients}</Text>
+                    </View>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.navButton}
+                    onPress={() => item.latitude && openMaps(item.latitude, item.longitude)}
+                >
+                    <Navigation size={20} color="#f8fafc" />
+                </TouchableOpacity>
+            </View>
         </View>
     );
-
-    const formatLastUpdate = () => {
-        if (!lastUpdate) return "Nunca";
-        const seconds = Math.floor((Date.now() - lastUpdate) / 1000);
-        if (seconds < 60) return `${seconds}s atrás`;
-        const minutes = Math.floor(seconds / 60);
-        return `${minutes}min atrás`;
-    };
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
 
-            {/* Header Info */}
-            <View style={styles.headerInfo}>
+            {/* Modern Header */}
+            <View style={styles.header}>
                 <View>
-                    <Text style={styles.welcome}>Olá, {user?.name || 'Técnico'}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <MapPin size={14} color={isSendingLocation ? "#f9e2af" : "#a6e3a1"} />
-                        <Text style={styles.coords}>
-                            {location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : "Obtendo GPS..."}
+                    <Text style={styles.greeting}>Olá, <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'Técnico'}</Text></Text>
+                    <View style={styles.statusRow}>
+                        <View style={[styles.statusDot, { backgroundColor: isSendingLocation ? '#f9e2af' : '#a6e3a1' }]} />
+                        <Text style={styles.statusText}>
+                            {location ? "GPS Ativo" : "Buscando GPS..."} • {formatLastUpdate()}
                         </Text>
                     </View>
-                    <Text style={styles.updateText}>Última atualização: {formatLastUpdate()}</Text>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 16 }}>
-                    <TouchableOpacity onPress={handleManualRefresh} disabled={loading}>
-                        {loading ? (
-                            <ActivityIndicator size={24} color="#60a5fa" />
-                        ) : (
-                            <RefreshCw size={24} color="#60a5fa" />
-                        )}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={signOut}>
-                        <LogOut size={24} color="#f87171" />
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                    style={styles.settingsBtn}
+                    onPress={() => router.push('/settings')}
+                >
+                    <Settings size={24} color="#94a3b8" />
+                </TouchableOpacity>
             </View>
 
-            {/* Conteúdo */}
+            {/* Lista Principal */}
             {errorMsg ? (
                 <View style={styles.center}>
                     <Text style={styles.errorText}>{errorMsg}</Text>
@@ -234,83 +253,107 @@ export default function TechDashboard() {
                     data={towers}
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderTower}
-                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    initialNumToRender={5}
+                    maxToRenderPerBatch={5}
+                    windowSize={5}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#60a5fa" />
+                    }
+                    ListHeaderComponent={
+                        <Text style={styles.sectionHeader}>Torres Próximas</Text>
+                    }
                     ListEmptyComponent={
                         loading ? (
-                            <View style={styles.center}>
+                            <View style={styles.centerLoading}>
                                 <ActivityIndicator size="large" color="#60a5fa" />
-                                <Text style={styles.loadingText}>Procurando torres...</Text>
+                                <Text style={styles.loadingText}>Escaneando perímetro...</Text>
                             </View>
                         ) : (
-                            <Text style={styles.emptyText}>Nenhuma torre encontrada num raio próximo.</Text>
+                            <View style={styles.emptyContainer}>
+                                <MapPin size={48} color="#334155" />
+                                <Text style={styles.emptyText}>Nenhuma torre encontrada num raio próximo.</Text>
+                            </View>
                         )
                     }
                 />
             )}
-
-            {/* FAB (Botão Flutuante) */}
-            <Link href="/add-tower" asChild>
-                <TouchableOpacity style={styles.fab}>
-                    <Plus size={32} color="#fff" />
-                </TouchableOpacity>
-            </Link>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#0f172a' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
 
-    headerInfo: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        padding: 20, paddingTop: 40, backgroundColor: '#1e293b',
-        borderBottomWidth: 1, borderBottomColor: '#334155'
+    header: {
+        paddingHorizontal: 24,
+        paddingTop: 60,
+        paddingBottom: 24,
+        backgroundColor: '#0f172a',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: '#1e293b'
     },
-    welcome: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold' },
-    coords: { color: '#94a3b8', marginLeft: 6, fontFamily: 'monospace', fontSize: 12 },
-    updateText: { color: '#64748b', fontSize: 10, marginTop: 2 },
+    greeting: { color: '#94a3b8', fontSize: 16 },
+    userName: { color: '#f8fafc', fontWeight: 'bold', fontSize: 20 },
+    statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+    statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+    statusText: { color: '#64748b', fontSize: 12 },
+
+    settingsBtn: {
+        width: 44, height: 44, borderRadius: 22,
+        backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: '#334155'
+    },
+
+    listContent: { padding: 24, paddingBottom: 100 },
+    sectionHeader: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
 
     card: {
         backgroundColor: '#1e293b',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 16,
         borderWidth: 1,
         borderColor: '#334155',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, elevation: 2
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4
     },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    cardTitle: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold' },
-    badge: { backgroundColor: 'rgba(96, 165, 250, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(96, 165, 250, 0.2)' },
-    badgeText: { color: '#60a5fa', fontSize: 12, fontWeight: '700' },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    cardTitle: { color: '#f8fafc', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
+    inlineInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    ipText: { color: '#64748b', fontSize: 12, fontFamily: 'monospace' },
 
-    statsRow: { flexDirection: 'row', gap: 20, marginBottom: 12 },
-    stat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    statText: { color: '#cbd5e1', fontSize: 14 },
+    distanceBadge: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: 'rgba(96, 165, 250, 0.1)', paddingHorizontal: 10, paddingVertical: 6,
+        borderRadius: 12, borderWidth: 1, borderColor: 'rgba(96, 165, 250, 0.2)'
+    },
+    distanceText: { color: '#60a5fa', fontSize: 12, fontWeight: '700' },
 
-    ipText: { color: '#64748b', fontSize: 12, marginTop: 4, fontFamily: 'monospace' },
+    divider: { height: 1, backgroundColor: '#334155', marginVertical: 16 },
 
-    loadingText: { color: '#94a3b8', marginTop: 12 },
+    statsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    statItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    iconBg: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    statLabel: { color: '#64748b', fontSize: 10, textTransform: 'uppercase', fontWeight: 'bold' },
+    statValue: { color: '#cbd5e1', fontSize: 14, fontWeight: '600' },
+
+    navButton: {
+        width: 40, height: 40, borderRadius: 20,
+        backgroundColor: '#3b82f6', justifyContent: 'center', alignItems: 'center',
+        shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, elevation: 4
+    },
+
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    centerLoading: { alignItems: 'center', paddingVertical: 40 },
+    loadingText: { color: '#64748b', marginTop: 12 },
+    emptyContainer: { alignItems: 'center', marginTop: 40, opacity: 0.5 },
+    emptyText: { color: '#64748b', marginTop: 16, width: 200, textAlign: 'center' },
+
     errorText: { color: '#f87171', textAlign: 'center', marginBottom: 20 },
-    emptyText: { color: '#64748b', textAlign: 'center', marginTop: 40 },
-
-    retryBtn: { backgroundColor: '#334155', padding: 12, borderRadius: 8 },
-    btnText: { color: '#f8fafc' },
-
-    fab: {
-        position: 'absolute',
-        bottom: 24,
-        right: 24,
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#2563eb',
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 8,
-        shadowColor: '#2563eb',
-        shadowOpacity: 0.4,
-        shadowOffset: { width: 0, height: 4 }
-    }
+    retryBtn: { backgroundColor: '#334155', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 },
+    btnText: { color: '#f8fafc', fontWeight: 'bold' }
 });

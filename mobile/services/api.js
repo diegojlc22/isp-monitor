@@ -15,8 +15,8 @@ const api = axios.create({
     }
 });
 
-export const setBaseUrl = (ip) => {
-    api.defaults.baseURL = `http://${ip}:8080/api`;
-};
+// export const setBaseUrl = (ip) => {
+//     api.defaults.baseURL = `http://${ip}:8080/api`;
+// };
 
 export default api;
