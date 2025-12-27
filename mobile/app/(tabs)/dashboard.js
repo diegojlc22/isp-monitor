@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, StatusBar, RefreshControl, Linking } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, StatusBar, RefreshControl, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { RefreshCw, Plus, Signal, Server, MapPin, LogOut, Settings, Navigation, Wifi } from 'lucide-react-native';
@@ -115,7 +115,15 @@ export default function TechDashboard() {
             if (isMounted.current) setLastUpdate(Date.now());
         } catch (error) {
             console.log("Falha Location:", error);
-            // Retry seguro
+
+            // Check for 401 Unauthorized
+            if (error.response && error.response.status === 401) {
+                console.log("Sessão expirada. Parando rastreamento.");
+                // Stop trying to send location if authorized failed
+                return;
+            }
+
+            // Retry seguro para outros erros
             if (isMounted.current) {
                 retryTimeout.current = setTimeout(() => sendLocationToBackend(coords), 5000);
             }
