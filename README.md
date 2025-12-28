@@ -20,6 +20,22 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 ---
 
 
+## 🚀 Novidades da Versão 3.7 (28/12/2025)
+
+### 👻 1. Invisible Startup & Silent Mode
+A inicialização do sistema foi completamente reescrita para ser **100% invisível**:
+- **Zero Janelas Pretas**: Removemos completamente a dependência de arquivos `.bat` no boot.
+- **Boot Direto via Python**: O Launcher inicia o Banco de Dados e a API diretamente, sem invocar o Shell do Windows.
+- **Silent Firewall Check**: A verificação de firewall (`network_diagnostics.py`) agora roda silenciosamente em background.
+- **Resultado**: Uma experiência de usuário "fantasba", profissional e sem interrupções visuais.
+
+### 🧟 2. Doctor V3.7 "Zombie Hunter"
+O sistema de auto-cura agora possui um protocolo de **Extermínio de Zumbis**:
+- **Monitoramento de Árvore**: O Doctor memoriza cada processo filho criado (Node, Python, Postgres).
+- **Shutdown Hook**: Se o Launcher fechar (crash ou stop manual), o Doctor intercepta o evento.
+- **Kill Recursivo**: Mata não apenas o processo pai, mas toda a árvore de dependentes (ex: `npm` -> `vite` -> `esbuild`).
+- **Garantia de Limpeza**: Impede erros de "Porta em Uso" ao reiniciar o sistema.
+
 ## 🚀 Novidades da Versão 3.4 (28/12/2025)
 
 ### 📡 1. Monitoramento Wireless Multi-Fabricante

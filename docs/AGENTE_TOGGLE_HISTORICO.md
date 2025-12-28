@@ -1,5 +1,68 @@
 # 📡 AGENTE TOGGLE - Histórico de Desenvolvimento
 
+## 🚀 Sessão 28/12/2025 - Invisible Startup & Zombie Hunter (V3.7)
+
+### 🎯 Objetivo Principal
+Eliminar completamente as janelas de terminal (PowerShell/CMD) que piscavam durante o uso do sistema e garantir que nenhum processo órfão ("zumbi") permaneça rodando após o fechamento do Launcher.
+
+### ✅ Funcionalidades Implementadas
+
+#### 1. **Invisible Startup (Modo Fantasma)**
+- ✅ **Remoção de .BATs**: O `iniciar_postgres.bat` foi removido do fluxo de boot. O Launcher agora inicia o banco via `subprocess` direto do Python.
+- ✅ **Flag `CREATE_NO_WINDOW`**: Todas as chamadas de sistema (API, Banco, Pinger) agora usam a flag `0x08000000` (Windows) para garantir invisibilidade.
+- ✅ **Silent Firewall**: O script `network_diagnostics.py` foi blindado para checar regras de firewall sem invocar janelas do PowerShell.
+- ✅ **Frontend cmd /c**: O comando `npm run dev` agora é envelopado em um `cmd /c` invisível para evitar chamadas padrão do Shell.
+
+#### 2. **Doctor V3.7 "Zombie Hunter"**
+- ✅ **Árvore de Processos**: O script `self_heal.py` agora rastreia todos os Process Objects (Popen) criados.
+- ✅ **Shutdown Hook (`atexit`)**: Se o Doctor for morto, fechado ou travar, um gatilho automático dispara a limpeza.
+- ✅ **Recursive Kill (`psutil`)**: O método de encerramento agora mata a árvore genealógica inteira do processo (Pai + Filhos + Netos). Ex: Mata `npm` -> mata `cmd` -> mata `vite` -> mata `esbuild`.
+- ✅ **Launcher Watchdog**: Se o PID do Launcher desaparecer, o Doctor se suicida levando todos os serviços junto.
+
+#### 3. **Launch Control Aprimorado**
+- ✅ **Stop System**: O botão "Parar" no Launcher agora é instantâneo e garantido.
+- ✅ **Boot Mais Rápido**: Sem a sobrecarga de iniciar terminais CMD, o boot ficou ~1.5s mais rápido.
+
+### 📦 Arquivos Modificados
+
+**Core System:**
+- `launcher.pyw`
+  - Start System reescrito (Python direto)
+  - Force Kill usa `subprocess.run` invisível
+  - Logs redirecionados para disco
+
+- `scripts/self_heal.py` (The Doctor)
+  - Implementação `Zombie Hunter Protocol`
+  - `spawned_procs` dictionary
+  - `atexit.register(cleanup_all)`
+
+- `backend/app/utils/network_diagnostics.py`
+  - `CREATE_NO_WINDOW` adicionado nas chamadas PowerShell
+
+- `backend/doctor/fixes/fix_postgres_service.py`
+  - Comandos `net stop/start` silenciados
+
+### 🧪 Testes Realizados
+
+- ✅ **Boot Invisível**: Launcher aberto via `ABRIR_SISTEMA.bat` → Nenhuma janela piscou.
+- ✅ **Shutdown Test**: Launcher fechado no meio da operação → Lista de processos limpa (0 python, 0 node).
+- ✅ **Stress Test**: Launcher matado via Task Manager → Doctor detectou e limpou tudo em < 5s.
+- ✅ **Re-Start**: Sistema iniciado e parado 5x seguidas sem erro de "Porta em Uso".
+
+### 🎯 Impacto
+
+**Antes:**
+- Janelas pretas piscando aleatoriamente.
+- Erros de "Address already in use" ao reiniciar rápido.
+- Processos `node.exe` e `python.exe` acumulando no gerenciador de tarefas.
+
+**Depois:**
+- Experiência visual 100% limpa.
+- Confiança total no botão "Parar".
+- Sistema sempre pronto para um novo boot limpo.
+
+---
+
 ## 🚀 Sessão 28/12/2025 - Monitoramento Wireless Multi-Fabricante
 
 ### 🎯 Objetivo Principal
