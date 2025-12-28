@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getTelegramConfig, updateTelegramConfig, testTelegramMessage, testWhatsappMessage, getWhatsappGroups, getWhatsappStatus } from '../services/api';
-import { Bell, Save, MessageCircle, Send, Search, Copy, Check, X, RefreshCw } from 'lucide-react';
+import { Bell, Save, MessageCircle, Send, Search, Copy, Check, X, RefreshCw, AlertTriangle } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../context/AuthContext';
 
@@ -21,7 +21,7 @@ export function Alerts() {
     const [configLoading, setConfigLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
-    // Templates (UI state separated for big inputs)
+    // Templates
     const [templateDown, setTemplateDown] = useState('🔴 [Device.Name] caiu! IP=[Device.IP]');
     const [templateUp, setTemplateUp] = useState('🟢 [Device.Name] voltou! IP=[Device.IP]');
 
@@ -34,15 +34,20 @@ export function Alerts() {
     // WhatsApp Status State
     const [whatsappStatus, setWhatsappStatus] = useState<{ ready: boolean, qr: string | null }>({ ready: false, qr: null });
     const [showQrModal, setShowQrModal] = useState(false);
+    const [qrError, setQrError] = useState('');
 
     const checkWhatsappStatus = async () => {
         try {
+            setQrError('');
             const data = await getWhatsappStatus();
             if (!data.error) {
                 setWhatsappStatus(data);
+            } else {
+                setQrError("Erro no Gateway: " + data.error);
             }
         } catch (e) {
             console.error("Erro ao checar status zap", e);
+            setQrError("Erro de conexão com a API. Verifique se o servidor está rodando.");
         }
     };
 
@@ -62,8 +67,7 @@ export function Alerts() {
             getTelegramConfig().then(res => {
                 setConfig({
                     ...res,
-                    // Garante booleanos e strings
-                    telegram_enabled: res.telegram_enabled !== false, // default true se undefined
+                    telegram_enabled: res.telegram_enabled !== false,
                     whatsapp_enabled: res.whatsapp_enabled === true,
                     whatsapp_target: res.whatsapp_target || '',
                     whatsapp_target_group: res.whatsapp_target_group || ''
@@ -138,7 +142,6 @@ export function Alerts() {
     async function handleTestWhatsapp(targetOverride?: string) {
         setMsg(''); setConfigLoading(true);
         try {
-            // Usa o valor passado pelo botão
             await testWhatsappMessage(targetOverride || config.whatsapp_target);
             setMsg('Teste WhatsApp enviado com sucesso!');
         } catch (e: any) {
@@ -213,7 +216,14 @@ export function Alerts() {
                             <button onClick={() => setShowQrModal(false)} className="text-slate-500 hover:text-slate-900"><X /></button>
                         </div>
 
-                        {whatsappStatus.ready ? (
+                        {qrError ? (
+                            <div className="text-center py-8">
+                                <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+                                <p className="text-red-600 font-medium mb-1">Falha na Conexão</p>
+                                <p className="text-xs text-slate-500 max-w-[200px] mx-auto">{qrError}</p>
+                                <button onClick={checkWhatsappStatus} className="mt-4 text-blue-600 hover:underline text-sm">Tentar Novamente</button>
+                            </div>
+                        ) : whatsappStatus.ready ? (
                             <div className="text-center py-6">
                                 <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <Check size={32} />
@@ -235,7 +245,7 @@ export function Alerts() {
                             <div className="py-12 flex flex-col items-center text-slate-500">
                                 <RefreshCw className="animate-spin mb-2" size={32} />
                                 <p>Aguardando QR Code...</p>
-                                <p className="text-xs text-slate-400 mt-1">Isso pode levar alguns segundos.</p>
+                                <p className="text-xs text-slate-400 mt-1">Iniciando sessão do navegador...</p>
                             </div>
                         )}
                     </div>
@@ -367,7 +377,7 @@ export function Alerts() {
                 </form>
             )}
 
-            {/* Templates Section (Mantido igual mas simplificado visualmente) */}
+            {/* Templates Section */}
             <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
                 <div className="p-4 border-b border-slate-800 bg-slate-900/50">
                     <h3 className="text-base font-semibold text-white">Mensagens Personalizadas</h3>
