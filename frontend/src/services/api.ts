@@ -85,3 +85,8 @@ export const detectEquipmentBrand = (ip: string, snmp_community: string = 'publi
     api.post('/equipments/detect-brand', { ip, snmp_community, snmp_port }).then(res => res.data);
 
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
+
+// Expo / Mobile
+export const getExpoStatus = () => api.get('/expo/status').then(res => res.data);
+export const startExpo = () => api.post('/expo/start').then(res => res.data);
+export const stopExpo = () => api.post('/expo/stop').then(res => res.data);

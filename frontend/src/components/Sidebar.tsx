@@ -69,6 +69,9 @@ export function Sidebar() {
                             <NavLink to="/users" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
                                 <Users className="w-5 h-5" /> <span className="font-medium">Usuários</span>
                             </NavLink>
+                            <NavLink to="/mobile" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                                <Smartphone className="w-5 h-5" /> <span className="font-medium">App Mobile (Expo)</span>
+                            </NavLink>
                             <NavLink to="/requests" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
                                 <Smartphone className="w-5 h-5" /> <span className="font-medium">Solicitações (App)</span>
                             </NavLink>

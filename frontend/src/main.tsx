@@ -24,6 +24,7 @@ const LiveMonitor = lazy(() => import('./pages/LiveMonitor').then(m => ({ defaul
 const Agent = lazy(() => import('./pages/Agent'));
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage'));
+const MobileApp = lazy(() => import('./pages/MobileApp').then(m => ({ default: m.MobileApp })));
 
 // Loading Component
 const PageLoader = () => (
@@ -57,6 +58,7 @@ createRoot(document.getElementById('root')!).render(
                 {/* Admin Routes */}
                 <Route element={<AdminRoute />}>
                   <Route path="requests" element={<RequestsPage />} />
+                  <Route path="mobile" element={<MobileApp />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="users" element={<ManageUsers />} />
                   <Route path="backup" element={<Backup />} />

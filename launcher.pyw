@@ -92,10 +92,7 @@ class ModernLauncher:
         self.process = None
         self.should_be_running = False 
         self.restart_attempts = 0
-        self.expo_logs = []  # Armazenar logs do Expo
         self.child_processes = []  # Rastrear PIDs dos processos criados
-        self.process_expo = None
-        self.expo_running = False
 
         # Estilos Customizados
         self.setup_styles()
@@ -185,23 +182,13 @@ class ModernLauncher:
         self.tab_home = tk.Frame(self.notebook, bg=COLORS['bg'])
         self.notebook.add(self.tab_home, text="  🏠 PRINCIPAL  ")
         
-        # 2. Aba Mobile
-        self.tab_mobile = tk.Frame(self.notebook, bg=COLORS['bg'])
-        self.notebook.add(self.tab_mobile, text="  📱 MOBILE  ")
-
-        # 3. Aba Logs System
+        # 2. Aba Logs System
         self.tab_logs = tk.Frame(self.notebook, bg=COLORS['bg'])
         self.notebook.add(self.tab_logs, text="  📝 LOGS  ")
         
-        # 4. Aba Logs Expo
-        self.tab_expo_logs = tk.Frame(self.notebook, bg=COLORS['bg'])
-        self.notebook.add(self.tab_expo_logs, text="  DEBUG APP  ")
-
         # Construir Conteúdo das Abas
         self.build_home_tab(self.tab_home)
-        self.build_mobile_tab(self.tab_mobile)
         self.build_logs_tab(self.tab_logs)
-        self.build_expo_logs_tab(self.tab_expo_logs)
 
         # Rodapé Global
         self.info_label = tk.Label(main_container, text="Sistema pronto.", font=("Segoe UI", 9), bg=COLORS['bg'], fg=COLORS['subtext'])
@@ -295,55 +282,7 @@ class ModernLauncher:
         
         self.info_label.config(text="Modo DEV iniciado! API na 8000, Frontend na 5173.")
 
-    def build_mobile_tab(self, parent):
-        """Aba Mobile: Controle do App (Expo)"""
-        container = tk.Frame(parent, bg=COLORS['bg'])
-        container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        # Status Card
-        status_card = tk.Frame(container, bg=COLORS['card'], padx=20, pady=20)
-        status_card.pack(fill=tk.X, pady=(0, 20))
-        
-        self.lbl_mobile_status = tk.Label(status_card, text="MOBILE: PARADO", font=("Segoe UI", 12, "bold"), bg=COLORS['card'], fg=COLORS['subtext'])
-        self.lbl_mobile_status.pack(side=tk.LEFT)
-
-        # Controls
-        controls = tk.Frame(container, bg=COLORS['bg'])
-        controls.pack(fill=tk.X)
-        
-        self.btn_mobile = self.create_button(controls, "📱 Iniciar App Mobile (Expo)", self.toggle_mobile, bg=COLORS['primary'], fg='#1e1e2e')
-        self.btn_mobile.pack(side=tk.LEFT, padx=5)
-        
-        self.btn_qr = self.create_button(controls, "🔳 Ver QR Code", self.toggle_expo_qr, bg=COLORS['card'], fg=COLORS['text'])
-        self.btn_qr.pack(side=tk.LEFT, padx=5)
-
-    def toggle_mobile(self):
-        if self.process_expo:
-            subprocess.call('taskkill /F /IM node.exe /T', shell=True) 
-            self.process_expo = None
-            self.lbl_mobile_status.config(text="MOBILE: PARADO", fg=COLORS['subtext'])
-            self.btn_mobile.config(text="📱 Iniciar App Mobile (Expo)", bg=COLORS['primary'])
-        else:
-            project_path = os.path.join(os.getcwd(), 'mobile')
-            if not os.path.exists(project_path):
-                messagebox.showerror("Erro", "Pasta 'mobile' não encontrada.")
-                return
-
-            self.lbl_mobile_status.config(text="MOBILE: INICIANDO...", fg=COLORS['warning'])
-            
-            def run_expo():
-                cmd = "npx expo start --clean"
-                try:
-                    self.process_expo = subprocess.Popen(cmd, cwd=project_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    self.lbl_mobile_status.config(text="MOBILE: RODANDO", fg=COLORS['success'])
-                    self.btn_mobile.config(text="⏹ Parar Mobile", bg=COLORS['danger'])
-                except Exception as e:
-                    self.lbl_mobile_status.config(text="MOBILE: ERRO", fg=COLORS['danger'])
-                    
-            threading.Thread(target=run_expo, daemon=True).start()
-
-    def toggle_expo_qr(self):
-        self.notebook.select(self.tab_expo_logs)
 
     def build_logs_tab(self, parent):
         """Constrói a aba de logs com Terminal"""
@@ -377,41 +316,7 @@ class ModernLauncher:
         self.log_text.tag_config("title", foreground=COLORS['primary'], font=("Consolas", 10, "bold"))
         self.log_text.tag_config("error", foreground=COLORS['danger'])
     
-    def build_expo_logs_tab(self, parent):
-        """Constrói a aba de logs do Expo"""
-        # Toolbar
-        toolbar = tk.Frame(parent, bg=COLORS['bg'])
-        toolbar.pack(fill=tk.X, padx=10, pady=10)
-        
-        tk.Button(
-            toolbar, text="🔄 Atualizar Logs", 
-            command=self.refresh_expo_logs,
-            bg=COLORS['card'], fg=COLORS['text'], relief="flat", padx=15, pady=5
-        ).pack(side=tk.RIGHT)
-        
-        tk.Label(
-            toolbar, text="Logs do Metro Bundler (Expo)",
-            bg=COLORS['bg'], fg=COLORS['subtext']
-        ).pack(side=tk.LEFT, pady=5)
-        
-        # Terminal
-        self.expo_log_text = tk.Text(
-            parent, bg=COLORS['terminal'], fg=COLORS['terminal_fg'],
-            font=("Consolas", 10), relief="flat", padx=10, pady=10
-        )
-        scrollbar = tk.Scrollbar(parent, command=self.expo_log_text.yview)
-        self.expo_log_text.config(yscrollcommand=scrollbar.set)
-        
-        self.expo_log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Tags
-        self.expo_log_text.tag_config("success", foreground=COLORS['success'])
-        self.expo_log_text.tag_config("warning", foreground=COLORS['warning'])
-        self.expo_log_text.tag_config("error", foreground=COLORS['danger'])
-        
-        # Iniciar atualização automática
-        self.refresh_expo_logs()
+
 
     def create_button(self, parent, text, command, bg, fg, font=("Segoe UI", 12, "bold"), height=2):
         """Helper para criar botões estilizados"""
@@ -458,49 +363,6 @@ class ModernLauncher:
                     self.btn_start.config(state=tk.NORMAL, bg=COLORS['success'], fg='#1e1e2e')
                     self.btn_stop.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
                     self.info_label.config(text="Sistema parado. Clique em INICIAR para começar.")
-            
-            # 2. Check Processes (Only Expo/Ngrok now)
-            if not hasattr(self, '_check_counter'):
-                self._check_counter = 0
-            
-            self._check_counter += 1
-            
-            if self._check_counter % 3 == 0:
-                ngrok_is_running = (self.ngrok_process is not None and self.ngrok_process.poll() is None)
-                expo_is_running = (self.expo_process is not None and self.expo_process.poll() is None)
-                
-                # Check external processes
-                for p in psutil.process_iter(['name']):
-                    try:
-                        name = p.info['name'].lower()
-                        if 'ngrok' in name:
-                            ngrok_is_running = True
-                        elif 'node' in name:
-                            try:
-                                cmd = ' '.join(p.cmdline()).lower()
-                                if 'expo' in cmd:
-                                    expo_is_running = True
-                            except: pass
-                    except: pass
-
-                # Update Ngrok UI
-                if ngrok_is_running != self.ngrok_running:
-                    self.ngrok_running = ngrok_is_running
-                    if ngrok_is_running:
-                        self.btn_ngrok.config(text="🌐 NGROK: LIGADO", bg=COLORS['success'], fg='#1e1e2e')
-                    else:
-                        self.btn_ngrok.config(text="🌐 NGROK: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-                
-                # Update Expo UI
-                if expo_is_running != self.expo_running:
-                    self.expo_running = expo_is_running
-                    if expo_is_running:
-                        self.btn_expo.config(text="📱 EXPO: LIGADO (Clique p/ QR)", bg=COLORS['success'], fg='#1e1e2e')
-                        self.btn_expo_stop.config(state=tk.NORMAL, bg=COLORS['danger'])
-                    else:
-                        self.btn_expo.config(text="📱 EXPO: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-                        self.btn_expo_stop.config(state=tk.DISABLED, bg='#45475a')
-
         except Exception as e:
             pass
 
