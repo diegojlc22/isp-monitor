@@ -728,6 +728,17 @@ export function Equipments() {
                         <MonitorPlay size={18} /> Scan
                     </button>
                     <button
+                        onClick={toggleSelectAll}
+                        className="flex gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg"
+                        title={selectedIds.length === filteredEquipments.length && filteredEquipments.length > 0 ? "Desmarcar Todos" : "Selecionar Todos"}
+                    >
+                        {selectedIds.length === filteredEquipments.length && filteredEquipments.length > 0 ? (
+                            <><CheckSquare size={18} /> Desmarcar Todos</>
+                        ) : (
+                            <><Square size={18} /> Selecionar Todos</>
+                        )}
+                    </button>
+                    <button
                         onClick={handleBatchAutoDetect}
                         disabled={selectedIds.length === 0 || isDetecting}
                         className="flex gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
