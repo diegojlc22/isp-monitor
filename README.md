@@ -20,93 +20,39 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 ---
 
 
-## 🚀 Novidades da Versão 3.7 (28/12/2025)
+## 🚀 Novidades da Versão 4.0 (28/12/2025) - Centralized Alerts & WhatsApp 2.0
 
-### 👻 1. Invisible Startup & Silent Mode
+### 🔔 1. Central de Alertas Unificada
+Toda a configuração de notificações foi centralizada em uma única aba **"Alertas"**:
+- **Consolidação Total**: Telegram, WhatsApp, Backups e Agente IA agora são configurados em um só lugar.
+- **Toggle Control**: Ative ou desative canais de comunicação globalmente com um clique.
+- **Granularidade**: Escolha exatamente o que receber em cada canal (Queda de Equipamentos, Sucesso de Backups, Alertas de Latência do Agente IA).
+
+### 📱 2. WhatsApp Gateway 2.0
+Integração profunda e simplificada:
+- **Busca de Grupos**: Novo sistema de busca que lista todos os seus grupos do WhatsApp com nome e ID.
+- **Autenticação Segura**: Suporte nativo a API Keys via `.env` (MSG_SECRET).
+- **QR Code Integrado**: Conexão simplificada diretamente pelo Launcher.
+- **Multi-Target**: Suporte simultâneo a números individuais e IDs de grupos.
+
+### 💾 3. Backups Multi-Canal
+O sistema de backup de banco de dados agora é proativo:
+- **Notificações em Tempo Real**: Receba o status do backup no Telegram E no WhatsApp.
+- **Auto-Fix pg_dump**: O script agora localiza automaticamente o executável do PostgreSQL no Windows, eliminando erros de "pg_dump not found".
+- **Relatórios Formatados**: Mensagens ricas com tamanho do arquivo, data e status do processo.
+
+### 🚀 4. Automated Boot & Admin Elevation
+O `ABRIR_SISTEMA.bat` foi transformado em um assistente inteligente:
+- **Auto-Start PostgreSQL**: O sistema detecta se o banco está parado e o inicia automaticamente.
+- **Elevation Request**: Solicita privilégios de Administrador apenas quando necessário para criar regras de firewall ou iniciar serviços.
+- **Depedency Check**: Verifica e instala bibliotecas Python faltando no ambiente de Administrador.
+
+### 👻 5. Invisible Startup & Silent Mode
 A inicialização do sistema foi completamente reescrita para ser **100% invisível**:
 - **Zero Janelas Pretas**: Removemos completamente a dependência de arquivos `.bat` no boot.
 - **Boot Direto via Python**: O Launcher inicia o Banco de Dados e a API diretamente, sem invocar o Shell do Windows.
-- **Silent Firewall Check**: A verificação de firewall (`network_diagnostics.py`) agora roda silenciosamente em background.
-- **Resultado**: Uma experiência de usuário "fantasba", profissional e sem interrupções visuais.
+- **Silent Firewall Check**: A verificação de firewall agora roda silenciosamente em background.
 
-### 🧟 2. Doctor V3.7 "Zombie Hunter"
-O sistema de auto-cura agora possui um protocolo de **Extermínio de Zumbis**:
-- **Monitoramento de Árvore**: O Doctor memoriza cada processo filho criado (Node, Python, Postgres).
-- **Shutdown Hook**: Se o Launcher fechar (crash ou stop manual), o Doctor intercepta o evento.
-- **Kill Recursivo**: Mata não apenas o processo pai, mas toda a árvore de dependentes (ex: `npm` -> `vite` -> `esbuild`).
-- **Garantia de Limpeza**: Impede erros de "Porta em Uso" ao reiniciar o sistema.
-
-## 🚀 Novidades da Versão 3.4 (28/12/2025)
-
-### 📡 1. Monitoramento Wireless Multi-Fabricante
-Sistema completo de monitoramento SNMP para equipamentos wireless:
-- **Ubiquiti**: Suporte total (M5, AC, AirFiber) com detecção automática de tabelas dinâmicas.
-- **Mikrotik**: Station e AP mode com CCQ e contagem de clientes.
-- **Mimosa**: C5c e similares com SNR como métrica de qualidade.
-- **Intelbras**: WOM series (compatível com OIDs Ubiquiti).
-- **Métricas**: Signal Strength (dBm), CCQ/SNR, Clientes Conectados.
-
-### 🔍 2. Auto-Detecção Inteligente
-Cadastro de equipamentos agora é automático:
-- **Botão "Auto-Detectar"**: Identifica marca e tipo via SNMP.
-- **Detecção de Marca**: Analisa sysDescr, sysObjectID e testa OIDs específicos.
-- **Detecção de Tipo**: Diferencia automaticamente Station (Cliente) vs Transmitter (AP).
-- **Priorização Intelbras**: Identifica corretamente Intelbras WOM (não confunde com Ubiquiti).
-- **Endpoint API**: `POST /api/equipments/detect-brand`
-
-### 🎨 3. Interface Aprimorada
-- **Modal Wireless**: Gráficos em tempo real de Sinal e Clientes Conectados.
-- **Formulário Inteligente**: Campos de marca e tipo preenchidos automaticamente.
-- **Opções Expandidas**: Suporte a 5 fabricantes (Generic, Ubiquiti, Mikrotik, Mimosa, Intelbras).
-- **Loading States**: Feedback visual durante detecção SNMP.
-
-## ⚡ Versão 3.8 (Ultra Performance & Fixes) - 28/12/2025
-*   **Turbo SNMP V2**: Refatoração completa do serviço de monitoramento de tráfego. Agora utiliza **Bulk Updates** no banco de dados, reduzindo o uso de CPU/Disk IO drasticamente (de N transações para 1 por ciclo).
-*   **Fix Frontend Hang**: Correção definitiva do travamento ao iniciar o Frontend no Windows (usando chamada direta ao Node/Vite).
-*   **WhatsApp Repair**: Solução para o erro "Execution Context Destroyed" e atualização do motor do WhatsApp Web para versão mais recente.
-*   **Boot Instantâneo**: Otimização do Launcher (`ABRIR_SISTEMA.bat`) para iniciar em milissegundos.
-
-## 🚀 Novidades da Versão 3.3 (27/12/2025)
-
-### 📱 1. Mobile & Expo Offline Mode
-- **Auto-Discovery**: O App Mobile detecta automaticamente o IP do servidor (`hostUri`). Chega de configurar IPs fixos!
-- **Modo Offline**: Inicialização do Expo otimizada com `--offline` para evitar falhas de login.
-- **Auto-Install Healer**: O Launcher detecta dependências ausentes e instala automaticamente na primeira execução.
-
-### 🗺️ 2. Frontend GPS Fix
-- **Parser Inteligente**: Agora aceita coordenadas em qualquer formato (ex: `-19,55` ou `-19.55`), corrigindo erro de cálculo de distância.
-
-### 🛠️ 3. Launcher 3.0 (Stability)
-- **Logs em Tempo Real**: Novo sistema "Memory Mirror" evita bloqueio de arquivos de log.
-- **Crash Shield**: Correção de bugs críticos de terminação de processos.
-- **Startup Otimizado**: Inicialização silenciosa e invisível para serviços de background.
-
-### 🏥 4. Auto-Reparo (Doctor AI + Healer)
-Reduzimos a necessidade de suporte técnico manual com um sistema de auto-cura:
-- **Diagnóstico Ativo**: O script `diagnostico.py` lê logs em busca de erros conhecidos (porta presa, queda de API).
-- **Cura Automática**: Scripts de correção (`tools/reparo/`) são acionados automaticamente para:
-  - Destravar processos zumbis.
-  - Reinstalar dependências corrompidas.
-  - Reconectar o Gateway WhatsApp.
-  - Otimizar o banco PostgreSQL (`turbo_db.py`).
-
-### 📱 2. Gateway WhatsApp 2.0 (Dual Channel)
-Notificações robustas e flexíveis:
-- **Envio Duplo**: Suporte simultâneo a envio para **Número Individual** (Admin) e **Grupo de Técnicos** (`@g.us`).
-- **Antitrava**: Versão do WhatsApp Web fixada (`2.2407.3`) para evitar falhas de envio "No LID".
-- **Visualizador de Grupos**: Nova ferramenta no Launcher para listar seus grupos e copiar o ID facilmente.
-
-### 🔔 3. Painel de Alertas Multicanal
-Agora você tem controle total sobre onde receber os avisos:
-- **Telegram**: Configuração de Bot Token e Chat ID.
-- **WhatsApp**: Campos separados para **Número Individual** e **ID de Grupo**.
-- **Templates**: Personalize as mensagens de "Queda" e "Retorno" com variáveis dinâmicas (`[Device.Name]`, `[Device.IP]`).
-
-### 🛠️ 4. Launcher Profissional (GUI)
-Interface gráfica moderna (`launcher.pyw`) para controle total:
-- **Abas de Controle**: Principal, WhatsApp, Mobile e Logs.
-- **Monitoramento em Tempo Real**: Status da API, Ngrok e Expo.
-- **Botões de Ação**: Reiniciar tudo, Testar ZAP, Abrir Dashboard.
 
 ---
 
@@ -210,7 +156,7 @@ O sistema tenta se corrigir sozinho. Se falhar 3x, verifique a aba **LOGS** no L
 
 
 **Última atualização:** 28/12/2025
-**Build:** v3.4.0 (Wireless Multi-Vendor Edition)
+**Build:** v4.0.0 (Centralized Alerts & WhatsApp 2.0 Edition)
 
 
 ---

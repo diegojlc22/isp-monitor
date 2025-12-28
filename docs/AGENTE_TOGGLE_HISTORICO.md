@@ -1,5 +1,55 @@
 # 📡 AGENTE TOGGLE - Histórico de Desenvolvimento
 
+## 🚀 Sessão 28/12/2025 - Centralized Alerts & WhatsApp 2.0 (V4.0)
+
+### 🎯 Objetivo Principal
+Centralizar todas as configurações de notificações em uma única interface inteligente e garantir a estabilidade do sistema com auto-start do banco de dados e elevação de privilégios automatizada.
+
+### ✅ Funcionalidades Implementadas
+
+#### 1. **Central de Alertas Unificada**
+- ✅ **Frontend Redesenhado**: Nova aba "Alertas" que consolida configurações de Telegram, WhatsApp, Backups e Agente IA.
+- ✅ **Toggle Global**: Interruptores para ativar/desativar canais de comunicação (Telegram/WhatsApp) globalmente.
+- ✅ **Notificações por Tipo**: Checkboxes para habilitar alertas específicos de Equipamentos, Backups e Agente IA.
+- ✅ **Botões de Teste**: Funções de teste dedicadas para cada módulo, permitindo validar o envio em tempo real.
+
+#### 2. **WhatsApp Gateway 2.0 & Integração**
+- ✅ **Busca de Grupos**: API que lista grupos do WhatsApp com busca por nome, facilitando a configuração de IDs de grupos.
+- ✅ **Autenticação (API Key)**: Implementação de cabeçalho `x-api-key` em todas as rotas do Gateway para segurança.
+- ✅ **dotenv Config**: O Gateway agora carrega segredos diretamente do arquivo `.env` principal.
+- ✅ **Fix de Sessão**: Lógica para limpar sessões corrompidas e forçar novo QR Code se necessário.
+
+#### 3. **Backups Multi-Canal & Estabilidade**
+- ✅ **Notificações no WhatsApp**: Extensão do script de backup para enviar alertas para grupos ou números de WhatsApp.
+- ✅ **Auto-Locate pg_dump**: O sistema agora varre caminhos comuns no Windows para encontrar o binário do PostgreSQL.
+- ✅ **Pre-Flight Connection**: Verificação de prontidão da porta 5432 antes de iniciar a API.
+
+#### 4. **Automated Launch System**
+- ✅ **ABRIR_SISTEMA.bat (Admin)**: Solicita elevação e reexecuta com privilégios de administrador.
+- ✅ **PowerShell Healer**: Script `start_postgres.ps1` que inicia o serviço do banco e aguarda a porta estar ativa.
+- ✅ **Dependency Sync**: O Launcher verifica se as bibliotecas (ex: `pysnmp`) estão acessíveis no contexto de Administrador.
+
+### 📦 Arquivos Modificados
+- `frontend/src/pages/Alerts.tsx`: Interface central de notificações.
+- `frontend/src/pages/Agent.tsx`: Remoção de configurações duplicadas.
+- `backup_db.py`: Novo motor de notificações e localização de binários.
+- `backend/app/routers/settings.py`: API de busca de grupos e persistência de novos campos.
+- `ABRIR_SISTEMA.bat`: Lógica de elevação e auto-start.
+- `start_postgres.ps1`: Script de gerenciamento de serviço.
+
+### 🧪 Testes Realizados
+- ✅ **Teste de Grupo**: Sucesso ao buscar e selecionar o grupo "ISP MONITOR" com 32 membros.
+- ✅ **Teste de Backup**: Notificação enviada para Telegram (com arquivo) e WhatsApp (resumo texto) simultaneamente.
+- ✅ **Teste de Agente IA**: Botão "Testar Agora" enviou alerta de pico de latência com sucesso.
+- ✅ **Cold Boot**: Início do zero (banco parado) → Sucesso ao iniciar tudo automaticamente com 1 clique.
+
+### 🎯 Impacto
+- **Experiência do Usuário**: Fim da confusão de onde configurar notificações; tudo está em "Alertas".
+- **Facilidade de Uso**: Não é mais necessário procurar caminhos de sistema no PATH ou iniciar serviços manuais.
+- **Robustez**: O sistema se recupera de quedas de banco e sessões de WhatsApp de forma autônoma.
+
+---
+
 ## 🚀 Sessão 28/12/2025 - Invisible Startup & Zombie Hunter (V3.7)
 
 ### 🎯 Objetivo Principal
