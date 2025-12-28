@@ -871,7 +871,7 @@ export function Equipments() {
                             {/* Select All Header */}
                             {scannedDevices.map((device, index) => (
                                 <div key={device.ip} className="flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer border-b border-slate-800/50 last:border-0" onClick={() => setSelectedIps(p => p.includes(device.ip) ? p.filter(i => i !== device.ip) : [...p, device.ip])}>
-                                    {selectedIps.includes(device.ip) ? <CheckSquare className="text-blue-500" size={16} shrink-0 /> : <Square className="text-slate-500" size={16} shrink-0 />}
+                                    {selectedIps.includes(device.ip) ? <CheckSquare className="text-blue-500 shrink-0" size={16} /> : <Square className="text-slate-500 shrink-0" size={16} />}
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
