@@ -43,7 +43,7 @@ def run_fix(error_log):
     try:
         # Usa o executável do python atual para garantir que instala no ambiente certo
         cmd = [sys.executable, "-m", "pip", "install", pip_package]
-        res = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=0x08000000)
         print(f"[DOCTOR] ✅ Pacote '{pip_package}' instalado com sucesso!")
         return True
     except subprocess.CalledProcessError as e:

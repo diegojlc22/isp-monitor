@@ -218,9 +218,9 @@ const WirelessMonitorModal = ({ equipment, onClose }: { equipment: any, onClose:
 
                 {/* Live Chart - Only show if valid type */}
                 {(isTransmitter || isStation) && (
-                    <div className="h-48 bg-slate-950/50 rounded border border-slate-800/50 p-2">
+                    <div className="h-48 bg-slate-950/50 rounded border border-slate-800/50 p-2 relative">
                         {data.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" debounce={100}>
                                 <AreaChart data={data}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
                                     <XAxis dataKey="time" hide />
@@ -999,8 +999,8 @@ export function Equipments() {
                     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
                         <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl p-6 h-[70vh] flex flex-col">
                             <h3 className="text-white font-bold mb-4">{selectedEqHistory.name} - Histórico ({historyPeriod})</h3>
-                            <div className="flex-1 min-h-0">
-                                <ResponsiveContainer width="100%" height="100%">
+                            <div className="flex-1 min-h-0 relative">
+                                <ResponsiveContainer width="100%" height="100%" debounce={100}>
                                     <AreaChart data={historyData}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                                         <XAxis dataKey="timeStr" stroke="#666" />

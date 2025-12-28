@@ -86,9 +86,8 @@ class ModernLauncher:
         # Estado
         self.is_running = False
         self.is_starting = False # Flag para evitar falsos positivos no startup
-        self.should_be_running = False # Monitoramento de auto-cura
         self.process = None
-        self.should_be_running = False 
+        self.should_be_running = False # Monitoramento de auto-cura
         self.restart_attempts = 0
         self.child_processes = []  # Rastrear PIDs dos processos criados
 
@@ -98,8 +97,11 @@ class ModernLauncher:
         # Construir Interface
         self.create_widgets()
         
-        # Loop de Verificação
+        # Loop de Verificação de Status
         self.check_status_loop()
+        
+        # Loop de Auto-Update de Logs
+        self.update_logs_loop()
 
         # Handle Exit
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -331,7 +333,26 @@ class ModernLauncher:
 
     def check_status_loop(self):
         self.check_status()
-        self.root.after(4000, self.check_status_loop)
+        self.root.after(5000, self.check_status_loop) # A cada 5 segundos
+
+    def update_logs_loop(self):
+        """Auto-atualiza os logs se estiver na aba de logs"""
+        try:
+            current_tab = self.notebook.index(self.notebook.select())
+            if current_tab == 1:
+                # Verifica se o tamanho dos arquivos mudou antes de atualizar para evitar flicker
+                total_size = 0
+                log_paths = ["startup.log", "logs/api.log", "logs/collector.log", "logs/frontend.log", "logs/whatsapp.log", "logs/self_heal.log"]
+                for p in log_paths:
+                    if os.path.exists(p): total_size += os.path.getsize(p)
+                
+                # Se mudou o tamanho, ou se é a primeira vez, atualiza
+                if not hasattr(self, 'last_log_size') or self.last_log_size != total_size:
+                    self.refresh_logs()
+                    self.last_log_size = total_size
+        except:
+            pass
+        self.root.after(2000, self.update_logs_loop) # A cada 2 segundos
 
     def check_status(self):
         """Verifica se API está rodando na porta 8080"""
@@ -381,21 +402,28 @@ class ModernLauncher:
                 print(f"[LAUNCHER] Diretório '{log_dir}' recriado automaticamente.")
             except: pass
 
-        # RESET LOGS (Limpar logs antigos dentro da pasta logs)
-        # Lista atualizada para o novo padrão
+        # RESET LOGS (Limpar logs antigos fisicamente)
         log_files = [
+            "startup.log",
             os.path.join(log_dir, "api.log"),
             os.path.join(log_dir, "collector.log"),
             os.path.join(log_dir, "frontend.log"),
-            # Startup.log muitas vezes fica na raiz pois é gerado antes do launcher saber de tudo,
-            # mas vamos tentar limpar o da raiz também por higiene.
-            "startup.log" 
+            os.path.join(log_dir, "whatsapp.log"),
+            os.path.join(log_dir, "snmp.log"),
+            os.path.join(log_dir, "self_heal.log")
         ]
         
         for lf in log_files:
-            if os.path.exists(lf):
-                try: open(lf, 'w').close()
-                except: pass
+            try:
+                if os.path.exists(lf):
+                    with open(lf, 'w', encoding='utf-8') as f:
+                        f.truncate(0)
+            except: pass
+        
+        # Limpar terminal na UI
+        self.log_text.config(state="normal")
+        self.log_text.delete(1.0, "end")
+        self.log_text.config(state="disabled")
 
         # --- DOCTOR CHECKUP ---
         # Roda verificações proativas (Otimização DB, etc)
@@ -413,14 +441,20 @@ class ModernLauncher:
         # if not self.check_and_rebuild_frontend():
         #      return
 
-        script = "iniciar_postgres.bat"
-        if not os.path.exists(script):
-            messagebox.showerror("Erro", f"Script {script} não encontrado!")
-            return
-            
+        # Database Init (Direct Python - Silent)
         try:
-            # Launcher silencioso
-            proc = subprocess.Popen([script], creationflags=0x08000000, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Executa inicialização do banco diretamente via Python (sem janelas .bat)
+            db_cmd = [
+                sys.executable, "-c", 
+                "from backend.app.database import init_db; import asyncio; asyncio.run(init_db())"
+            ]
+            
+            # Garante diretório de logs
+            if not os.path.exists("logs"): os.makedirs("logs")
+            
+            # Redireciona log
+            log_f = open("logs/db_init.log", "w")
+            proc = subprocess.Popen(db_cmd, creationflags=0x08000000, stdout=log_f, stderr=subprocess.STDOUT)
             self.child_processes.append(proc)  # Rastrear processo
             
             # Switch to logs tab
@@ -430,6 +464,16 @@ class ModernLauncher:
             # Feedback
             self.info_label.config(text="Iniciando... (Aguarde 5-10s)")
             self.status_badge.config(text=" ● INICIANDO ", fg=COLORS['warning'])
+
+            # Lançar Doctor V3.6 (O Mestre de Cerimônias)
+            my_pid = os.getpid()
+            python_exe = sys.executable
+            doctor_cmd = [python_exe, "scripts/self_heal.py", str(my_pid)]
+            subprocess.Popen(doctor_cmd, creationflags=0x08000000)
+            print(f"[LAUNCHER] Doctor V3.6 iniciado (Monitorando PID {my_pid}).")
+            
+            # Pequeno delay para os arquivos de log serem liberados pelo OS
+            time.sleep(1)
             
             # Aguardar e verificar com flag de proteção
             self.is_starting = True
@@ -459,17 +503,18 @@ class ModernLauncher:
             print("[FORCE KILL] Executando limpeza agressiva...")
             
             # 1. Taskkill padrão
-            os.system("taskkill /F /IM node.exe /T >nul 2>&1")
-            os.system("taskkill /F /IM python.exe /T >nul 2>&1")
-            os.system("taskkill /F /IM pythonw.exe /T >nul 2>&1")
-            os.system("taskkill /F /IM postgres.exe /T >nul 2>&1")
-            os.system("taskkill /F /IM conhost.exe /T >nul 2>&1")
+            creation_flags = 0x08000000
+            subprocess.run("taskkill /F /IM node.exe /T", shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run("taskkill /F /IM python.exe /T", shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run("taskkill /F /IM pythonw.exe /T", shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run("taskkill /F /IM postgres.exe /T", shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run("taskkill /F /IM conhost.exe /T", shell=True, capture_output=True, creationflags=creation_flags)
             
             # 2. WMIC para processos órfãos (força bruta)
-            os.system('wmic process where "name=\'node.exe\'" delete >nul 2>&1')
-            os.system('wmic process where "name=\'python.exe\'" delete >nul 2>&1')
-            os.system('wmic process where "name=\'pythonw.exe\'" delete >nul 2>&1')
-            os.system('wmic process where "name=\'conhost.exe\'" delete >nul 2>&1')
+            subprocess.run('wmic process where "name=\'node.exe\'" delete', shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run('wmic process where "name=\'python.exe\'" delete', shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run('wmic process where "name=\'pythonw.exe\'" delete', shell=True, capture_output=True, creationflags=creation_flags)
+            subprocess.run('wmic process where "name=\'conhost.exe\'" delete', shell=True, capture_output=True, creationflags=creation_flags)
             
             print("[FORCE KILL] Limpeza completa.")
             
@@ -515,7 +560,7 @@ class ModernLauncher:
         """Verifica se precisa rebuildar o frontend"""
         # Se nao tiver npm (node), nao tenta
         try:
-           subprocess.run(["npm", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+           subprocess.run(["npm", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, creationflags=0x08000000)
         except:
            return True # Pula se nao tiver node
 
@@ -586,9 +631,6 @@ class ModernLauncher:
              
         build_win.destroy()
         return success
-
-        build_win.destroy()
-        return success
         
     def wait_for_start(self):
         """Aguarda inicialização verificando logs"""
@@ -606,59 +648,59 @@ class ModernLauncher:
 
     def stop_system(self):
         """Mata API, Coletor e processos relacionados"""
-        self.should_be_running = False # Desativa monitoramento de crash
+        self.should_be_running = False 
         killed = []
         try:
             my_pid = os.getpid()
             
-            # Matar TODOS os processos relacionados ao projeto
+            # --- PASSO 1: MATAR O DOCTOR PRIMEIRO ---
+            for proc in psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    cmdline = ' '.join(proc.info.get('cmdline') or []).lower()
+                    if 'self_heal.py' in cmdline and proc.info['pid'] != my_pid:
+                        proc.kill()
+                        killed.append("Doctor")
+                except: pass
+
+            time.sleep(0.5)
+
+            # --- PASSO 2: MATAR OS OUTROS SERVIÇOS ---
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
-                    if proc.info['pid'] == my_pid: 
-                        continue
-                    
+                    if proc.info['pid'] == my_pid: continue
                     proc_name = proc.info.get('name', '').lower()
-                    # Trata cmdline None para evitar erro 'can only join an iterable'
                     cmdline = ' '.join(proc.info.get('cmdline') or []).lower()
                     
-                    # Critérios para matar:
-                    # 1. Processos do projeto (python com collector, node com whatsapp, postgres)
-                    # 2. Conhost que tenha postgres ou isp-monitor no caminho
                     should_kill = False
                     reason = ""
-                    
-                    if 'collector.py' in cmdline:
+                    if 'pinger_fast' in cmdline:
                         should_kill = True
-                        reason = "Coletor"
-                    elif proc_name == 'node.exe' and 'whatsapp' in cmdline:
+                        reason = "Coletor (Pinger)"
+                    elif 'snmp_monitor' in cmdline:
                         should_kill = True
-                        reason = "WhatsApp Gateway"
-                    elif proc_name == 'postgres.exe' and 'isp-monitor' in cmdline:
+                        reason = "SNMP Monitor"
+                    elif (proc_name == 'node.exe' or proc_name == 'node') and ('server.js' in cmdline or 'vite' in cmdline):
                         should_kill = True
-                        reason = "PostgreSQL"
-                    elif proc_name == 'conhost.exe' and ('postgres' in cmdline or 'isp-monitor' in cmdline):
-                        should_kill = True
-                        reason = "Console Host (Projeto)"
-                    elif proc_name == 'python.exe' and 'uvicorn' in cmdline and '8080' in cmdline:
+                        reason = "Frontend/WhatsApp"
+                    elif 'uvicorn' in cmdline and '8080' in cmdline:
                         should_kill = True
                         reason = "API (Uvicorn)"
+                    elif 'postgres.exe' in cmdline or 'pg_ctl' in cmdline:
+                        if 'isp_monitor' in cmdline or 'data' in cmdline:
+                            should_kill = True
+                            reason = "PostgreSQL"
                     
                     if should_kill:
-                        print(f"[STOP] Matando {reason}: {proc_name} (PID {proc.info['pid']})")
                         proc.kill()
                         killed.append(reason)
-                        
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-                except Exception as e:
-                    print(f"[STOP] Erro ao processar {proc.info.get('name', '?')}: {e}")
+                except: pass
             
             self.child_processes.clear()
             time.sleep(1)
             self.check_status()
         
             if killed:
-                messagebox.showinfo("Parado", f"Processos encerrados: {', '.join(set(killed))}")
+                messagebox.showinfo("Sucesso", f"O sistema foi parado.\nEncerramos: {', '.join(set(killed))}")
             else:
                 messagebox.showinfo("Info", "Nenhum processo ativo encontrado.")
             
@@ -668,7 +710,7 @@ class ModernLauncher:
     def force_kill(self):
         if messagebox.askyesno("Kill Forçado", "Isso vai encerrar TODOS os processos Python/Postgres relacionados.\nContinuar?"):
             try:
-                os.system("taskkill /F /IM python.exe /T")
+                subprocess.run("taskkill /F /IM python.exe /T", shell=True, capture_output=True, creationflags=0x08000000)
                 # os.system("taskkill /F /IM postgres.exe /T") # Opcional, perigoso
                 messagebox.showinfo("Kill", "Processos mortos. O launcher também fechará.")
                 self.root.destroy()
@@ -715,7 +757,10 @@ class ModernLauncher:
             "STARTUP.LOG": "startup.log",
             "API.LOG": os.path.join("logs", "api.log"),
             "COLLECTOR.LOG": os.path.join("logs", "collector.log"),
-            "FRONTEND.LOG": os.path.join("logs", "frontend.log")
+            "FRONTEND.LOG": os.path.join("logs", "frontend.log"),
+            "WHATSAPP.LOG": os.path.join("logs", "whatsapp.log"),
+            "SNMP.LOG": os.path.join("logs", "snmp.log"),
+            "SELF_HEAL.LOG": os.path.join("logs", "self_heal.log")
         }
         
         for display_name, real_path in log_files.items():
@@ -766,9 +811,9 @@ class ModernLauncher:
             # Limpeza final agressiva (fallback)
             print("[LAUNCHER] Limpeza final...")
             try:
-                os.system("taskkill /F /IM node.exe /T >nul 2>&1")
-                os.system("taskkill /F /IM conhost.exe /FI \"WINDOWTITLE eq *postgres*\" >nul 2>&1")
-                os.system("taskkill /F /IM conhost.exe /FI \"WINDOWTITLE eq *isp-monitor*\" >nul 2>&1")
+                subprocess.run("taskkill /F /IM node.exe /T", shell=True, capture_output=True, creationflags=0x08000000)
+                subprocess.run('taskkill /F /IM conhost.exe /FI "WINDOWTITLE eq *postgres*"', shell=True, capture_output=True, creationflags=0x08000000)
+                subprocess.run('taskkill /F /IM conhost.exe /FI "WINDOWTITLE eq *isp-monitor*"', shell=True, capture_output=True, creationflags=0x08000000)
             except:
                 pass
             

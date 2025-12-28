@@ -53,7 +53,8 @@ def check_firewall_rule(rule_name: str, port: int) -> bool:
         cmd = f"Get-NetFirewallRule -DisplayName '{rule_name}' -ErrorAction SilentlyContinue"
         result = subprocess.run(
             ["powershell", "-Command", cmd],
-            capture_output=True
+            capture_output=True,
+            creationflags=0x08000000
         )
         # Decode output safely
         stdout = decode_output(result.stdout)
@@ -84,7 +85,8 @@ def create_firewall_rule(rule_name: str, port: int):
     try:
         result = subprocess.run(
             ["powershell", "-Command", cmd],
-            capture_output=True
+            capture_output=True,
+            creationflags=0x08000000
         )
         
         if result.returncode == 0:

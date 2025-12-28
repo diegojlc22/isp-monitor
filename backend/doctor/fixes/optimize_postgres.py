@@ -69,13 +69,13 @@ def run_fix(arg=None):
         shutil.copy2(source_conf, target_conf)
         
         # Permissões (Crucial)
-        subprocess.run(f'icacls "{target_conf}" /reset', shell=True, stdout=subprocess.DEVNULL)
-        subprocess.run(f'icacls "{target_conf}" /grant "NT SERVICE\\{service_name}":(R)', shell=True, stdout=subprocess.DEVNULL)
+        subprocess.run(f'icacls "{target_conf}" /reset', shell=True, stdout=subprocess.DEVNULL, creationflags=0x08000000)
+        subprocess.run(f'icacls "{target_conf}" /grant "NT SERVICE\\{service_name}":(R)', shell=True, stdout=subprocess.DEVNULL, creationflags=0x08000000)
         
         print("[DOCTOR] 🔧 Configuração aplicada. Reiniciando serviço...")
         
-        subprocess.run(f"net stop {service_name}", shell=True, stdout=subprocess.DEVNULL)
-        ret = subprocess.run(f"net start {service_name}", shell=True, capture_output=True)
+        subprocess.run(f"net stop {service_name}", shell=True, stdout=subprocess.DEVNULL, creationflags=0x08000000)
+        ret = subprocess.run(f"net start {service_name}", shell=True, capture_output=True, creationflags=0x08000000)
         
         if ret.returncode == 0:
             print("[DOCTOR] ✅ Otimização aplicada com sucesso!")
@@ -85,7 +85,7 @@ def run_fix(arg=None):
             print("[DOCTOR] ℹ️ Verifique se tem RAM livre suficiente ou reduza 'shared_buffers'.")
             
             shutil.copy2(os.path.join(pg_data, "postgresql.conf.backup_auto"), target_conf)
-            subprocess.run(f"net start {service_name}", shell=True)
+            subprocess.run(f"net start {service_name}", shell=True, creationflags=0x08000000)
             print("[DOCTOR] ℹ️ Sistema restaurado para padrão.")
             return True
             

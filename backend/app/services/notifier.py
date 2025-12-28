@@ -1,20 +1,13 @@
 import asyncio
 import os
-import logging
 import httpx
 from dotenv import load_dotenv
+from loguru import logger
+from backend.app.config import settings
 
-# Carregar variaveis do ambiente
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
-
-logger = logging.getLogger(__name__)
-
-# Configurações
-ALERT_TYPE = os.getenv("ALERT_TYPE", "telegram").lower()
-TELEGRAM_TOKEN_ENV = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID_ENV = os.getenv("TELEGRAM_CHAT_ID")
-WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "http://localhost:3001/send")
-WHATSAPP_NUMBER = os.getenv("WHATSAPP_TARGET_NUMBER", "")
+# Configurações globais (fallback)
+WHATSAPP_API_URL = settings.whatsapp_api_url
+WHATSAPP_NUMBER = settings.whatsapp_target_number
 
 # Global HTTP Client (Lazy loaded)
 _client: httpx.AsyncClient = None
@@ -50,8 +43,8 @@ async def send_notification(
     tasks = []
     
     # 1. Telegram
-    token = telegram_token or TELEGRAM_TOKEN_ENV
-    chat_id = telegram_chat_id or TELEGRAM_CHAT_ID_ENV
+    token = telegram_token or settings.telegram_token
+    chat_id = telegram_chat_id or settings.telegram_chat_id
         
     if telegram_enabled and token and chat_id:
         tasks.append(send_telegram(message, token, chat_id))
@@ -92,9 +85,11 @@ async def send_telegram(message: str, token: str, chat_id: str):
         "parse_mode": "HTML"
     }
     try:
+        logger.info(f"Enviando Telegram para {chat_id}: {message[:50]}...")
         await _post_with_retry(url, payload)
+        logger.info(f"Telegram enviado com sucesso para {chat_id}")
     except Exception as e:
-        logger.error(f"Falha ao enviar Telegram após retries: {e}")
+        logger.error(f"Falha ao enviar Telegram para {chat_id}: {e}")
 
 async def send_whatsapp(message: str, target: str):
     payload = {
@@ -102,6 +97,8 @@ async def send_whatsapp(message: str, target: str):
         "message": message
     }
     try:
+        logger.info(f"Enviando WhatsApp para {target}: {message[:50]}...")
         await _post_with_retry(WHATSAPP_API_URL, payload)
+        logger.info(f"WhatsApp enviado com sucesso para {target}")
     except Exception as e:
-        logger.error(f"Falha ao enviar WhatsApp: {e}")
+        logger.error(f"Falha ao enviar WhatsApp para {target}: {e}")

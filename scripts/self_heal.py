@@ -1,0 +1,149 @@
+import os
+import sys
+import time
+import subprocess
+import psutil
+from datetime import datetime
+
+# ==========================================================
+# DOCTOR V3.6 - O MESTRE DOS PROCESSOS (ULTRA-FINAL)
+# ==========================================================
+
+LOG_FILE = "logs/self_heal.log"
+PYTHON_EXE = sys.executable
+
+os.environ["PYTHONIOENCODING"] = "utf-8"
+os.environ["PYTHONUTF8"] = "1"
+
+SERVICES = {
+    "whatsapp": {
+        "cmd": "node server.js",
+        "port": 3001,
+        "check": ["node", "server.js"],
+        "log": "logs/whatsapp.log",
+        "cwd": "tools/whatsapp"
+    },
+    "api": {
+        "cmd": f'"{PYTHON_EXE}" -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080',
+        "port": 8080,
+        "check": ["uvicorn", "backend.app.main:app"],
+        "log": "logs/api.log"
+    },
+    "pinger": {
+        "cmd": f'"{PYTHON_EXE}" -m backend.app.services.pinger_fast',
+        "check": ["pinger_fast"],
+        "log": "logs/collector.log"
+    },
+    "snmp": {
+        "cmd": f'"{PYTHON_EXE}" -m backend.app.services.snmp_monitor',
+        "check": ["snmp_monitor"],
+        "log": "logs/snmp.log"
+    },
+    "frontend": {
+        "cmd": "npm run dev",
+        "check": ["vite"],
+        "log": "logs/frontend.log",
+        "cwd": "frontend"
+    }
+}
+
+PARENT_PID = int(sys.argv[1]) if len(sys.argv) > 1 else None
+SPAWNED_PROCS = {} # Nome -> Popen Object
+
+def kill_process_tree(pid):
+    """Mata uma árvore de processos inteira (Pai + Filhos)"""
+    try:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        
+        # Mata filhos primeiro
+        for child in children:
+            try: child.kill()
+            except: pass
+            
+        # Mata o pai
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
+    except Exception as e:
+        log(f"⚠️ Erro ao matar árvore PID {pid}: {e}", "WARN")
+
+def cleanup_all():
+    """Limpeza final ao fechar o Doctor"""
+    log("💀 [SHUTDOWN] Iniciando protocolo 'Zombie Hunter'...", "WARN")
+    
+    for name, proc in SPAWNED_PROCS.items():
+        if proc.poll() is None: # Se ainda está rodando
+            log(f"🪓 Terminando {name.upper()} (PID {proc.pid})...")
+            kill_process_tree(proc.pid)
+    
+    log("✅ Todos os serviços foram encerrados.", "INFO")
+
+import atexit
+atexit.register(cleanup_all)
+
+def run_doctor():
+    log("🚑 ========================================")
+    log("🚑 DOCTOR V3.7 ONLINE - ZOMBIE HUNTER")
+    log("🚑 ========================================")
+    
+    first_run = True
+
+    while True:
+        # Check se o Launcher morreu
+        if PARENT_PID and not psutil.pid_exists(PARENT_PID):
+            log("👋 Launcher fechado. Executando limpeza total...", "WARN")
+            cleanup_all()
+            sys.exit(0)
+
+        for name, config in SERVICES.items():
+            try:
+                # Na primeira rodada, FORÇAMOS o reinício de tudo
+                should_start = False
+                
+                if first_run:
+                    log(f"🧹 [CLEANUP] Preparando {name.upper()} para início fresco...")
+                    kill_duplicates(name, config)
+                    
+                    if name == "whatsapp": 
+                        subprocess.run("taskkill /F /IM node.exe /T", shell=True, capture_output=True, creationflags=0x08000000)
+                    
+                    should_start = True
+                    time.sleep(0.5)
+                else:
+                    if not is_running(name, config):
+                        should_start = True
+
+                if should_start:
+                    log(f"🚀 [START] Iniciando {name.upper()}...", "INFO")
+                    
+                    log_path = config["log"]
+                    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+                    
+                    mode = "w" if first_run else "a"
+                    
+                    if name == "frontend":
+                        config["cmd"] = "cmd /c npm run dev"
+                    
+                    with open(log_path, mode, encoding="utf-8") as f:
+                        f.write(f"\n--- [SYSTEM START] {datetime.now()} ---\n")
+                        
+                        proc = subprocess.Popen(
+                            config["cmd"],
+                            cwd=config.get("cwd", "."),
+                            creationflags=0x08000000,
+                            stdout=f,
+                            stderr=f,
+                            shell=False if name == "frontend" else True, 
+                            env=os.environ.copy()
+                        )
+                        SPAWNED_PROCS[name] = proc
+                        
+            except Exception as e:
+                log(f"🚨 Erro ao gerenciar {name}: {e}", "CRITICAL")
+        
+        first_run = False
+        time.sleep(5) # Ciclo mais rápido (5s) para pegar zumbis logo
+
+if __name__ == "__main__":
+    run_doctor()

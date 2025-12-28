@@ -29,18 +29,18 @@ def run_fix():
     conf_file = os.path.join(pg_data, "postgresql.conf")
     try:
         # Resetar e garantir leitura para o serviço
-        subprocess.run(f'icacls "{conf_file}" /reset', shell=True, stdout=subprocess.DEVNULL)
-        subprocess.run(f'icacls "{conf_file}" /grant "NT SERVICE\\{service_name}":(R)', shell=True, stdout=subprocess.DEVNULL)
-        subprocess.run(f'icacls "{pg_data}" /grant "NT SERVICE\\{service_name}":(R)', shell=True, stdout=subprocess.DEVNULL)
+        subprocess.run(f'icacls "{conf_file}" /reset', shell=True, stdout=subprocess.DEVNULL, creationflags=0x08000000)
+        subprocess.run(f'icacls "{conf_file}" /grant "NT SERVICE\\{service_name}":(R)', shell=True, stdout=subprocess.DEVNULL, creationflags=0x08000000)
+        subprocess.run(f'icacls "{pg_data}" /grant "NT SERVICE\\{service_name}":(R)', shell=True, stdout=subprocess.DEVNULL, creationflags=0x08000000)
     except Exception as e:
         print(f"[DOCTOR] ⚠️ Aviso ao ajustar permissões: {e}")
 
     # 3. Reiniciar Serviço
     print("[DOCTOR] ⚡ Tentando reiniciar o serviço...")
     # Tenta parar primeiro para garantir
-    subprocess.run(f"net stop {service_name}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(f"net stop {service_name}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=0x08000000)
     
-    res = subprocess.run(f"net start {service_name}", shell=True, capture_output=True)
+    res = subprocess.run(f"net start {service_name}", shell=True, capture_output=True, creationflags=0x08000000)
     output = res.stdout.decode('cp850', errors='ignore') + res.stderr.decode('cp850', errors='ignore')
     
     if res.returncode == 0:
