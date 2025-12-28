@@ -94,6 +94,8 @@ class ModernLauncher:
         self.restart_attempts = 0
         self.expo_logs = []  # Armazenar logs do Expo
         self.child_processes = []  # Rastrear PIDs dos processos criados
+        self.process_expo = None
+        self.expo_running = False
 
         # Estilos Customizados
         self.setup_styles()
@@ -183,25 +185,20 @@ class ModernLauncher:
         self.tab_home = tk.Frame(self.notebook, bg=COLORS['bg'])
         self.notebook.add(self.tab_home, text="  🏠 PRINCIPAL  ")
         
-        # 2. Aba WhatsApp
-        self.tab_whatsapp = tk.Frame(self.notebook, bg=COLORS['bg'])
-        self.notebook.add(self.tab_whatsapp, text="  💚 WHATSAPP  ")
-
-        # 3. Aba Mobile
+        # 2. Aba Mobile
         self.tab_mobile = tk.Frame(self.notebook, bg=COLORS['bg'])
         self.notebook.add(self.tab_mobile, text="  📱 MOBILE  ")
 
-        # 4. Aba Logs System
+        # 3. Aba Logs System
         self.tab_logs = tk.Frame(self.notebook, bg=COLORS['bg'])
         self.notebook.add(self.tab_logs, text="  📝 LOGS  ")
         
-        # 5. Aba Logs Expo
+        # 4. Aba Logs Expo
         self.tab_expo_logs = tk.Frame(self.notebook, bg=COLORS['bg'])
         self.notebook.add(self.tab_expo_logs, text="  DEBUG APP  ")
 
         # Construir Conteúdo das Abas
         self.build_home_tab(self.tab_home)
-        self.build_whatsapp_tab(self.tab_whatsapp)
         self.build_mobile_tab(self.tab_mobile)
         self.build_logs_tab(self.tab_logs)
         self.build_expo_logs_tab(self.tab_expo_logs)
@@ -298,75 +295,55 @@ class ModernLauncher:
         
         self.info_label.config(text="Modo DEV iniciado! API na 8000, Frontend na 5173.")
 
-
-    def build_whatsapp_tab(self, parent):
-        """Aba WhatsApp Gateway"""
-        container = tk.Frame(parent, bg=COLORS['bg'])
-        container.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
-        
-        tk.Label(container, text="WhatsApp Gateway", font=("Segoe UI", 14, "bold"), bg=COLORS['bg'], fg=COLORS['success']).pack(pady=(0,20))
-
-        self.btn_whatsapp = self.create_button(container, "ZEP: DESLIGADO", self.toggle_whatsapp, bg='#45475a', fg=COLORS['subtext'], height=2, font=("Segoe UI", 11, "bold"))
-        self.btn_whatsapp.pack(fill=tk.X, pady=10)
-        
-        # QR e Reset lado a lado
-        row_btns = tk.Frame(container, bg=COLORS['bg'])
-        row_btns.pack(fill=tk.X, pady=10)
-        
-        self.btn_whatsapp_qr = self.create_button(row_btns, "� Ver QR Code", self.open_whatsapp_qr, bg='#45475a', fg=COLORS['text'])
-        self.btn_whatsapp_qr.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0,5))
-        self.btn_whatsapp_qr.config(state=tk.DISABLED)
-
-        self.btn_whatsapp_reset = self.create_button(row_btns, "🔄 Resetar Sessão", self.reset_whatsapp, bg='#45475a', fg=COLORS['text'])
-        self.btn_whatsapp_reset.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(5,0))
-
-        tk.Label(container, text="Testes & Diagnóstico", font=("Segoe UI", 10, "bold"), bg=COLORS['bg'], fg=COLORS['text']).pack(pady=(20,10))
-
-        self.btn_whatsapp_test = self.create_button(container, "🔔 Enviar Mensagem de Teste", self.test_whatsapp_msg, bg='#45475a', fg=COLORS['text'])
-        self.btn_whatsapp_test.pack(fill=tk.X, pady=5)
-        self.btn_whatsapp_test.config(state=tk.DISABLED)
-
-        self.btn_whatsapp_groups = self.create_button(container, "📋 Listar Meus Grupos (Copiar ID)", self.list_whatsapp_groups, bg='#45475a', fg=COLORS['text'])
-        self.btn_whatsapp_groups.pack(fill=tk.X, pady=5)
-        self.btn_whatsapp_groups.config(state=tk.DISABLED)
-
-        self.whatsapp_process = None
-        self.whatsapp_running = False
-
     def build_mobile_tab(self, parent):
-        """Aba Mobile / Acesso Remoto"""
+        """Aba Mobile: Controle do App (Expo)"""
         container = tk.Frame(parent, bg=COLORS['bg'])
-        container.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
-        
-        tk.Label(container, text="Acesso Remoto (App)", font=("Segoe UI", 12, "bold"), bg=COLORS['bg'], fg=COLORS['text']).pack(pady=(0,20))
+        container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        # Ngrok
-        self.btn_ngrok = self.create_button(container, "🌐 Ngrok (Túnel)", self.toggle_ngrok, bg='#45475a', fg=COLORS['subtext'])
-        self.btn_ngrok.pack(fill=tk.X, pady=10)
+        # Status Card
+        status_card = tk.Frame(container, bg=COLORS['card'], padx=20, pady=20)
+        status_card.pack(fill=tk.X, pady=(0, 20))
         
-        # Expo
-        tk.Label(container, text="Expo (React Native)", font=("Segoe UI", 10), bg=COLORS['bg'], fg=COLORS['subtext']).pack(pady=(10,5))
-        
-        self.btn_expo = self.create_button(container, "📱 Iniciar Expo", self.toggle_expo, bg='#45475a', fg=COLORS['subtext'])
-        self.btn_expo.pack(fill=tk.X, pady=5)
-        
-        self.btn_expo_stop = self.create_button(container, "⏹ Parar Expo", self.stop_expo, bg='#45475a', fg=COLORS['danger'])
-        self.btn_expo_stop.pack(fill=tk.X, pady=5)
-        self.btn_expo_stop.config(state=tk.DISABLED)
+        self.lbl_mobile_status = tk.Label(status_card, text="MOBILE: PARADO", font=("Segoe UI", 12, "bold"), bg=COLORS['card'], fg=COLORS['subtext'])
+        self.lbl_mobile_status.pack(side=tk.LEFT)
 
-        self.ngrok_process = None
-        self.ngrok_running = False
-        self.expo_process = None
-        self.expo_running = False
+        # Controls
+        controls = tk.Frame(container, bg=COLORS['bg'])
+        controls.pack(fill=tk.X)
+        
+        self.btn_mobile = self.create_button(controls, "📱 Iniciar App Mobile (Expo)", self.toggle_mobile, bg=COLORS['primary'], fg='#1e1e2e')
+        self.btn_mobile.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_qr = self.create_button(controls, "🔳 Ver QR Code", self.toggle_expo_qr, bg=COLORS['card'], fg=COLORS['text'])
+        self.btn_qr.pack(side=tk.LEFT, padx=5)
 
-    def run_doctor(self):
-        """Executa o sistema de diagnostico e reparo"""
-        script_path = os.path.join(os.getcwd(), "tools", "reparo", "diagnostico.py")
-        if os.path.exists(script_path):
-            # Executa em nova janela para o usuario ver o processo
-            subprocess.Popen(f'start "SISTEMA DE REPARO AUTOMATICO" cmd /c "python {script_path} && pause"', shell=True)
+    def toggle_mobile(self):
+        if self.process_expo:
+            subprocess.call('taskkill /F /IM node.exe /T', shell=True) 
+            self.process_expo = None
+            self.lbl_mobile_status.config(text="MOBILE: PARADO", fg=COLORS['subtext'])
+            self.btn_mobile.config(text="📱 Iniciar App Mobile (Expo)", bg=COLORS['primary'])
         else:
-            messagebox.showerror("Erro", "Modulo de reparo nao encontrado.\nVerifique tools/reparo")
+            project_path = os.path.join(os.getcwd(), 'mobile')
+            if not os.path.exists(project_path):
+                messagebox.showerror("Erro", "Pasta 'mobile' não encontrada.")
+                return
+
+            self.lbl_mobile_status.config(text="MOBILE: INICIANDO...", fg=COLORS['warning'])
+            
+            def run_expo():
+                cmd = "npx expo start --clean"
+                try:
+                    self.process_expo = subprocess.Popen(cmd, cwd=project_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    self.lbl_mobile_status.config(text="MOBILE: RODANDO", fg=COLORS['success'])
+                    self.btn_mobile.config(text="⏹ Parar Mobile", bg=COLORS['danger'])
+                except Exception as e:
+                    self.lbl_mobile_status.config(text="MOBILE: ERRO", fg=COLORS['danger'])
+                    
+            threading.Thread(target=run_expo, daemon=True).start()
+
+    def toggle_expo_qr(self):
+        self.notebook.select(self.tab_expo_logs)
 
     def build_logs_tab(self, parent):
         """Constrói a aba de logs com Terminal"""
@@ -379,12 +356,6 @@ class ModernLauncher:
             command=self.refresh_logs,
             bg=COLORS['card'], fg=COLORS['text'], relief="flat", padx=15, pady=5
         ).pack(side=tk.RIGHT)
-
-        tk.Button(
-            toolbar, text="🚑 REPARO INTELIGENTE (IA)", 
-            command=self.run_doctor,
-            bg=COLORS['warning'], fg='#1e1e2e', relief="flat", padx=15, pady=5, font=("Segoe UI", 9, "bold")
-        ).pack(side=tk.RIGHT, padx=10)
         
         tk.Label(
             toolbar, text="Monitoramento de Processos (startup.log, api.log, collector.log)",
@@ -457,24 +428,16 @@ class ModernLauncher:
 
     def check_status_loop(self):
         self.check_status()
-        
-        # --- AUTO HEAL ---
-        try:
-            # Ignora crash check se estiver iniciando (janela de grace period)
-            if getattr(self, 'should_be_running', False) and not self.is_running and not self.is_starting:
-                 self.handle_crash()
-        except: pass
-        
         self.root.after(4000, self.check_status_loop)
 
     def check_status(self):
-        """Verifica se API está rodando na porta 8080 (OTIMIZADO v2)"""
+        """Verifica se API está rodando na porta 8080"""
         try:
-            # 1. Check Port 8080 (Lightweight Socket Check)
+            # 1. Check Port 8080
             is_up = False
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(0.3)  # Reduzido de 0.5s para 0.3s
+                sock.settimeout(0.3)
                 result = sock.connect_ex(('127.0.0.1', 8080))
                 if result == 0:
                     is_up = True
@@ -482,8 +445,8 @@ class ModernLauncher:
             except:
                 is_up = False
             
-            # Update main status (sempre rápido)
-            if self.is_running != is_up:  # Só atualiza se mudou
+            # Update main status
+            if self.is_running != is_up:
                 self.is_running = is_up
                 if is_up:
                     self.status_badge.config(text=" ● ONLINE ", fg=COLORS['success'], highlightbackground=COLORS['success'])
@@ -496,40 +459,31 @@ class ModernLauncher:
                     self.btn_stop.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
                     self.info_label.config(text="Sistema parado. Clique em INICIAR para começar.")
             
-            # 2. Check Processes (OTIMIZADO: Só a cada 3 ciclos = 12 segundos)
+            # 2. Check Processes (Only Expo/Ngrok now)
             if not hasattr(self, '_check_counter'):
                 self._check_counter = 0
             
             self._check_counter += 1
             
-            # Processos auxiliares: verificar menos frequentemente
-            if self._check_counter % 3 == 0:  # A cada 12 segundos
-                # Verificar processos filhos controlados por nós (Mais Confiável)
+            if self._check_counter % 3 == 0:
                 ngrok_is_running = (self.ngrok_process is not None and self.ngrok_process.poll() is None)
                 expo_is_running = (self.expo_process is not None and self.expo_process.poll() is None)
-                zap_is_running = False
                 
-                # OTIMIZAÇÃO: Filtrar por nome primeiro para detectar externos ou órfãos
+                # Check external processes
                 for p in psutil.process_iter(['name']):
                     try:
                         name = p.info['name'].lower()
-                        
                         if 'ngrok' in name:
                             ngrok_is_running = True
                         elif 'node' in name:
-                            # Só pega cmdline se for node (evita overhead)
                             try:
                                 cmd = ' '.join(p.cmdline()).lower()
                                 if 'expo' in cmd:
                                     expo_is_running = True
-                                if 'server.js' in cmd:
-                                    zap_is_running = True
-                            except:
-                                pass
-                    except:
-                        pass
+                            except: pass
+                    except: pass
 
-                # Update Ngrok UI (só se mudou)
+                # Update Ngrok UI
                 if ngrok_is_running != self.ngrok_running:
                     self.ngrok_running = ngrok_is_running
                     if ngrok_is_running:
@@ -537,7 +491,7 @@ class ModernLauncher:
                     else:
                         self.btn_ngrok.config(text="🌐 NGROK: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
                 
-                # Update Expo UI (só se mudou)
+                # Update Expo UI
                 if expo_is_running != self.expo_running:
                     self.expo_running = expo_is_running
                     if expo_is_running:
@@ -546,86 +500,12 @@ class ModernLauncher:
                     else:
                         self.btn_expo.config(text="📱 EXPO: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
                         self.btn_expo_stop.config(state=tk.DISABLED, bg='#45475a')
-                
-                # Update WhatsApp UI (OTIMIZADO: Só verifica status HTTP se processo mudou)
-                if zap_is_running != self.whatsapp_running:
-                    self.whatsapp_running = zap_is_running
-                    
-                    if not zap_is_running:
-                        self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-                        self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                        self.btn_whatsapp_test.config(state=tk.DISABLED)
-                        self.btn_whatsapp_groups.config(state=tk.DISABLED)
-                    else:
-                        # Processo rodando, verificar status (só quando necessário)
-                        try:
-                            resp = requests.get("http://localhost:3001/status", timeout=0.3)
-                            if resp.status_code == 200:
-                                data = resp.json()
-                                if data.get("ready"):
-                                    self.btn_whatsapp.config(text="� ZAP: PRONTO", bg=COLORS['success'], fg='#1e1e2e')
-                                    self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                                    self.btn_whatsapp_test.config(state=tk.NORMAL)
-                                    self.btn_whatsapp_groups.config(state=tk.NORMAL)
-                                elif data.get("qr_code_available"):
-                                    self.btn_whatsapp.config(text="� ZAP: ESCANEAR QR", bg=COLORS['warning'], fg='#1e1e2e')
-                                    self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['danger'])
-                                    self.btn_whatsapp_test.config(state=tk.DISABLED)
-                                    self.btn_whatsapp_groups.config(state=tk.DISABLED)
-                                else:
-                                    self.btn_whatsapp.config(text="💛 ZAP: CARREGANDO...", bg=COLORS['warning'], fg='#1e1e2e')
-                                    self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                                    self.btn_whatsapp_test.config(state=tk.DISABLED)
-                                    self.btn_whatsapp_groups.config(state=tk.DISABLED)
-                        except:
-                            self.btn_whatsapp.config(text="💛 ZAP: CARREGANDO...", bg=COLORS['warning'], fg='#1e1e2e')
-                            self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                            self.btn_whatsapp_test.config(state=tk.DISABLED)
-                            self.btn_whatsapp_groups.config(state=tk.DISABLED)
 
         except Exception as e:
-            # print(f"Status Check Fail: {e}") 
             pass
 
-    def handle_crash(self):
-        """Gerencia falhas e aciona o Doctor"""
-        if self.restart_attempts >= 3:
-            self.should_be_running = False # Desiste
-            self.root.after(0, lambda: messagebox.showerror("Erro Crítico", 
-                "O sistema falhou repetidamente e o reparo automático não resolveu.\nVerifique os LOGS."))
-            return
 
-        print(f"[LAUNCHER] Crash detectado! Tentativa de cura {self.restart_attempts + 1}/3...")
-        self.info_label.config(text=f"Autocura em andamento ({self.restart_attempts+1}/3)...")
-        
-        # Ler logs para diagnóstico
-        log_content = ""
-        for log_file in ["startup.log", "api.log", "collector.log"]:
-            if os.path.exists(log_file):
-                try:
-                    with open(log_file, "r") as f:
-                        log_content += f"\n--- {log_file} ---\n"
-                        log_content += "".join(f.readlines()[-50:]) # Ultimas 50 linhas
-                except: pass
-        
-        # Chamar Doctor
-        try:
-            from backend.doctor import healer
-            healed = healer.diagnose_and_heal(log_content)
-            
-            if healed:
-                print("[LAUNCHER] Doctor reportou sucesso. Reiniciando...")
-                self.restart_attempts += 1
-                time.sleep(2)
-                self.start_system() 
-            else:
-                print("[LAUNCHER] Doctor não encontrou cura.")
-                self.should_be_running = False # Para de tentar
-                self.root.after(0, lambda: messagebox.showwarning("Atenção", "O sistema parou e não há correção automática conhecida."))
-                
-        except Exception as e:
-            print(f"[LAUNCHER] Erro ao chamar Doctor: {e}")
-            self.should_be_running = False
+
 
     def start_system(self):
         if self.is_running: return
@@ -850,328 +730,6 @@ class ModernLauncher:
         build_win.destroy()
         return success
         
-    # --- WHATSAPP CONTROL ---
-    def toggle_whatsapp(self):
-        """Liga/Desliga o WhatsApp Gateway"""
-        if self.whatsapp_running:
-            # Desligar
-            try:
-                # Matar processo node que roda server.js na pasta tools/whatsapp
-                for proc in psutil.process_iter(['name', 'cmdline']):
-                    try:
-                        if 'node' in proc.info['name'].lower():
-                            cmd = ' '.join(proc.info['cmdline'] or [])
-                            if 'whatsapp' in cmd and 'server.js' in cmd:
-                                proc.kill()
-                    except: pass
-                
-                self.whatsapp_running = False
-                self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-                self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-                self.btn_whatsapp_test.config(state=tk.DISABLED)
-                self.btn_whatsapp_groups.config(state=tk.DISABLED)
-                self.info_label.config(text="WhatsApp Gateway desligado")
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao desligar Zap: {e}")
-        else:
-            # Ligar
-            try:
-                 # 1. Matar Zumbis (Prevenir EADDRINUSE)
-                 for proc in psutil.process_iter(['name', 'cmdline']):
-                    try:
-                        if 'node' in proc.info['name'].lower():
-                            cmd = ' '.join(proc.info['cmdline'] or [])
-                            if 'whatsapp' in cmd and 'server.js' in cmd:
-                                proc.kill()
-                    except: pass
-                 time.sleep(1) # Dar tempo para liberar porta
-            
-                 script_path = os.path.join(os.getcwd(), "tools", "whatsapp", "server.js")
-                 if not os.path.exists(script_path):
-                     messagebox.showerror("Erro", "Gateway não instalado.\nRode INSTALAR_ZAP.bat primeiro.")
-                     return
-                 
-                 # Iniciar Node em background (LOGGING ATIVADO)
-                 cwd = os.path.join(os.getcwd(), "tools", "whatsapp")
-                 log_file = os.path.join(cwd, "whatsapp.log")
-                 
-                 # Usar um arquivo para capturar stdout/stderr
-                 # Importante: Não usar 'with open' aqui pois o file handle precisa ficar aberto para o subprocesso
-                 f_log = open(log_file, "w")
-                 
-                 subprocess.Popen(["node", "server.js"], cwd=cwd, 
-                                  stdout=f_log, stderr=f_log,
-                                  creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-                 
-                 self.whatsapp_running = True
-                 self.btn_whatsapp.config(text="💚 ZAP: INICIANDO...", bg=COLORS['warning'], fg='#1e1e2e')
-                 self.btn_whatsapp_qr.config(state=tk.NORMAL, bg=COLORS['primary'])
-                 self.btn_whatsapp_test.config(state=tk.NORMAL)
-                 self.btn_whatsapp_groups.config(state=tk.NORMAL)
-                 self.info_label.config(text="Iniciando WhatsApp... Aguarde QR Code.")
-                 
-                 # Verificar QR code em loop (via API agora checada no main loop)
-                 # self.root.after(2000, self.check_whatsapp_qr)
-                 
-            except Exception as e:
-                 messagebox.showerror("Erro", f"Erro ao ligar Zap: {e}")
-
-    def check_whatsapp_qr(self):
-        # Deprecated: Logic moved to check_status API call
-        pass
-
-    def open_whatsapp_qr(self):
-        qr_path = os.path.join(os.getcwd(), "tools", "whatsapp", "whatsapp-qr.png")
-        if os.path.exists(qr_path):
-            os.startfile(qr_path)
-            self.info_label.config(text="Escaneie o QR Code com seu celular.")
-        else:
-             messagebox.showinfo("Info", "QR Code ainda não gerado ou já conectado.")
-
-    def reset_whatsapp(self):
-        # Janela Customizada para Escolha
-        win = tk.Toplevel(self.root)
-        win.title("Opções de Reset")
-        win.geometry("400x250")
-        win.configure(bg=COLORS['bg'])
-        
-        # Centralizar na tela (aproximado)
-        x = self.root.winfo_x() + 50
-        y = self.root.winfo_y() + 50
-        win.geometry(f"+{x}+{y}")
-
-        tk.Label(win, text="O que você deseja fazer?", font=("Segoe UI", 12, "bold"), 
-                 bg=COLORS['bg'], fg=COLORS['text']).pack(pady=(20,15))
-
-        # Variável para armazenar escolha
-        self._reset_choice = None
-        
-        def choose_hard():
-            self._reset_choice = 'hard'
-            win.destroy()
-            
-        def choose_soft():
-            self._reset_choice = 'soft'
-            self._reset_choice = 'soft'
-            win.destroy()
-
-        # Botão Hard Reset
-        btn_hard = tk.Button(win, text="🧹 APAGAR TUDO (Gerar Novo QR)\n(Logout Completo)", 
-                             command=choose_hard, bg=COLORS['danger'], fg='#ffffff', 
-                             font=("Segoe UI", 10, "bold"), height=3, relief="flat")
-        btn_hard.pack(fill=tk.X, padx=20, pady=5)
-
-        # Botão Soft Reset
-        btn_soft = tk.Button(win, text="🔄 APENAS REINICIAR (Manter Login)\n(Destravar Serviço)", 
-                             command=choose_soft, bg=COLORS['warning'], fg='#1e1e2e', 
-                             font=("Segoe UI", 10, "bold"), height=3, relief="flat")
-        btn_soft.pack(fill=tk.X, padx=20, pady=5)
-        
-        tk.Button(win, text="Cancelar", command=win.destroy, bg=COLORS['card'], fg=COLORS['text']).pack(pady=10)
-
-        win.transient(self.root)
-        win.grab_set()
-        self.root.wait_window(win)
-        
-        if not self._reset_choice:
-            return # Cancelado
-
-        is_hard_reset = (self._reset_choice == 'hard')
-
-        # 1. Matar Processo Forçadamente
-        self.info_label.config(text="Parando WhatsApp...")
-        self.root.update()
-        
-        try:
-            for proc in psutil.process_iter(['name', 'cmdline']):
-                try:
-                    if 'node' in proc.info['name'].lower():
-                        cmd = ' '.join(proc.info['cmdline'] or [])
-                        if 'whatsapp' in cmd and 'server.js' in cmd:
-                            proc.kill()
-                except: pass
-        except: pass
-        
-        self.whatsapp_running = False
-        self.btn_whatsapp.config(text="💚 ZAP: DESLIGADO", bg='#45475a', fg=COLORS['subtext'])
-        self.btn_whatsapp_qr.config(state=tk.DISABLED, bg='#45475a')
-        self.btn_whatsapp_test.config(state=tk.DISABLED)
-        self.btn_whatsapp_groups.config(state=tk.DISABLED)
-        
-        time.sleep(1) 
-
-        if is_hard_reset:
-            # 2. Limpar arquivos (Apenas se pediu Hard Reset)
-            self.info_label.config(text="Limpando sessão antiga...")
-            self.root.update()
-            
-            try:
-                base_dir = os.path.join(os.getcwd(), "tools", "whatsapp")
-                targets = ["session", ".wwebjs_auth", ".wwebjs_cache"]
-                
-                for t in targets:
-                    path = os.path.join(base_dir, t)
-                    if os.path.exists(path):
-                        for attempt in range(3):
-                            try:
-                                shutil.rmtree(path, ignore_errors=False)
-                                break
-                            except:
-                                time.sleep(1)
-                
-                qr_file = os.path.join(base_dir, "whatsapp-qr.png")
-                if os.path.exists(qr_file):
-                    try: os.remove(qr_file)
-                    except: pass
-            except Exception as e:
-                pass # Ignorar erros de delete no reset
-
-        self.info_label.config(text="Reiniciando serviço...")
-        # 3. Ligar novamente
-        self.root.after(1000, self.toggle_whatsapp)
-
-    def send_test_to_target(self, target, name=None):
-        """Envia teste para um alvo específico"""
-        try:
-            # Salvar número novo
-            try:
-                last_num_file = os.path.join(os.getcwd(), "tools", "whatsapp", "last_number.txt")
-                with open(last_num_file, "w") as f:
-                    f.write(target)
-            except: pass
-
-            import json
-            import urllib.request
-            import urllib.error
-            
-            url = "http://127.0.0.1:3001/send"
-            msg = f"🔔 *Teste ISP Monitor*\n\nEnviado para: {name or target}\nStatus: OPERACIONAL! 🚀"
-            
-            data = json.dumps({
-                "number": target,
-                "message": msg
-            }).encode('utf-8')
-            
-            req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-            
-            with urllib.request.urlopen(req, timeout=30) as response:
-                if response.getcode() == 200:
-                    messagebox.showinfo("Sucesso", f"Mensagem enviada para {name or target}!")
-                else:
-                    messagebox.showerror("Erro", "O servidor retornou erro.")
-                    
-        except urllib.error.HTTPError as e:
-            try:
-                error_body = e.read().decode('utf-8')
-                error_json = json.loads(error_body)
-                error_msg = error_json.get('error', error_body)
-            except:
-                error_msg = "Detalhes indisponiveis"
-
-            if e.code == 404:
-                messagebox.showerror("Erro 404", f"Número nao registrado no WhatsApp:\n{error_msg}")
-            elif e.code == 503:
-                messagebox.showwarning("Aguarde", f"O WhatsApp ainda está sincronizando.\n{error_msg}")
-            else:
-                messagebox.showerror("Erro no Servidor", f"Erro {e.code}: {e.reason}\n\nMotivo: {error_msg}")
-
-        except Exception as e:
-            messagebox.showerror("Falha no Teste", f"Erro: {e}")
-
-    def test_whatsapp_msg(self):
-        # 1. Tentar ler último número salvo
-        last_num_file = os.path.join(os.getcwd(), "tools", "whatsapp", "last_number.txt")
-        default_val = ""
-        
-        if os.path.exists(last_num_file):
-            try:
-                with open(last_num_file, "r") as f:
-                    default_val = f.read().strip()
-            except: pass
-
-        # 2. Pedir número (com default)
-        target = simpledialog.askstring("Teste WhatsApp", 
-                                      "Qual número receberá o teste?\nFormatos: 5511999999999 ou 1203...@g.us", 
-                                      initialvalue=default_val)
-        if target:
-            self.send_test_to_target(target)
-
-    def list_whatsapp_groups(self):
-        """Busca e exibe grupos do WhatsApp com UI interativa"""
-        try:
-            import urllib.request
-            import json
-            from tkinter import ttk
-            
-            url = "http://127.0.0.1:3001/groups"
-            with urllib.request.urlopen(url, timeout=15) as response:
-                if response.getcode() == 200:
-                    data = json.loads(response.read().decode())
-                    # Ordenar
-                    try: data.sort(key=lambda x: x['name'].lower())
-                    except: pass
-                    
-                    win = tk.Toplevel(self.root)
-                    win.title("Selecione um Grupo")
-                    win.geometry("750x550")
-                    win.configure(bg=COLORS['bg'])
-                    
-                    tk.Label(win, text="Duplo clique para enviar teste ou selecione para copiar ID", 
-                             bg=COLORS['bg'], fg=COLORS['text'], font=("Segoe UI", 11)).pack(pady=10)
-                    
-                    # Estilo Dark para Treeview
-                    style = ttk.Style()
-                    try: style.theme_use('clam')
-                    except: pass
-                    style.configure("Treeview", background="#2a2b3c", fieldbackground="#2a2b3c", foreground="white", rowheight=25)
-                    style.configure("Treeview.Heading", background="#4a4b5c", foreground="white", font=("Segoe UI", 10, "bold"))
-                    style.map("Treeview", background=[('selected', COLORS['primary'])])
-                    
-                    columns = ('nome', 'id')
-                    tree = ttk.Treeview(win, columns=columns, show='headings')
-                    tree.heading('nome', text='Nome do Grupo')
-                    tree.heading('id', text='ID (Copiável)')
-                    tree.column('nome', width=450)
-                    tree.column('id', width=250)
-                    
-                    # Scrollbar
-                    scrollbar = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
-                    tree.configure(yscrollcommand=scrollbar.set)
-                    
-                    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10,0), pady=10)
-                    scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=10, padx=(0,10))
-                    
-                    for group in data:
-                        tree.insert('', tk.END, values=(group['name'], group['id']))
-                        
-                    def on_action(event=None):
-                        sel = tree.selection()
-                        if not sel: return
-                        item = tree.item(sel[0])
-                        target_id = item['values'][1]
-                        name = item['values'][0]
-                        
-                        self.root.clipboard_clear()
-                        self.root.clipboard_append(target_id)
-                        
-                        resp = messagebox.askyesno("Confirmar Envio", 
-                                                 f"Grupo: {name}\nID: {target_id}\n\nTudo certo! Deseja enviar o teste agora?")
-                        if resp:
-                            win.destroy()
-                            self.send_test_to_target(target_id, name)
-                            
-                    tree.bind("<Double-1>", on_action)
-                    
-                    # Botao inferior
-                    btn_agora = tk.Button(win, text="✅ Selecionar e Testar", command=on_action,
-                                        bg=COLORS['primary'], fg='white', font=("Segoe UI", 12, "bold"), height=2)
-                    btn_agora.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=20)
-
-                else:
-                    messagebox.showerror("Erro", "Erro ao buscar grupos (Status != 200).")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Não foi possível listar grupos.\nO Zap está conectado?\n\nErro: {e}")
-
     def wait_for_start(self):
         """Aguarda inicialização verificando logs"""
         for _ in range(15):
@@ -1573,8 +1131,8 @@ class ModernLauncher:
         self.expo_log_text.config(state=tk.NORMAL)
         self.expo_log_text.delete(1.0, tk.END)
         
-        if not self.expo_running:
-            self.expo_log_text.insert(tk.END, "Expo não está rodando.\n\nClique em 'EXPO: DESLIGADO' para iniciar.", "warning")
+        if not self.process_expo:
+            self.expo_log_text.insert(tk.END, "Expo não está rodando.\n\nVá na aba '📱 MOBILE' e clique em iniciar.", "warning")
         elif not self.expo_logs:
             self.expo_log_text.insert(tk.END, "Aguardando logs do Expo...\n\nO Metro Bundler está iniciando.", "warning")
         else:
@@ -1593,7 +1151,7 @@ class ModernLauncher:
         self.expo_log_text.config(state=tk.DISABLED)
         
         # Auto-refresh a cada 2 segundos se Expo estiver rodando
-        if self.expo_running:
+        if self.process_expo:
             self.root.after(2000, self.refresh_expo_logs)
 
 

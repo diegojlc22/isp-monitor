@@ -119,6 +119,15 @@ app.get('/status', (req, res) => {
     });
 });
 
+// Novo Endpoint para retornar o QR Code bruto
+app.get('/qr', (req, res) => {
+    if (qrCodeUrl) {
+        res.json({ qr: qrCodeUrl });
+    } else {
+        res.status(404).json({ error: 'QR Code não disponível (Cliente já está conectado ou iniciando).' });
+    }
+});
+
 // 2. Enviar Mensagem
 app.post('/send', async (req, res) => {
     try {

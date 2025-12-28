@@ -15,7 +15,9 @@ ERROR_PATTERNS = {
     "winerror 10061": "destravar_processos.bat",
     "address already in use": "destravar_processos.bat",
     "TemplateNotFound": "rebuild_frontend.bat",
-    "index.html not found": "rebuild_frontend.bat"
+    "index.html not found": "rebuild_frontend.bat",
+    "no such column: equipments.whatsapp_groups": "corrigir_banco.bat",
+    "Internal Server Error": "corrigir_banco.bat"
 }
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -57,6 +59,7 @@ def show_menu():
     print("2. 🏗️  Reconstruir Frontend (Auto-Rebuild)")
     print("3. 🔄 Resetar WhatsApp (Limpeza Profunda)")
     print("4. 💀 Destravar Processos (Force Kill)")
+    print("5. 🗄️  Corrigir Estrutura do Banco (Migrations)")
     print("0. Sair")
     
     choice = input("\nEscolha uma opcao: ")
@@ -72,6 +75,9 @@ def show_menu():
         subprocess.call([path], shell=True)
     elif choice == "4":
         path = os.path.join(FIXES_DIR, "destravar_processos.bat")
+        subprocess.call([path], shell=True)
+    elif choice == "5":
+        path = os.path.join(FIXES_DIR, "corrigir_banco.bat")
         subprocess.call([path], shell=True)
 
 def apply_fixes(fixes):

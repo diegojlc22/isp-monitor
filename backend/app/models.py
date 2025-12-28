@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from backend.app.database import Base
@@ -84,7 +84,8 @@ class Equipment(Base):
     signal_dbm = Column(Integer, nullable=True)
     ccq = Column(Integer, nullable=True)
     connected_clients = Column(Integer, nullable=True, default=0)  # For APs/Transmitters
-    
+    whatsapp_groups = Column(JSON, nullable=True, default=[]) # List of Group IDs
+
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps
     

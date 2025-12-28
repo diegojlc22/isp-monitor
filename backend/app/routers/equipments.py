@@ -16,6 +16,7 @@ from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate, E
 from backend.app.services.cache import cache
 from backend.app.services.ssh_commander import reboot_device
 from backend.app.services.pinger_fast import scan_network
+from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
@@ -102,8 +103,6 @@ async def detect_equipment_brand(request: DetectBrandRequest):
     Returns detected brand (ubiquiti, mikrotik, mimosa, intelbras, generic)
     and type (station, transmitter, other)
     """
-    from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type
-    
     try:
         # Detect brand first
         brand = await detect_brand(request.ip, request.snmp_community, request.snmp_port)
@@ -177,7 +176,11 @@ async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_d
     return {"message": "Comando de reboot enviado com sucesso"}
 
 @router.get("/scan/stream/")
-async def scan_network_stream(ip_range: str):
+async def scan_network_stream(
+    ip_range: str,
+    snmp_community: str = Query("public"),
+    snmp_port: int = Query(161)
+):
     try:
         ips_to_scan = []
         # Parse Logic
@@ -202,6 +205,19 @@ async def scan_network_stream(ip_range: str):
 
         async def event_generator():
             async for result in scan_network(ips_to_scan):
+                # Auto-Detect Brand & Type if Online
+                if result.get("is_online"):
+                    try:
+                        # Use a shorter timeout for scan detection if possible, or just standard
+                        brand = await detect_brand(result['ip'], snmp_community, snmp_port)
+                        eq_type = await detect_equipment_type(result['ip'], brand, snmp_community, snmp_port)
+                        
+                        result['brand'] = brand
+                        result['equipment_type'] = eq_type
+                    except Exception as e:
+                        # Non-critical, just log
+                        print(f"Scan detection error for {result['ip']}: {e}")
+                
                 yield f"data: {json.dumps(result)}\n\n"
             yield "event: done\ndata: {}\n\n"
 

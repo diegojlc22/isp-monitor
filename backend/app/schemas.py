@@ -42,6 +42,7 @@ class EquipmentBase(BaseModel):
     signal_dbm: Optional[int] = None
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
+    whatsapp_groups: Optional[List[str]] = []
 
 class EquipmentCreate(EquipmentBase):
     ssh_password: Optional[str] = None
@@ -66,6 +67,7 @@ class EquipmentUpdate(BaseModel):
     signal_dbm: Optional[int] = None
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
+    whatsapp_groups: Optional[List[str]] = None
 
 class Equipment(EquipmentBase):
     id: int

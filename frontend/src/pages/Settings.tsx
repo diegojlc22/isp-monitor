@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getTelegramConfig, updateTelegramConfig, getNetworkDefaults, updateNetworkDefaults } from '../services/api';
+import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getNetworkDefaults, updateNetworkDefaults } from '../services/api';
 import { Save, Smartphone, Settings as SettingsIcon, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function Settings() {
     const { user, refreshSystemName } = useAuth();
-    const [config, setConfig] = useState({ bot_token: '', chat_id: '', backup_chat_id: '', template_down: '', template_up: '' });
     const [sysName, setSysName] = useState('');
     const [thresholds, setThresholds] = useState({ good: 50, critical: 200 });
     const [networkDefaults, setNetworkDefaults] = useState({ ssh_user: '', ssh_password: '', snmp_community: '' });
@@ -13,7 +12,6 @@ export function Settings() {
     const [msg, setMsg] = useState('');
 
     useEffect(() => {
-        getTelegramConfig().then(setConfig).catch(console.error);
         getSystemName().then(res => setSysName(res.name)).catch(console.error);
         getLatencyConfig().then(setThresholds).catch(console.error);
         getNetworkDefaults().then(setNetworkDefaults).catch(console.error);
@@ -23,7 +21,6 @@ export function Settings() {
         e.preventDefault();
         setLoading(true);
         try {
-            await updateTelegramConfig(config);
             await updateSystemName(sysName);
             await updateLatencyConfig(thresholds);
             await updateNetworkDefaults(networkDefaults);
@@ -47,7 +44,7 @@ export function Settings() {
     }
 
     return (
-        <div className="max-w-2xl">
+        <div className="max-w-2xl relative">
             <h2 className="text-2xl font-bold mb-6 text-white">Configurações</h2>
 
             <div className="space-y-6">
@@ -68,9 +65,6 @@ export function Settings() {
                                 value={sysName} onChange={e => setSysName(e.target.value)} />
                         </div>
                     </div>
-
-
-
 
                     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
                         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
@@ -99,22 +93,7 @@ export function Settings() {
                         </div>
                     </div>
 
-                    {msg && (
-                        <div className={`p-3 rounded-lg text-sm ${msg.includes('Erro') ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                            {msg}
-                        </div>
-                    )}
-
-                    <div className="flex justify-end">
-                        <button type="submit" disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                            <Save size={18} />
-                            {loading ? 'Salvando...' : 'Salvar Tudo'}
-                        </button>
-                    </div>
-                </form>
-
-                <form onSubmit={handleSave} className="space-y-6 mt-6">
-                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden mt-6">
                         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
                             <div className="p-2 bg-slate-800 rounded-lg">
                                 <SettingsIcon className="text-purple-400" size={24} />
@@ -167,9 +146,6 @@ export function Settings() {
                             <p className="text-sm text-slate-400">Acesso via API para aplicativo móvel.</p>
                         </div>
                     </div>
-                    <p className="text-sm text-slate-500">
-                        A API já está preparada para integração. A chave de API poderá ser gerada aqui futuramente.
-                    </p>
                 </div>
             </div>
         </div>

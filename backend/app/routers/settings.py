@@ -374,3 +374,59 @@ async def test_whatsapp_message_route(
 @router.post("/telegram/test-backup")
 async def test_telegram_backup():
     return {"error": "Backup via painel desativado para PostgreSQL. Use pg_dump no servidor."}
+@router.get("/whatsapp/groups")
+async def get_whatsapp_groups(db: AsyncSession = Depends(get_db)):
+    try:
+        import aiohttp
+        url = "http://127.0.0.1:3001/groups"
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(url, timeout=5) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        # Sort by name
+                        data.sort(key=lambda x: x.get('name', '').lower())
+                        return data
+                    else:
+                        return {"error": f"Erro Gateway: {resp.status}"}
+            except Exception as e:
+                return {"error": f"Falha ao conectar no Gateway Zap: {str(e)}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/whatsapp/status")
+async def get_whatsapp_status():
+    try:
+        import aiohttp
+        url = "http://127.0.0.1:3001/status"
+        url_qr = "http://127.0.0.1:3001/qr"
+        
+        async with aiohttp.ClientSession() as session:
+            # 1. Get Status
+            status_data = {}
+            try:
+                async with session.get(url, timeout=2) as resp:
+                    if resp.status == 200:
+                        status_data = await resp.json()
+                    else:
+                        return {"error": f"Gateway Status Error: {resp.status}"}
+            except:
+                return {"error": "Gateway offline"}
+
+            # 2. Get QR if available (e status diz que tem qr)
+            qr_data = None
+            if status_data.get("qr_code_available"):
+                try:
+                    async with session.get(url_qr, timeout=2) as resp:
+                        if resp.status == 200:
+                             qr_json = await resp.json()
+                             qr_data = qr_json.get("qr")
+                except: pass
+            
+            return {
+                "ready": status_data.get("ready", False),
+                "qr": qr_data
+            }
+
+    except Exception as e:
+        return {"error": str(e)}

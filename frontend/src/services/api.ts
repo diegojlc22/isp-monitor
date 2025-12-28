@@ -67,6 +67,7 @@ export const migrateData = (postgres_url: string) => api.post('/settings/migrate
 export const testTelegramMessage = () => api.post('/settings/telegram/test-message').then(res => res.data);
 export const testWhatsappMessage = (target?: string) => api.post('/settings/whatsapp/test-message', { target }).then(res => res.data);
 export const testBackup = () => api.post('/settings/telegram/test-backup').then(res => res.data);
+export const getWhatsappGroups = () => api.get('/settings/whatsapp/groups').then(res => res.data);
 
 
 // CSV Import/Export
@@ -82,3 +83,5 @@ export const importEquipmentsCSV = (file: File) => {
 // Auto-detect equipment brand and type
 export const detectEquipmentBrand = (ip: string, snmp_community: string = 'public', snmp_port: number = 161) =>
     api.post('/equipments/detect-brand', { ip, snmp_community, snmp_port }).then(res => res.data);
+
+export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);

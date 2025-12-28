@@ -24,6 +24,7 @@
     "react-grid-layout": "^2.1.1",
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^5.0.0",
+    "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.11.0",
     "react-virtualized-auto-sizer": "^2.0.0",
     "react-window": "^2.2.3",

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand } from '../services/api'; // removed unused getLatencyConfig
+import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, getWhatsappGroups, detectEquipmentBrand } from '../services/api'; // removed unused getLatencyConfig
 
-import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users } from 'lucide-react';
+
+import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, MessageCircle, Check } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
 
@@ -200,7 +201,7 @@ const WirelessMonitorModal = ({ equipment, onClose }: { equipment: any, onClose:
                             </div>
                             <div className="bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
                                 <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">CCQ</div>
-                                <div className="text-3xl font-bold text-blue-400">{currentEq.ccq ? `${currentEq.ccq}%` : 'N/A'}</div>
+                                <div className="text-3xl font-bold text-blue-400">{currentEq.ccq ? `${currentEq.ccq}% ` : 'N/A'}</div>
                             </div>
                         </>
                     ) : (
@@ -262,6 +263,51 @@ export function Equipments() {
     const [showModal, setShowModal] = useState(false);
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
     const [formData, setFormData] = useState<FormData>(INITIAL_FORM_STATE);
+    const [networkDefaults, setNetworkDefaults] = useState<any>({});
+
+    // WhatsApp Groups State
+    const [whatsappGroups, setWhatsappGroups] = useState<any[]>([]);
+    const [scanningGroupIndex, setScanningGroupIndex] = useState<number | null>(null);
+
+    // Scanner State
+    const [showScanner, setShowScanner] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const [scannedDevices, setScannedDevices] = useState<any[]>([]);
+    const [progress, setProgress] = useState(0);
+    const eventSourceRef = useRef<EventSource | null>(null);
+    const [selectedIps, setSelectedIps] = useState<string[]>([]);
+    const [ipNames, setIpNames] = useState<{ [key: string]: string }>({});
+    const [scanRange, setScanRange] = useState('');
+
+    // Configurações do scanner
+
+
+    // Load Groups
+    useEffect(() => {
+        getWhatsappGroups().then(g => {
+            if (Array.isArray(g)) setWhatsappGroups(g);
+        }).catch(err => console.log('Erro load groups', err));
+    }, []);
+
+    const toggleGroupForDevice = (index: number, groupId: string) => {
+        setScannedDevices(prev => {
+            const newDevices = [...prev];
+            const device = { ...newDevices[index] };
+            const groups = device.whatsapp_groups || [];
+
+            if (groups.includes(groupId)) {
+                device.whatsapp_groups = groups.filter((id: string) => id !== groupId);
+            } else {
+                device.whatsapp_groups = [...groups, groupId];
+            }
+            newDevices[index] = device;
+            return newDevices;
+        });
+    };
+
+    const openGroupSelector = (index: number) => {
+        setScanningGroupIndex(index);
+    };
 
     // Batch Selection State
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -364,7 +410,7 @@ export function Equipments() {
     };
 
     const handleBatchDelete = async () => {
-        if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.length} equipamentos?`)) return;
+        if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.length} equipamentos ? `)) return;
         try {
             for (const id of selectedIds) { await deleteEquipment(id); }
             alert('Equipamentos excluídos!'); setSelectedIds([]); load();
@@ -372,22 +418,18 @@ export function Equipments() {
     };
 
     const handleBatchReboot = async () => {
-        if (!confirm(`Reiniciar ${selectedIds.length} equipamentos?`)) return;
+        if (!confirm(`Reiniciar ${selectedIds.length} equipamentos ? `)) return;
         try {
             for (const id of selectedIds) { rebootEquipment(id).catch(console.error); }
             alert('Comandos de reboot enviados!'); setSelectedIds([]);
         } catch (e) { alert('Erro ao enviar comandos.'); }
     };
 
-    // Scanner States
-    const [showScanner, setShowScanner] = useState(false);
-    const [scanRange, setScanRange] = useState('');
-    const [isScanning, setIsScanning] = useState(false);
-    const [scannedIps, setScannedIps] = useState<string[]>([]);
-    const [selectedIps, setSelectedIps] = useState<string[]>([]);
-    const [ipNames, setIpNames] = useState<Record<string, string>>({});
-    const [progress, setProgress] = useState(0);
-    const eventSourceRef = useRef<EventSource | null>(null);
+
+
+    useEffect(() => {
+        getNetworkDefaults().then(setNetworkDefaults).catch(() => { });
+    }, []);
 
     // History & Modals
     const [historyData, setHistoryData] = useState<any[]>([]);
@@ -421,9 +463,9 @@ export function Equipments() {
                 equipment_type: result.equipment_type
             });
 
-            alert(`Detectado:\n✅ Marca: ${result.brand.toUpperCase()}\n✅ Tipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'}`);
+            alert(`Detectado: \n✅ Marca: ${result.brand.toUpperCase()} \n✅ Tipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'} `);
         } catch (error: any) {
-            alert(`Erro na detecção: ${error.response?.data?.detail || error.message}`);
+            alert(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
         } finally {
             setIsDetecting(false);
         }
@@ -541,30 +583,62 @@ export function Equipments() {
 
     async function handleScanStart() {
         if (isScanning) { eventSourceRef.current?.close(); setIsScanning(false); return; }
-        setIsScanning(true); setScannedIps([]); setProgress(0);
+        setIsScanning(true); setScannedDevices([]); setProgress(0);
         try {
-            const es = new EventSource(`/api/equipments/scan/stream/?ip_range=${encodeURIComponent(scanRange)}`);
+            const community = networkDefaults.snmp_community || 'public';
+            const port = networkDefaults.snmp_port || 161;
+            const es = new EventSource(`/ api / equipments / scan / stream /? ip_range = ${encodeURIComponent(scanRange)}& snmp_community=${encodeURIComponent(community)}& snmp_port=${port} `);
             eventSourceRef.current = es;
             es.onmessage = ev => {
                 const d = JSON.parse(ev.data); setProgress(d.progress || 0);
-                if (d.is_online) setScannedIps(p => p.includes(d.ip) ? p : [...p, d.ip]);
+                if (d.is_online) {
+                    setScannedDevices(prev => {
+                        if (prev.find(p => p.ip === d.ip)) return prev;
+                        return [...prev, d]; // Save full object
+                    });
+                }
             };
             es.addEventListener("done", () => { es.close(); setIsScanning(false); });
             es.onerror = () => { es.close(); setIsScanning(false); };
         } catch (e) { setIsScanning(false); }
     }
+
     async function saveScanned() {
         if (!selectedIps.length) return;
+        let count = 0;
         for (const ip of selectedIps) {
-            try { await createEquipment({ name: ipNames[ip] || `Dispositivo ${ip}`, ip, ssh_port: 22, ssh_user: 'admin', tower_id: null }); } catch (e) { }
+            try {
+                const device = scannedDevices.find(d => d.ip === ip);
+                await createEquipment({
+                    name: ipNames[ip] || `Dispositivo ${ip} `,
+                    ip,
+                    // Defaults Logic
+                    ssh_port: networkDefaults.ssh_port || 22,
+                    ssh_user: networkDefaults.ssh_user || 'admin',
+                    ssh_password: networkDefaults.ssh_password || '',
+                    snmp_community: networkDefaults.snmp_community || 'public',
+                    snmp_port: networkDefaults.snmp_port || 161,
+
+                    // Detected Logic
+                    brand: device?.brand || 'generic',
+                    equipment_type: device?.equipment_type || 'station',
+                    is_mikrotik: device?.brand === 'mikrotik',
+                    whatsapp_groups: device?.whatsapp_groups || [],
+
+                    tower_id: null
+                });
+                count++;
+            } catch (e) { }
         }
-        alert('Salvo!'); setShowScanner(false); load();
+        alert(`Salvo ${count} equipamentos!`); setShowScanner(false); load();
     }
 
     const handleNewEquipment = async () => {
         setEditingEquipment(null);
+        // Defaults are now already in 'networkDefaults' state, but loading freshly just in case
         try {
-            const defaults = await getNetworkDefaults();
+            const defaults = await getNetworkDefaults(); // Refresh defaults
+            setNetworkDefaults(defaults); // Update state too
             setFormData({
                 ...INITIAL_FORM_STATE,
                 ssh_user: defaults.ssh_user || 'admin',
@@ -764,52 +838,134 @@ export function Equipments() {
                         </div>
                         <div className="flex-1 bg-slate-950 rounded border border-slate-800 p-2 overflow-y-auto">
                             {/* Select All Header */}
-                            {scannedIps.length > 0 && (
-                                <div className="flex items-center gap-2 p-2 border-b border-slate-800 mb-2 hover:bg-slate-900 cursor-pointer"
-                                    onClick={() => setSelectedIps(selectedIps.length === scannedIps.length ? [] : [...scannedIps])}>
-                                    {selectedIps.length === scannedIps.length ? <CheckSquare className="text-blue-500" size={16} /> : <Square className="text-slate-500" size={16} />}
-                                    <span className="text-slate-300 font-medium text-sm">Selecionar Todos ({scannedIps.length})</span>
-                                </div>
-                            )}
-                            {scannedIps.map(ip => (
-                                <div key={ip} className="flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer" onClick={() => setSelectedIps(p => p.includes(ip) ? p.filter(i => i !== ip) : [...p, ip])}>
-                                    {selectedIps.includes(ip) ? <CheckSquare className="text-blue-500" size={16} /> : <Square className="text-slate-500" size={16} />}
-                                    <span className="text-slate-300 font-mono">{ip}</span>
-                                    <input className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white" placeholder="Nome" value={ipNames[ip] || ''} onClick={e => e.stopPropagation()} onChange={e => setIpNames({ ...ipNames, [ip]: e.target.value })} />
+                            {scannedDevices.map((device, index) => (
+                                <div key={device.ip} className="flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer border-b border-slate-800/50 last:border-0" onClick={() => setSelectedIps(p => p.includes(device.ip) ? p.filter(i => i !== device.ip) : [...p, device.ip])}>
+                                    {selectedIps.includes(device.ip) ? <CheckSquare className="text-blue-500" size={16} shrink-0 /> : <Square className="text-slate-500" size={16} shrink-0 />}
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-white font-mono text-sm">{device.ip}</span>
+                                            {device.hostname && <span className="text-xs text-slate-500 truncate">({device.hostname})</span>}
+                                        </div>
+                                        <div className="flex gap-2 text-xs text-slate-500">
+                                            <span>{device.vendor}</span>
+                                            {device.mac && <span>• {device.mac}</span>}
+                                        </div>
+                                    </div>
+
+                                    <div className="w-32">
+                                        <input
+                                            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                                            placeholder="Nome (Opcional)"
+                                            onClick={e => e.stopPropagation()}
+                                            value={ipNames[device.ip] || ''}
+                                            onChange={e => setIpNames({ ...ipNames, [device.ip]: e.target.value })}
+                                        />
+                                    </div>
+
+                                    {/* Botão de Grupos */}
+                                    <div className="ml-2" onClick={e => e.stopPropagation()}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); openGroupSelector(index); }}
+                                            className={`p-2 rounded text-xs font-bold border transition-colors ${device.whatsapp_groups && device.whatsapp_groups.length > 0
+                                                ? 'bg-green-500/20 border-green-500 text-green-400 hover:bg-green-500/30'
+                                                : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'
+                                                }`}
+                                            title="Selecionar Grupos de Notificação"
+                                        >
+                                            <MessageCircle size={14} className="inline mr-1" />
+                                            {device.whatsapp_groups?.length || 0}
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-4 flex justify-end gap-2">
-                            <button onClick={() => setShowScanner(false)} className="text-slate-400 px-4">Fechar</button>
-                            <button onClick={saveScanned} disabled={!selectedIps.length} className="bg-blue-600 text-white px-4 py-2 rounded">Salvar Selecionados</button>
+                        <div className="flex justify-between items-center mt-4">
+                            <span className="text-slate-400 text-sm">{selectedIps.length} selecionados</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowScanner(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
+                                <button onClick={saveScanned} disabled={selectedIps.length === 0} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">Salvar Selecionados</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
-            {showHistoryModal && selectedEqHistory && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl p-6 h-[70vh] flex flex-col">
-                        <h3 className="text-white font-bold mb-4">{selectedEqHistory.name} - Histórico ({historyPeriod})</h3>
-                        <div className="flex-1 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={historyData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                                    <XAxis dataKey="timeStr" stroke="#666" />
-                                    <YAxis stroke="#666" />
-                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
-                                    <Area type="monotone" dataKey="latency" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                                </AreaChart>
-                            </ResponsiveContainer>
+
+            {/* MODAL DE GRUPOS DO SCANNER */}
+            {scanningGroupIndex !== null && scannedDevices[scanningGroupIndex] && (
+                <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm flex flex-col max-h-[60vh] shadow-2xl">
+                        <div className="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-800/50 rounded-t-xl">
+                            <h3 className="text-white font-bold text-sm">
+                                Grupos para <span className="text-blue-400">{scannedDevices[scanningGroupIndex].ip}</span>
+                            </h3>
+                            <button onClick={() => setScanningGroupIndex(null)} className="text-slate-400 hover:text-white transition-colors">✕</button>
                         </div>
-                        <button onClick={() => setShowHistoryModal(false)} className="mt-4 bg-slate-800 text-white px-4 py-2 rounded">Fechar</button>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                            {whatsappGroups.length === 0 ? (
+                                <div className="text-center p-8 text-slate-500 text-sm flex flex-col items-center">
+                                    <MessageCircle size={24} className="mb-2 opacity-50" />
+                                    Nenhum grupo carregado.<br />Verifique se o WhatsApp está conectado.
+                                </div>
+                            ) : (
+                                whatsappGroups.map(g => {
+                                    const isSelected = scannedDevices[scanningGroupIndex].whatsapp_groups?.includes(g.id);
+                                    return (
+                                        <div key={g.id}
+                                            onClick={() => toggleGroupForDevice(scanningGroupIndex, g.id)}
+                                            className={`flex items-center gap-3 p-2 rounded cursor-pointer border transition-all ${isSelected
+                                                ? 'bg-blue-600/20 border-blue-500/50'
+                                                : 'hover:bg-slate-800 border-transparent'
+                                                }`}
+                                        >
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800'
+                                                }`}>
+                                                {isSelected && <Check size={12} className="text-white" />}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>{g.name}</div>
+                                                <div className="text-[10px] text-slate-500 font-mono truncate opacity-60">{g.id}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                        <div className="p-3 border-t border-slate-700 bg-slate-800/30 rounded-b-xl flex justify-end">
+                            <button onClick={() => setScanningGroupIndex(null)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition-colors">OK</button>
+                        </div>
                     </div>
                 </div>
             )}
-            {showWirelessModal && selectedWirelessEq && (
-                <WirelessMonitorModal equipment={selectedWirelessEq} onClose={() => setShowWirelessModal(false)} />
-            )}
+
+            {
+                showHistoryModal && selectedEqHistory && (
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl p-6 h-[70vh] flex flex-col">
+                            <h3 className="text-white font-bold mb-4">{selectedEqHistory.name} - Histórico ({historyPeriod})</h3>
+                            <div className="flex-1 min-h-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={historyData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                        <XAxis dataKey="timeStr" stroke="#666" />
+                                        <YAxis stroke="#666" />
+                                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
+                                        <Area type="monotone" dataKey="latency" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <button onClick={() => setShowHistoryModal(false)} className="mt-4 bg-slate-800 text-white px-4 py-2 rounded">Fechar</button>
+                        </div>
+                    </div>
+                )
+            }
+            {
+                showWirelessModal && selectedWirelessEq && (
+                    <WirelessMonitorModal equipment={selectedWirelessEq} onClose={() => setShowWirelessModal(false)} />
+                )
+            }
             {showTemplateModal && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-slate-900 border border-slate-700 rounded p-6"><input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Nome do Template" className="bg-slate-950 border border-slate-700 rounded p-2 text-white block mb-4 w-full" /><div className="flex gap-2 justify-end"><button onClick={() => setShowTemplateModal(false)} className="text-slate-400">Cancelar</button><button onClick={saveTemplate} className="bg-purple-600 text-white px-4 py-2 rounded">Salvar</button></div></div></div>)}
-        </div>
+        </div >
     );
 }
 

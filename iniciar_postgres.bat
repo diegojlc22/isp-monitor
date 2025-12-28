@@ -34,6 +34,20 @@ if exist "node_modules" (
     start /b "" npm run dev > ..\logs\frontend.log 2>&1
 )
 
+:: 5. Iniciar Gateway WhatsApp
+echo [4/4] Iniciando Gateway WhatsApp...
+if exist "tools\whatsapp" (
+    cd tools\whatsapp
+    if not exist "node_modules" (
+        echo [ZAP] Instalando dependencias...
+        call npm install >nul 2>&1
+    )
+    start /b "" npm start > ..\..\logs\whatsapp.log 2>&1
+    cd ..\..
+) else (
+    echo [AVISO] Pasta tools\whatsapp nao encontrada.
+)
+
 :: IMPORTANTE:
 :: Como usamos start /b, se este script fechar, os processos morrem.
 :: Mantemos ele vivo indefinidamente em loop de espera economica.
