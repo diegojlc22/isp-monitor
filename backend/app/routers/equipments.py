@@ -187,25 +187,37 @@ async def scan_network_stream(
 ):
     try:
         ips_to_scan = []
-        # Parse Logic
+        # Parse Logic - More flexible
         if '/' in ip_range:
-            net = ipaddress.ip_network(ip_range, strict=False)
-            ips_to_scan = [str(ip) for ip in net.hosts()]
+            # Accept any IP with CIDR, e.g., 192.168.108.1/24 or 192.168.108.0/24
+            try:
+                net = ipaddress.ip_network(ip_range, strict=False)
+                ips_to_scan = [str(ip) for ip in net.hosts()]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"CIDR inválido: {str(e)}")
         elif '-' in ip_range:
-            start_ip, end_ip = ip_range.split('-')
-            start = ipaddress.IPv4Address(start_ip.strip())
-            end = ipaddress.IPv4Address(end_ip.strip())
-            curr = start
-            while curr <= end:
-                ips_to_scan.append(str(curr))
-                curr += 1
+            # Range format: 192.168.1.1-192.168.1.50
+            try:
+                start_ip, end_ip = ip_range.split('-')
+                start = ipaddress.IPv4Address(start_ip.strip())
+                end = ipaddress.IPv4Address(end_ip.strip())
+                curr = start
+                while curr <= end:
+                    ips_to_scan.append(str(curr))
+                    curr += 1
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Range inválido: {str(e)}")
         else:
+            # Single IP - assume /24 network
             try:
                 ip_str = ip_range.strip()
+                # Validate it's a valid IP first
+                ipaddress.IPv4Address(ip_str)
+                # Then create /24 network from it
                 net = ipaddress.ip_network(f"{ip_str}/24", strict=False)
                 ips_to_scan = [str(ip) for ip in net.hosts()]
-            except ValueError:
-                 raise HTTPException(status_code=400, detail="IP Inválido")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"IP inválido: {str(e)}")
 
         async def event_generator():
             async for result in scan_network(ips_to_scan):
