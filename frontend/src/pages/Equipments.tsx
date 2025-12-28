@@ -589,7 +589,7 @@ export function Equipments() {
         try {
             const community = networkDefaults.snmp_community || 'public';
             const port = networkDefaults.snmp_port || 161;
-            const es = new EventSource(`/ api / equipments / scan / stream /? ip_range = ${encodeURIComponent(scanRange)}& snmp_community=${encodeURIComponent(community)}& snmp_port=${port} `);
+            const es = new EventSource(`/api/equipments/scan/stream/?ip_range=${encodeURIComponent(scanRange)}&snmp_community=${encodeURIComponent(community)}&snmp_port=${port}`);
             eventSourceRef.current = es;
             es.onmessage = ev => {
                 const d = JSON.parse(ev.data); setProgress(d.progress || 0);
