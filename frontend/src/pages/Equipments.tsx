@@ -635,6 +635,35 @@ export function Equipments() {
         alert(`Salvo ${count} equipamentos!`); setShowScanner(false); load();
     }
 
+    async function saveAllScanned() {
+        if (!scannedDevices.length) return;
+        let count = 0;
+        for (const device of scannedDevices) {
+            try {
+                await createEquipment({
+                    name: ipNames[device.ip] || `Dispositivo ${device.ip}`,
+                    ip: device.ip,
+                    // Defaults Logic
+                    ssh_port: networkDefaults.ssh_port || 22,
+                    ssh_user: networkDefaults.ssh_user || 'admin',
+                    ssh_password: networkDefaults.ssh_password || '',
+                    snmp_community: networkDefaults.snmp_community || 'public',
+                    snmp_port: networkDefaults.snmp_port || 161,
+
+                    // Detected Logic
+                    brand: device.brand || 'generic',
+                    equipment_type: device.equipment_type || 'station',
+                    is_mikrotik: device.brand === 'mikrotik',
+                    whatsapp_groups: device.whatsapp_groups || [],
+
+                    tower_id: null
+                });
+                count++;
+            } catch (e) { }
+        }
+        alert(`Salvo ${count} equipamentos!`); setShowScanner(false); load();
+    }
+
     const handleNewEquipment = async () => {
         setEditingEquipment(null);
         // Defaults are now already in 'networkDefaults' state, but loading freshly just in case
@@ -886,7 +915,20 @@ export function Equipments() {
                             <span className="text-slate-400 text-sm">{selectedIps.length} selecionados</span>
                             <div className="flex gap-2">
                                 <button onClick={() => setShowScanner(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
-                                <button onClick={saveScanned} disabled={selectedIps.length === 0} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">Salvar Selecionados</button>
+                                <button
+                                    onClick={saveAllScanned}
+                                    disabled={scannedDevices.length === 0}
+                                    className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded disabled:opacity-50 transition-colors"
+                                >
+                                    Salvar Todos ({scannedDevices.length})
+                                </button>
+                                <button
+                                    onClick={saveScanned}
+                                    disabled={selectedIps.length === 0}
+                                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 transition-colors"
+                                >
+                                    Salvar Selecionados ({selectedIps.length})
+                                </button>
                             </div>
                         </div>
                     </div>
