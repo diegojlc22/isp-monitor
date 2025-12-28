@@ -54,6 +54,10 @@ export const getLinks = () => api.get('/towers/links').then(res => res.data);
 export const createLink = (data: any) => api.post('/towers/links', data).then(res => res.data);
 export const deleteLink = (id: number) => api.delete(`/towers/links/${id}`).then(res => res.data);
 
+// Network Defaults
+export const getNetworkDefaults = () => api.get('/settings/network-defaults').then(res => res.data);
+export const updateNetworkDefaults = (data: any) => api.post('/settings/network-defaults', data).then(res => res.data);
+
 // Database Config
 export const getDatabaseConfig = () => api.get('/settings/database').then(res => res.data);
 export const updateDatabaseConfig = (data: any) => api.post('/settings/database', data).then(res => res.data);
@@ -64,6 +68,7 @@ export const testTelegramMessage = () => api.post('/settings/telegram/test-messa
 export const testWhatsappMessage = (target?: string) => api.post('/settings/whatsapp/test-message', { target }).then(res => res.data);
 export const testBackup = () => api.post('/settings/telegram/test-backup').then(res => res.data);
 
+
 // CSV Import/Export
 export const exportEquipmentsCSV = () => api.get('/equipments/export/csv', { responseType: 'blob' }).then(res => res.data);
 export const importEquipmentsCSV = (file: File) => {
@@ -73,3 +78,7 @@ export const importEquipmentsCSV = (file: File) => {
         headers: { 'Content-Type': 'multipart/form-data' }
     }).then(res => res.data);
 };
+
+// Auto-detect equipment brand and type
+export const detectEquipmentBrand = (ip: string, snmp_community: string = 'public', snmp_port: number = 161) =>
+    api.post('/equipments/detect-brand', { ip, snmp_community, snmp_port }).then(res => res.data);

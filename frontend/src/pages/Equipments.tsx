@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV } from '../services/api'; // removed unused getLatencyConfig
-import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Info, Download, Upload } from 'lucide-react';
+import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand } from '../services/api'; // removed unused getLatencyConfig
+
+import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
 
@@ -85,9 +86,15 @@ const EquipmentRow = ({ index, data }: any) => {
 
             {/* Ações */}
             <div className="w-48 px-4 flex justify-end gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                {(eq.signal_dbm || eq.connected_clients !== undefined) && (
-                    <button onClick={() => onAction(eq)} className="text-slate-400 hover:text-sky-400 p-1.5 rounded hover:bg-slate-700" title="Info">
-                        <Info size={16} />
+                {/* Status Button based on Type */}
+                {eq.equipment_type === 'station' && (
+                    <button onClick={() => onAction(eq)} className="text-slate-400 hover:text-yellow-400 p-1.5 rounded hover:bg-slate-700" title="Ver Sinal">
+                        <Wifi size={16} />
+                    </button>
+                )}
+                {eq.equipment_type === 'transmitter' && (
+                    <button onClick={() => onAction(eq)} className="text-slate-400 hover:text-purple-400 p-1.5 rounded hover:bg-slate-700" title="Ver Clientes">
+                        <Users size={16} />
                     </button>
                 )}
                 <button onClick={() => onReboot(eq)} className="text-slate-400 hover:text-orange-500 p-1.5 rounded hover:bg-slate-700" title="Reiniciar">
@@ -107,6 +114,146 @@ const EquipmentRow = ({ index, data }: any) => {
     );
 };
 
+// --- Wireless Monitor Modal Helper Component ---
+const WirelessMonitorModal = ({ equipment, onClose }: { equipment: any, onClose: () => void }) => {
+    const [data, setData] = useState<any[]>([]);
+    const [currentEq, setCurrentEq] = useState(equipment);
+
+    // Derive type from current (live) data source
+    const isTransmitter = currentEq.equipment_type === 'transmitter';
+    const isStation = currentEq.equipment_type === 'station';
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetch = async () => {
+            try {
+                const updatedList = await getEquipments();
+                const latest = updatedList.find((e: any) => e.id === equipment.id);
+
+                if (latest && isMounted) {
+                    setCurrentEq(latest);
+
+                    const now = new Date();
+                    const newPoint = {
+                        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                        signal: latest.signal_dbm,
+                        clients: latest.connected_clients || 0
+                    };
+
+                    // Only add if we have valid data relevant to the type
+                    if ((latest.equipment_type === 'station' && latest.signal_dbm != null) ||
+                        (latest.equipment_type === 'transmitter')) {
+                        setData(prev => [...prev, newPoint].slice(-60)); // Keep 60 points
+                    }
+                }
+            } catch (err) {
+                console.error("Error polling wireless status:", err);
+            }
+        };
+
+        fetch(); // Initial
+        const interval = setInterval(fetch, 2000); // Poll every 2s
+        return () => { isMounted = false; clearInterval(interval); };
+    }, [equipment.id]); // Removed equipment.equipment_type dependency to rely on fetched data
+
+    const dataKey = isTransmitter ? 'clients' : 'signal';
+    const color = isTransmitter ? '#c084fc' : '#facc15';
+
+    // X Icon helper
+    const XIcon = ({ size }: { size: number }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    );
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-lg shadow-2xl">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 className="text-white font-bold text-lg">
+                            {currentEq.name} <span className="text-slate-500 font-normal text-sm">({isTransmitter ? 'Transmissor' : isStation ? 'Station' : 'Geral'})</span>
+                        </h3>
+                        <p className="text-slate-400 text-xs uppercase tracking-wide">
+                            {isTransmitter ? 'Monitoramento de Clientes' : isStation ? 'Monitoramento de Sinal' : 'Status'}
+                        </p>
+                    </div>
+
+                    <button onClick={onClose} className="text-slate-400 hover:text-white">
+                        <div className="bg-slate-800 hover:bg-slate-700 p-1 rounded-full"><XIcon size={16} /></div>
+                    </button>
+                </div>
+
+                {/* Big Stats */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    {isTransmitter ? (
+                        <div className="col-span-2 bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
+                            <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Clientes Conectados</div>
+                            <div className="text-4xl font-bold text-purple-400">{currentEq.connected_clients || 0}</div>
+                        </div>
+                    ) : isStation ? (
+                        <>
+                            <div className="bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
+                                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Sinal</div>
+                                <div className={clsx("text-3xl font-bold", (currentEq.signal_dbm || -100) > -65 ? "text-emerald-400" : "text-yellow-400")}>
+                                    {currentEq.signal_dbm ? `${currentEq.signal_dbm} dBm` : 'N/A'}
+                                </div>
+                            </div>
+                            <div className="bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
+                                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">CCQ</div>
+                                <div className="text-3xl font-bold text-blue-400">{currentEq.ccq ? `${currentEq.ccq}%` : 'N/A'}</div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="col-span-2 bg-slate-800/50 p-6 rounded border border-slate-700 text-center text-slate-500 text-sm">
+                            Monitoramento wireless não disponível para este tipo de equipamento.
+                        </div>
+                    )}
+                </div>
+
+                {/* Live Chart - Only show if valid type */}
+                {(isTransmitter || isStation) && (
+                    <div className="h-48 bg-slate-950/50 rounded border border-slate-800/50 p-2">
+                        {data.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={data}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
+                                    <XAxis dataKey="time" hide />
+                                    <YAxis
+                                        stroke="#64748b"
+                                        fontSize={10}
+                                        width={30}
+                                        domain={isTransmitter ? ['auto', 'auto'] : [-90, -40]}
+                                        hide={false}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', fontSize: '12px' }}
+                                        itemStyle={{ color: color }}
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey={dataKey}
+                                        stroke={color}
+                                        fill={color}
+                                        fillOpacity={0.1}
+                                        strokeWidth={2}
+                                        isAnimationActive={false}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-slate-600 text-xs">
+                                Aguardando dados...
+                            </div>
+                        )}
+                        <div className="mt-2 text-right">
+                            <span className="text-[10px] text-slate-500">Atualizado a cada 2s</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export function Equipments() {
     // --- State ---
@@ -251,6 +398,37 @@ export function Equipments() {
     const [selectedWirelessEq, setSelectedWirelessEq] = useState<Equipment | null>(null);
     const [templates, setTemplates] = useState<Record<string, Partial<FormData>>>({});
     const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [isDetecting, setIsDetecting] = useState(false);
+
+    // Auto-detect equipment brand and type
+    const handleAutoDetect = async () => {
+        if (!formData.ip) {
+            alert('Por favor, insira um IP primeiro');
+            return;
+        }
+
+        setIsDetecting(true);
+        try {
+            const result = await detectEquipmentBrand(
+                formData.ip,
+                formData.snmp_community || 'public',
+                formData.snmp_port || 161
+            );
+
+            setFormData({
+                ...formData,
+                brand: result.brand,
+                equipment_type: result.equipment_type
+            });
+
+            alert(`Detectado:\n✅ Marca: ${result.brand.toUpperCase()}\n✅ Tipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'}`);
+        } catch (error: any) {
+            alert(`Erro na detecção: ${error.response?.data?.detail || error.message}`);
+        } finally {
+            setIsDetecting(false);
+        }
+    };
+
     const [templateName, setTemplateName] = useState('');
 
     // --- Actions ---
@@ -302,8 +480,8 @@ export function Equipments() {
     const loadHistory = async (id: number, period: string) => {
         setHistoryPeriod(period);
         try {
-            const data = await getLatencyHistory(id, period);
-            setHistoryData(data.map((d: any) => ({
+            const response = await getLatencyHistory(id, period);
+            setHistoryData(response.data.map((d: any) => ({
                 ...d, timeStr: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             })));
         } catch (e) { console.error(e); }
@@ -383,6 +561,22 @@ export function Equipments() {
         alert('Salvo!'); setShowScanner(false); load();
     }
 
+    const handleNewEquipment = async () => {
+        setEditingEquipment(null);
+        try {
+            const defaults = await getNetworkDefaults();
+            setFormData({
+                ...INITIAL_FORM_STATE,
+                ssh_user: defaults.ssh_user || 'admin',
+                ssh_password: defaults.ssh_password || '',
+                snmp_community: defaults.snmp_community || 'public'
+            });
+        } catch (e) {
+            setFormData(INITIAL_FORM_STATE);
+        }
+        setShowModal(true);
+    };
+
     return (
         <div className="h-[calc(100vh-2rem)] flex flex-col relative">
             {/* Batch Actions Bar */}
@@ -416,7 +610,7 @@ export function Equipments() {
                         <Upload size={18} /> Importar
                         <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
                     </label>
-                    <button onClick={() => { setEditingEquipment(null); setFormData(INITIAL_FORM_STATE); setShowModal(true); }} className="flex gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
+                    <button onClick={handleNewEquipment} className="flex gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
                         <Plus size={18} /> Novo
                     </button>
                 </div>
@@ -493,7 +687,27 @@ export function Equipments() {
                         <h3 className="text-xl font-bold text-white mb-4">{editingEquipment ? 'Editar' : 'Novo'} Equipamento</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="Nome" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-                            <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP" value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} required />
+                            <div className="space-y-2">
+                                <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP" value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} required />
+                                <button
+                                    type="button"
+                                    onClick={handleAutoDetect}
+                                    disabled={isDetecting || !formData.ip}
+                                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-2 rounded font-semibold transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isDetecting ? (
+                                        <>
+                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                            Detectando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Search size={16} />
+                                            🔍 Auto-Detectar Marca e Tipo
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
                                     <option value="">Sem Torre</option>
@@ -501,10 +715,36 @@ export function Equipments() {
                                 </select>
                                 <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}>
                                     <option value="generic">Genérico</option>
-                                    <option value="mikrotik">Mikrotik</option>
                                     <option value="ubiquiti">Ubiquiti</option>
+                                    <option value="mikrotik">Mikrotik</option>
+                                    <option value="mimosa">Mimosa</option>
+                                    <option value="intelbras">Intelbras</option>
                                 </select>
                             </div>
+
+                            <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
+                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Tipo de Equipamento</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="eqType" checked={formData.equipment_type === 'station'} onChange={() => setFormData({ ...formData, equipment_type: 'station' })} className="accent-blue-500" />
+                                        <span className="text-white">Station (Cliente/Ponto)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="eqType" checked={formData.equipment_type === 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'transmitter' })} className="accent-purple-500" />
+                                        <span className="text-white">Transmissor (AP)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="eqType" checked={formData.equipment_type !== 'station' && formData.equipment_type !== 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'other' })} className="accent-slate-500" />
+                                        <span className="text-white">Nenhum</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="SSH User (admin)" value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
+                                <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" type="password" placeholder="SSH Password" value={formData.ssh_password} onChange={e => setFormData({ ...formData, ssh_password: e.target.value })} />
+                            </div>
+
                             <div className="flex justify-end gap-2 mt-4">
                                 <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
                                 <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Salvar</button>
@@ -566,22 +806,7 @@ export function Equipments() {
                 </div>
             )}
             {showWirelessModal && selectedWirelessEq && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-96">
-                        <h3 className="text-white font-bold mb-4">Status Wireless</h3>
-                        <div className="space-y-4">
-                            <div className="bg-slate-800 p-4 rounded text-center">
-                                <div className="text-slate-400 text-xs uppercase">Sinal</div>
-                                <div className={clsx("text-3xl font-bold", (selectedWirelessEq.signal_dbm || -100) > -65 ? "text-emerald-400" : "text-yellow-400")}>{selectedWirelessEq.signal_dbm || 'N/A'} dBm</div>
-                            </div>
-                            <div className="bg-slate-800 p-4 rounded text-center">
-                                <div className="text-slate-400 text-xs uppercase">CCQ</div>
-                                <div className="text-3xl font-bold text-blue-400">{selectedWirelessEq.ccq || 'N/A'} %</div>
-                            </div>
-                        </div>
-                        <button onClick={() => setShowWirelessModal(false)} className="mt-6 w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded">Fechar</button>
-                    </div>
-                </div>
+                <WirelessMonitorModal equipment={selectedWirelessEq} onClose={() => setShowWirelessModal(false)} />
             )}
             {showTemplateModal && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-slate-900 border border-slate-700 rounded p-6"><input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Nome do Template" className="bg-slate-950 border border-slate-700 rounded p-2 text-white block mb-4 w-full" /><div className="flex gap-2 justify-end"><button onClick={() => setShowTemplateModal(false)} className="text-slate-400">Cancelar</button><button onClick={saveTemplate} className="bg-purple-600 text-white px-4 py-2 rounded">Salvar</button></div></div></div>)}
         </div>

@@ -52,8 +52,8 @@ export function Dashboard() {
     // Load History when selection changes
     useEffect(() => {
         if (selectedDevice) {
-            getLatencyHistory(selectedDevice.id, '24h').then(data => {
-                setHistoryData(data.map((d: any) => ({
+            getLatencyHistory(selectedDevice.id, '24h').then(response => {
+                setHistoryData((response.data || []).map((d: any) => ({
                     ...d,
                     timeStr: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 })));

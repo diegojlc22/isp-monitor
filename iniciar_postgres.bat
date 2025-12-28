@@ -19,6 +19,10 @@ start /b "" %PYTHON_CMD% -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8
 echo [2/3] Iniciando Coletor Pinger...
 start /b "" %PYTHON_CMD% -m backend.app.services.pinger_fast > logs\collector.log 2>&1
 
+:: 3.1. Iniciar Monitor SNMP (Trafego/Wireless)
+echo [2.5/3] Iniciando Monitor SNMP...
+start /b "" %PYTHON_CMD% -m backend.app.services.snmp_monitor > logs\snmp.log 2>&1
+
 :: 4. Iniciar Frontend
 echo [3/3] Iniciando Frontend...
 cd frontend

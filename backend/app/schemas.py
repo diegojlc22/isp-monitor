@@ -41,6 +41,7 @@ class EquipmentBase(BaseModel):
     equipment_type: str = "station"  # "transmitter" or "station"
     signal_dbm: Optional[int] = None
     ccq: Optional[int] = None
+    connected_clients: Optional[int] = None
 
 class EquipmentCreate(EquipmentBase):
     ssh_password: Optional[str] = None
@@ -64,6 +65,7 @@ class EquipmentUpdate(BaseModel):
     equipment_type: Optional[str] = None
     signal_dbm: Optional[int] = None
     ccq: Optional[int] = None
+    connected_clients: Optional[int] = None
 
 class Equipment(EquipmentBase):
     id: int

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getTelegramConfig, updateTelegramConfig } from '../services/api';
+import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getTelegramConfig, updateTelegramConfig, getNetworkDefaults, updateNetworkDefaults } from '../services/api';
 import { Save, Smartphone, Settings as SettingsIcon, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,6 +8,7 @@ export function Settings() {
     const [config, setConfig] = useState({ bot_token: '', chat_id: '', backup_chat_id: '', template_down: '', template_up: '' });
     const [sysName, setSysName] = useState('');
     const [thresholds, setThresholds] = useState({ good: 50, critical: 200 });
+    const [networkDefaults, setNetworkDefaults] = useState({ ssh_user: '', ssh_password: '', snmp_community: '' });
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
@@ -15,6 +16,7 @@ export function Settings() {
         getTelegramConfig().then(setConfig).catch(console.error);
         getSystemName().then(res => setSysName(res.name)).catch(console.error);
         getLatencyConfig().then(setThresholds).catch(console.error);
+        getNetworkDefaults().then(setNetworkDefaults).catch(console.error);
     }, []);
 
     async function handleSave(e: React.FormEvent) {
@@ -24,6 +26,7 @@ export function Settings() {
             await updateTelegramConfig(config);
             await updateSystemName(sysName);
             await updateLatencyConfig(thresholds);
+            await updateNetworkDefaults(networkDefaults);
 
             await refreshSystemName();
             setMsg('Configurações salvas com sucesso!');
@@ -92,6 +95,50 @@ export function Settings() {
                                 <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-rose-400 font-bold focus:border-rose-500 focus:outline-none"
                                     value={thresholds.critical} onChange={e => setThresholds({ ...thresholds, critical: parseInt(e.target.value) })} />
                                 <p className="mt-1 text-xs text-slate-500">Acima disso é Vermelho.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {msg && (
+                        <div className={`p-3 rounded-lg text-sm ${msg.includes('Erro') ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                            {msg}
+                        </div>
+                    )}
+
+                    <div className="flex justify-end">
+                        <button type="submit" disabled={loading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                            <Save size={18} />
+                            {loading ? 'Salvando...' : 'Salvar Tudo'}
+                        </button>
+                    </div>
+                </form>
+
+                <form onSubmit={handleSave} className="space-y-6 mt-6">
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                            <div className="p-2 bg-slate-800 rounded-lg">
+                                <SettingsIcon className="text-purple-400" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Padrões de Rede</h3>
+                                <p className="text-sm text-slate-400">Credenciais que serão pré-preenchidas em novos equipamentos.</p>
+                            </div>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">SSH User Padrão</label>
+                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={networkDefaults.ssh_user} onChange={e => setNetworkDefaults({ ...networkDefaults, ssh_user: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">SSH Senha Padrão</label>
+                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={networkDefaults.ssh_password} onChange={e => setNetworkDefaults({ ...networkDefaults, ssh_password: e.target.value })} />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-400 mb-1">SNMP Community Global</label>
+                                <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
+                                    value={networkDefaults.snmp_community} onChange={e => setNetworkDefaults({ ...networkDefaults, snmp_community: e.target.value })} />
                             </div>
                         </div>
                     </div>

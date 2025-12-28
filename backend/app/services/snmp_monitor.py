@@ -201,3 +201,11 @@ async def snmp_monitor_job():
             print(f"Errors in SNMP loop: {e}")
             
         await asyncio.sleep(SNMP_INTERVAL)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(snmp_monitor_job())
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Global SNMP Error: {e}")

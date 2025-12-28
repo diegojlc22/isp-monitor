@@ -6,6 +6,7 @@ from backend.app.database import get_db
 from backend.app.models import Parameters
 from backend.app.schemas import TelegramConfig
 from backend.app.dependencies import get_current_admin_user
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -120,6 +121,41 @@ async def update_latency_config(config: LatencyThresholds, db: AsyncSession = De
         
     await db.commit()
     return {"message": "Latency thresholds updated"}
+
+class NetworkDefaults(BaseModel):
+    ssh_user: str = "admin"
+    ssh_password: str = ""
+    snmp_community: str = "public"
+
+@router.get("/network-defaults", response_model=NetworkDefaults)
+async def get_network_defaults(db: AsyncSession = Depends(get_db)):
+    async def get_val(key):
+        res = await db.execute(select(Parameters).where(Parameters.key == key))
+        obj = res.scalar_one_or_none()
+        return obj.value if obj else None
+
+    return NetworkDefaults(
+        ssh_user=await get_val("default_ssh_user") or "admin",
+        ssh_password=await get_val("default_ssh_password") or "",
+        snmp_community=await get_val("default_snmp_community") or "public"
+    )
+
+@router.post("/network-defaults")
+async def update_network_defaults(config: NetworkDefaults, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_admin_user)):
+    async def upsert(key, value):
+        if value is None: return
+        obj = (await db.execute(select(Parameters).where(Parameters.key == key))).scalar_one_or_none()
+        if not obj:
+            db.add(Parameters(key=key, value=str(value)))
+        else:
+            obj.value = str(value)
+
+    await upsert("default_ssh_user", config.ssh_user)
+    await upsert("default_ssh_password", config.ssh_password)
+    await upsert("default_snmp_community", config.snmp_community)
+    
+    await db.commit()
+    return {"message": "Padrões de rede atualizados"}
 
 from pydantic import BaseModel
 import os

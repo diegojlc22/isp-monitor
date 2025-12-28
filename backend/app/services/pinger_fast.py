@@ -42,7 +42,11 @@ class PingerService:
         logger.info("Ping Worker Started (Turbo Mode)")
         while self.running:
             start_time = time.time()
-            ips = list(self.targets.keys())
+            all_targets = list(self.targets.keys())
+            
+            # Filter valid IPs only
+            ips = [ip for ip in all_targets if self.is_valid_target(ip)]
+            
             if not ips:
                 await asyncio.sleep(5)
                 continue
@@ -51,6 +55,8 @@ class PingerService:
             for i in range(0, len(ips), chunk_size):
                 chunk = ips[i : i + chunk_size]
                 try:
+                    # icmplib async_multiping crashes if hostname cannot be resolved.
+                    # We double check validation here or rely on the filter above.
                     results = await async_multiping(chunk, count=2, interval=0.1, timeout=PING_TIMEOUT, privileged=False)
                     for host in results:
                         await self.results_queue.put({
@@ -61,12 +67,27 @@ class PingerService:
                             "timestamp": time.time()
                         })
                 except Exception as e:
-                    logger.error(f"Ping execution error: {e}")
+                    logger.error(f"Ping execution error for chunk {chunk[:3]}...: {e}")
             
             elapsed = time.time() - start_time
             sleep_time = max(1.0, PING_INTERVAL - elapsed)
             logger.debug(f"Cycle finished in {elapsed:.2f}s. Sleeping {sleep_time:.2f}s")
             await asyncio.sleep(sleep_time)
+
+    def is_valid_target(self, target: str) -> bool:
+        """Simple check to avoid passing garbage to pinger"""
+        if not target or len(target) < 7: return False
+        # Avoid simple names that aren't IPs if we don't have DNS
+        # For now, simplistic check: assume IP if it has digits and dots
+        # Proper way: try ipaddress.ip_address(target)
+        try:
+            ipaddress.ip_address(target)
+            return True
+        except ValueError:
+            # Could be a hostname, let it pass if it looks reasonable?
+            # For this system, we focus on IPs mostly.
+            # If '124124124' is passed, it fails here.
+            return False
 
     async def db_writer(self):
         logger.info("DB Writer Started (Bulk Postgres)")

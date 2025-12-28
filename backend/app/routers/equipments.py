@@ -11,7 +11,7 @@ import ipaddress
 from datetime import datetime, timedelta, timezone
 
 from backend.app.database import get_db
-from backend.app.models import Equipment, PingLog, TrafficLog
+from backend.app.models import Equipment, PingLog, TrafficLog, LatencyHistory
 from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate, EquipmentUpdate
 from backend.app.services.cache import cache
 from backend.app.services.ssh_commander import reboot_device
@@ -89,6 +89,36 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
         if "UNIQUE constraint" in error_msg or "duplicate key" in error_msg:
             raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe")
         raise HTTPException(status_code=500, detail=f"Erro ao criar: {error_msg}")
+
+class DetectBrandRequest(BaseModel):
+    ip: str
+    snmp_community: str = "public"
+    snmp_port: int = 161
+
+@router.post("/detect-brand")
+async def detect_equipment_brand(request: DetectBrandRequest):
+    """
+    Auto-detects equipment brand and type via SNMP.
+    Returns detected brand (ubiquiti, mikrotik, mimosa, intelbras, generic)
+    and type (station, transmitter, other)
+    """
+    from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type
+    
+    try:
+        # Detect brand first
+        brand = await detect_brand(request.ip, request.snmp_community, request.snmp_port)
+        
+        # Then detect type based on brand
+        equipment_type = await detect_equipment_type(request.ip, brand, request.snmp_community, request.snmp_port)
+        
+        return {
+            "brand": brand,
+            "equipment_type": equipment_type,
+            "ip": request.ip
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na detecção: {str(e)}")
+
 
 @router.put("/{eq_id}", response_model=EquipmentSchema)
 async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
@@ -193,25 +223,27 @@ async def get_latency_history(
     if limit < 1 or limit > 5000:
         raise HTTPException(status_code=400, detail="limit deve estar entre 1 e 5000")
     
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    start_time = now - timedelta(hours=hours)
+    # Calculate start time as timestamp
+    now_ts = datetime.now(timezone.utc).timestamp()
+    start_ts = now_ts - (hours * 3600)
     
-    query = select(PingLog).where(
-        PingLog.device_type == "equipment",
-        PingLog.device_id == eq_id,
-        PingLog.timestamp >= start_time
-    ).order_by(PingLog.timestamp.desc()).limit(limit)
+    query = select(LatencyHistory).where(
+        LatencyHistory.equipment_id == eq_id,
+        LatencyHistory.timestamp >= start_ts
+    ).order_by(LatencyHistory.timestamp.desc()).limit(limit)
     
     result = await db.execute(query)
     logs = result.scalars().all()
     
     data = []
     for log in reversed(logs):
-        if log.latency_ms is not None:
-            data.append({
-                "timestamp": log.timestamp.isoformat(),
-                "latency": log.latency_ms
-            })
+        # Convert float timestamp back to ISO string for frontend
+        dt_object = datetime.fromtimestamp(log.timestamp, timezone.utc)
+        data.append({
+            "timestamp": dt_object.isoformat(),
+            "latency": log.latency,
+            "packet_loss": log.packet_loss
+        })
     
     return {
         "data": data,

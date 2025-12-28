@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Activity, ArrowDownUp, Wifi } from 'lucide-react';
+import { Plus, X, Activity, ArrowDownUp, Wifi, Users } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory } from '../services/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -10,7 +10,7 @@ interface WidgetItem {
     y: number;
     w: number;
     h: number;
-    type: 'latency' | 'traffic' | 'signal';
+    type: 'latency' | 'traffic' | 'signal' | 'clients';
     equipmentId: number;
     title: string;
 }
@@ -22,19 +22,23 @@ const ChartWidget = React.memo(({ item, onRemove }: { item: WidgetItem, onRemove
 
     const fetchData = useCallback(async () => {
         try {
-            if (item.type === 'signal') {
-                // Para sinal, pegamos o valor instantâneo e acumulamos localmente
-                // Idealmente teríamos uma rota GET /equipments/{id} leve
+            if (item.type === 'signal' || item.type === 'clients') {
+                // Para sinal e clientes, pegamos o valor instantâneo e acumulamos localmente
                 const eqs = await getEquipments();
                 const eq = eqs.find((e: any) => e.id === item.equipmentId);
 
-                if (eq && eq.signal_dbm) {
+                if (eq) {
                     const now = new Date();
                     const newPoint = {
                         time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                        signal: eq.signal_dbm
+                        signal: eq.signal_dbm,
+                        clients: eq.connected_clients || 0
                     };
-                    setData(prev => [...prev, newPoint].slice(-30)); // Manter últimos 30 pontos
+
+                    // Só adiciona se tiver valor válido para o tipo
+                    if ((item.type === 'signal' && eq.signal_dbm != null) || (item.type === 'clients')) {
+                        setData(prev => [...prev, newPoint].slice(-30)); // Manter últimos 30 pontos
+                    }
                 }
                 setLoading(false);
                 return;
@@ -47,7 +51,7 @@ const ChartWidget = React.memo(({ item, onRemove }: { item: WidgetItem, onRemove
                 res = await getTrafficHistory(item.equipmentId, '1h');
             }
 
-            const formatted = res.map((d: any) => ({
+            const formatted = (res.data || []).map((d: any) => ({
                 ...d,
                 time: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }));
@@ -68,6 +72,7 @@ const ChartWidget = React.memo(({ item, onRemove }: { item: WidgetItem, onRemove
     const getIcon = () => {
         if (item.type === 'latency') return <Activity size={14} className="text-emerald-400" />;
         if (item.type === 'traffic') return <ArrowDownUp size={14} className="text-blue-400" />;
+        if (item.type === 'clients') return <Users size={14} className="text-purple-400" />;
         return <Wifi size={14} className="text-yellow-400" />;
     };
 
@@ -95,6 +100,14 @@ const ChartWidget = React.memo(({ item, onRemove }: { item: WidgetItem, onRemove
                                 <YAxis stroke="#94a3b8" fontSize={10} width={30} domain={[-90, -30]} />
                                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} />
                                 <Area type="monotone" dataKey="signal" stroke="#facc15" fill="#facc15" fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
+                            </AreaChart>
+                        ) : item.type === 'clients' ? (
+                            <AreaChart data={data}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                                <XAxis dataKey="time" hide />
+                                <YAxis stroke="#94a3b8" fontSize={10} width={30} allowDecimals={false} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} />
+                                <Area type="monotone" dataKey="clients" stroke="#c084fc" fill="#c084fc" fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
                             </AreaChart>
                         ) : item.type === 'latency' ? (
                             <AreaChart data={data}>
@@ -142,7 +155,7 @@ export function LiveMonitor() {
 
     // Form state
     const [selectedEq, setSelectedEq] = useState('');
-    const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal'>('traffic');
+    const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal' | 'clients'>('traffic');
 
     useEffect(() => {
         getEquipments().then(setEquipments);
@@ -167,7 +180,7 @@ export function LiveMonitor() {
             h: 3,
             type: selectedType,
             equipmentId: eq.id,
-            title: `${eq.name} (${selectedType === 'traffic' ? 'Tráfego' : selectedType === 'signal' ? 'Sinal' : 'Latência'})`
+            title: `${eq.name} (${selectedType === 'traffic' ? 'Tráfego' : selectedType === 'signal' ? 'Sinal' : selectedType === 'clients' ? 'Clientes' : 'Latência'})`
         };
 
         const newLayout = [...layout, newItem];
@@ -257,12 +270,24 @@ export function LiveMonitor() {
                                     >
                                         <Activity size={16} /> Latência
                                     </button>
-                                    <button
-                                        onClick={() => setSelectedType('signal')}
-                                        className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'signal' ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
-                                    >
-                                        <Wifi size={16} /> Sinal
-                                    </button>
+
+                                    {equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'station' && (
+                                        <button
+                                            onClick={() => setSelectedType('signal')}
+                                            className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'signal' ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                        >
+                                            <Wifi size={16} /> Sinal
+                                        </button>
+                                    )}
+
+                                    {equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'transmitter' && (
+                                        <button
+                                            onClick={() => setSelectedType('clients')}
+                                            className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'clients' ? 'bg-purple-600/20 border-purple-500 text-purple-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                        >
+                                            <Users size={16} /> Clientes
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
