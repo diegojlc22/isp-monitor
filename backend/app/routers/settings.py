@@ -373,7 +373,16 @@ async def test_whatsapp_message_route(
 
 @router.post("/telegram/test-backup")
 async def test_telegram_backup():
-    return {"error": "Backup via painel desativado para PostgreSQL. Use pg_dump no servidor."}
+    try:
+        import subprocess
+        import sys
+        
+        # Run script asynchronously (fire and forget from API perspective, but script runs)
+        subprocess.Popen([sys.executable, "backup_db.py"], creationflags=0x08000000)
+        
+        return {"message": "Backup solicitado! Verifique seu Telegram em instantes."}
+    except Exception as e:
+        return {"error": f"Falha ao iniciar backup: {str(e)}"}
 @router.get("/whatsapp/groups")
 async def get_whatsapp_groups(db: AsyncSession = Depends(get_db)):
     try:
