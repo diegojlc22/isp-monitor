@@ -1,23 +1,11 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV } from '../services/api'; // removed unused getLatencyConfig
 import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Info, Download, Upload } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
 
 // @ts-ignore
-import * as ReactWindow from 'react-window';
-// @ts-ignore
-import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { useDebounce } from 'use-debounce';
-
-// Fix para compatibilidade de build Vite/Rollup com CJS e TS
-const List = (ReactWindow as any).FixedSizeList || (ReactWindow as any).default?.FixedSizeList;
-const areEqual = (ReactWindow as any).areEqual || (ReactWindow as any).default?.areEqual;
-
-// Fallback se areEqual ainda falhar (Implementação manual simples)
-const safeAreEqual = areEqual || ((prev: any, next: any) => {
-    return prev.index === next.index && prev.style === next.style && prev.data === next.data;
-});
 
 // --- Interfaces ---
 interface Tower { id: number; name: string; }
@@ -55,13 +43,21 @@ function usePoll(callback: () => void, intervalMs: number) {
 
 // --- Componentes Otimizados ---
 
-const EquipmentRow = memo(({ index, style, data }: any) => {
-    const { equipments, towers, onAction, onReboot, onDelete, onHistory, onEdit } = data;
+const EquipmentRow = ({ index, data }: any) => {
+    const { equipments, towers, onAction, onReboot, onDelete, onHistory, onEdit, selectedIds, toggleSelection } = data;
     const eq = equipments[index];
     const tower = towers.find((t: Tower) => t.id === eq.tower_id);
+    const isSelected = selectedIds?.includes(eq.id);
 
     return (
-        <div style={style} className={clsx("flex items-center text-sm border-b border-slate-800 transition-colors hover:bg-slate-800/50 group", index % 2 === 0 ? "bg-transparent" : "bg-slate-900/30")}>
+        <div className={clsx("w-full h-16 flex items-center text-sm border-b border-slate-800 transition-colors hover:bg-slate-800/50 group", index % 2 === 0 ? "bg-transparent" : "bg-slate-900/30", isSelected && "bg-blue-900/20")}>
+            {/* Selection Checkbox */}
+            <div className="w-10 pl-4 flex items-center justify-center shrink-0">
+                <div onClick={() => toggleSelection && toggleSelection(eq.id)} className="cursor-pointer">
+                    {isSelected ? <CheckSquare size={18} className="text-blue-500" /> : <Square size={18} className="text-slate-600 hover:text-slate-400" />}
+                </div>
+            </div>
+
             {/* Status */}
             <div className="w-16 flex justify-center shrink-0">
                 <div
@@ -109,7 +105,7 @@ const EquipmentRow = memo(({ index, style, data }: any) => {
             </div>
         </div>
     );
-}, safeAreEqual);
+};
 
 
 export function Equipments() {
@@ -120,12 +116,121 @@ export function Equipments() {
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
     const [formData, setFormData] = useState<FormData>(INITIAL_FORM_STATE);
 
+    // Batch Selection State
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+    // Sorting State
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+
     // Filters & Search
     const [filterText, setFilterText] = useState('');
     const [debouncedFilterText] = useDebounce(filterText, 300);
     const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
     const [filterTower, setFilterTower] = useState<string>('all');
     const [filterType, setFilterType] = useState<string>('all');
+
+    // Load filter from URL
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get('status');
+        if (status && ['online', 'offline'].includes(status)) {
+            setFilterStatus(status as 'online' | 'offline');
+        }
+    }, []);
+
+    // Filter & Sort Logic - Memoized
+    const filteredEquipments = useMemo(() => {
+        let result = [...equipments]; // Create a copy to sort safely
+
+        // 1. Filtering
+        if (debouncedFilterText) {
+            const lower = debouncedFilterText.toLowerCase();
+            result = result.filter(eq => eq.name.toLowerCase().includes(lower) || eq.ip.includes(lower));
+        }
+        if (filterStatus !== 'all') {
+            result = result.filter(eq => filterStatus === 'online' ? eq.is_online : !eq.is_online);
+        }
+        if (filterTower !== 'all') {
+            result = result.filter(eq => eq.tower_id === parseInt(filterTower));
+        }
+        if (filterType !== 'all') {
+            result = result.filter(eq => eq.equipment_type === filterType);
+        }
+
+        // 2. Sorting
+        if (sortConfig) {
+            result.sort((a, b) => {
+                let aValue: any = a[sortConfig.key as keyof Equipment];
+                let bValue: any = b[sortConfig.key as keyof Equipment];
+
+                // Special handling for IP sorting
+                if (sortConfig.key === 'ip') {
+                    const ipA = a.ip.split('.').map(Number);
+                    const ipB = b.ip.split('.').map(Number);
+                    for (let i = 0; i < 4; i++) {
+                        if (ipA[i] !== ipB[i]) return sortConfig.direction === 'asc' ? ipA[i] - ipB[i] : ipB[i] - ipA[i];
+                    }
+                    return 0;
+                }
+
+                // Generic sorting
+                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        } else {
+            // Default sort: Offline first, then Name
+            result.sort((a, b) => {
+                if (a.is_online === b.is_online) return a.name.localeCompare(b.name);
+                return a.is_online ? 1 : -1;
+            });
+        }
+
+        return result;
+    }, [equipments, debouncedFilterText, filterStatus, filterTower, filterType, sortConfig]);
+
+    const handleSort = (key: string) => {
+        setSortConfig(current => {
+            if (current && current.key === key) {
+                return current.direction === 'asc' ? { key, direction: 'desc' } : null;
+            }
+            return { key, direction: 'asc' };
+        });
+    };
+
+    const getSortIcon = (key: string) => {
+        if (!sortConfig || sortConfig.key !== key) return <span className="opacity-20 ml-1">⇅</span>;
+        return <span className="ml-1 text-blue-400">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+    };
+
+    // Selection Logic
+    const toggleSelection = useCallback((id: number) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    }, []);
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === filteredEquipments.length && filteredEquipments.length > 0) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(filteredEquipments.map(eq => eq.id));
+        }
+    };
+
+    const handleBatchDelete = async () => {
+        if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.length} equipamentos?`)) return;
+        try {
+            for (const id of selectedIds) { await deleteEquipment(id); }
+            alert('Equipamentos excluídos!'); setSelectedIds([]); load();
+        } catch (e) { alert('Erro ao excluir alguns itens.'); }
+    };
+
+    const handleBatchReboot = async () => {
+        if (!confirm(`Reiniciar ${selectedIds.length} equipamentos?`)) return;
+        try {
+            for (const id of selectedIds) { rebootEquipment(id).catch(console.error); }
+            alert('Comandos de reboot enviados!'); setSelectedIds([]);
+        } catch (e) { alert('Erro ao enviar comandos.'); }
+    };
 
     // Scanner States
     const [showScanner, setShowScanner] = useState(false);
@@ -158,25 +263,6 @@ export function Equipments() {
     }, []);
 
     usePoll(load, 15000);
-
-    // Filter Logic - Memoized
-    const filteredEquipments = useMemo(() => {
-        let result = equipments;
-        if (debouncedFilterText) {
-            const lower = debouncedFilterText.toLowerCase();
-            result = result.filter(eq => eq.name.toLowerCase().includes(lower) || eq.ip.includes(lower));
-        }
-        if (filterStatus !== 'all') {
-            result = result.filter(eq => filterStatus === 'online' ? eq.is_online : !eq.is_online);
-        }
-        if (filterTower !== 'all') {
-            result = result.filter(eq => eq.tower_id === parseInt(filterTower));
-        }
-        if (filterType !== 'all') {
-            result = result.filter(eq => eq.equipment_type === filterType);
-        }
-        return result;
-    }, [equipments, debouncedFilterText, filterStatus, filterTower, filterType]);
 
     useEffect(() => {
         const saved = localStorage.getItem('equipment_templates');
@@ -298,8 +384,26 @@ export function Equipments() {
     }
 
     return (
-        <div className="h-[calc(100vh-2rem)] flex flex-col">
-            <div className="flex justify-between items-center mb-6 shrink-0">
+        <div className="h-[calc(100vh-2rem)] flex flex-col relative">
+            {/* Batch Actions Bar */}
+            {selectedIds.length > 0 && (
+                <div className="absolute top-0 left-0 right-0 z-20 bg-blue-600 text-white p-4 shadow-xl flex items-center justify-between rounded-b-xl animate-in slide-in-from-top-4">
+                    <div className="flex items-center gap-4 font-semibold">
+                        <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.length} selecionados</span>
+                        <span className="text-blue-100 text-sm cursor-pointer hover:underline" onClick={() => setSelectedIds([])}>Cancelar</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleBatchReboot} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded text-sm flex items-center gap-2 transition-colors">
+                            <Power size={16} /> Reiniciar Selecionados
+                        </button>
+                        <button onClick={handleBatchDelete} className="bg-rose-500 hover:bg-rose-600 px-4 py-2 rounded text-sm flex items-center gap-2 transition-colors shadow-lg">
+                            <Trash2 size={16} /> Excluir
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex justify-between items-center mb-6 shrink-0 mt-4">
                 <h2 className="text-2xl font-bold text-white">Equipamentos <span className="text-sm font-normal text-slate-500 ml-2">({filteredEquipments.length})</span></h2>
                 <div className="flex gap-2">
                     <button onClick={() => setShowScanner(true)} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
@@ -340,31 +444,45 @@ export function Equipments() {
             </div>
 
             <div className="flex-1 bg-slate-900 border-x border-b border-slate-800 rounded-b-xl overflow-hidden flex flex-col shadow-xl">
-                <div className="flex bg-slate-950 text-slate-400 uppercase text-xs font-bold py-3 border-b border-slate-800 shrink-0">
-                    <div className="w-16 text-center">Status</div>
-                    <div className="flex-1 px-4">Nome</div>
-                    <div className="w-32 px-4 hidden sm:block">IP</div>
+                <div className="flex bg-slate-950 text-slate-400 uppercase text-xs font-bold py-3 border-b border-slate-800 shrink-0 select-none">
+                    <div className="w-10 pl-4 flex items-center justify-center cursor-pointer" onClick={toggleSelectAll}>
+                        {selectedIds.length > 0 && selectedIds.length === filteredEquipments.length ? <CheckSquare size={18} className="text-blue-500" /> : <Square size={18} className="text-slate-600 hover:text-slate-400" />}
+                    </div>
+                    <div className="w-16 text-center cursor-pointer hover:text-white flex justify-center items-center" onClick={() => handleSort('is_online')}>
+                        Status {getSortIcon('is_online')}
+                    </div>
+                    <div className="flex-1 px-4 cursor-pointer hover:text-white flex items-center" onClick={() => handleSort('name')}>
+                        Nome {getSortIcon('name')}
+                    </div>
+                    <div className="w-32 px-4 hidden sm:flex items-center cursor-pointer hover:text-white" onClick={() => handleSort('ip')}>
+                        IP {getSortIcon('ip')}
+                    </div>
                     <div className="w-48 px-4 text-right">Ações</div>
                 </div>
 
-                <div className="flex-1">
+                <div className="flex-1 bg-slate-950 overflow-y-auto min-h-0">
                     {filteredEquipments.length === 0 ? (
                         <div className="flex justify-center items-center h-full text-slate-500">Nenhum equipamento encontrado.</div>
                     ) : (
-                        // @ts-ignore
-                        <AutoSizer>
-                            {({ height, width }: any) => (
-                                <List
-                                    height={height}
-                                    width={width}
-                                    itemCount={filteredEquipments.length}
-                                    itemSize={64}
-                                    itemData={{ equipments: filteredEquipments, towers, onAction: handleWirelessInfo, onReboot: handleReboot, onDelete: handleDelete, onHistory: handleShowHistory, onEdit: handleEdit }}
-                                >
-                                    {EquipmentRow}
-                                </List>
-                            )}
-                        </AutoSizer>
+                        <div className="w-full">
+                            {filteredEquipments.map((eq, index) => (
+                                <EquipmentRow
+                                    key={eq.id}
+                                    index={index}
+                                    data={{
+                                        equipments: filteredEquipments,
+                                        towers,
+                                        onAction: handleWirelessInfo,
+                                        onReboot: handleReboot,
+                                        onDelete: handleDelete,
+                                        onHistory: handleShowHistory,
+                                        onEdit: handleEdit,
+                                        selectedIds,
+                                        toggleSelection
+                                    }}
+                                />
+                            ))}
+                        </div>
                     )}
                 </div>
             </div>
@@ -405,6 +523,14 @@ export function Equipments() {
                             {progress > 0 && <span className="text-white text-xs self-center ml-2">{progress}%</span>}
                         </div>
                         <div className="flex-1 bg-slate-950 rounded border border-slate-800 p-2 overflow-y-auto">
+                            {/* Select All Header */}
+                            {scannedIps.length > 0 && (
+                                <div className="flex items-center gap-2 p-2 border-b border-slate-800 mb-2 hover:bg-slate-900 cursor-pointer"
+                                    onClick={() => setSelectedIps(selectedIps.length === scannedIps.length ? [] : [...scannedIps])}>
+                                    {selectedIps.length === scannedIps.length ? <CheckSquare className="text-blue-500" size={16} /> : <Square className="text-slate-500" size={16} />}
+                                    <span className="text-slate-300 font-medium text-sm">Selecionar Todos ({scannedIps.length})</span>
+                                </div>
+                            )}
                             {scannedIps.map(ip => (
                                 <div key={ip} className="flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer" onClick={() => setSelectedIps(p => p.includes(ip) ? p.filter(i => i !== ip) : [...p, ip])}>
                                     {selectedIps.includes(ip) ? <CheckSquare className="text-blue-500" size={16} /> : <Square className="text-slate-500" size={16} />}

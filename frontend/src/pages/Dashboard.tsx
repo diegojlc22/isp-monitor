@@ -74,7 +74,10 @@ export function Dashboard() {
                     <p className="text-3xl font-bold text-white mt-2">{stats.towers}</p>
                 </div>
 
-                <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-emerald-500/50 transition-colors">
+                <div
+                    onClick={() => window.location.href = '/equipments?status=online'}
+                    className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-emerald-500/50 transition-colors cursor-pointer"
+                >
                     <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Activity size={48} className="text-emerald-500" />
                     </div>
@@ -82,7 +85,10 @@ export function Dashboard() {
                     <p className="text-3xl font-bold text-emerald-400 mt-2">{stats.online}</p>
                 </div>
 
-                <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-rose-500/50 transition-colors">
+                <div
+                    onClick={() => window.location.href = '/equipments?status=offline'}
+                    className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-rose-500/50 transition-colors cursor-pointer"
+                >
                     <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <AlertTriangle size={48} className="text-rose-500" />
                     </div>
@@ -90,7 +96,10 @@ export function Dashboard() {
                     <p className="text-3xl font-bold text-rose-500 mt-2">{stats.offline}</p>
                 </div>
 
-                <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-purple-500/50 transition-colors">
+                <div
+                    onClick={() => window.location.href = '/equipments'}
+                    className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-purple-500/50 transition-colors cursor-pointer"
+                >
                     <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <ShieldCheck size={48} className="text-purple-500" />
                     </div>

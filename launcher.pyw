@@ -104,6 +104,34 @@ class ModernLauncher:
         # Loop de Verificação
         self.check_status_loop()
 
+        # Handle Exit
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def on_close(self):
+        """Limpa logs e fecha"""
+        if self.is_running:
+            try:
+                self.stop_system()
+            except: pass
+        
+        # Limpar logs ao fechar
+        try:
+            log_files = [
+                "startup.log",
+                os.path.join("logs", "api.log"),
+                os.path.join("logs", "collector.log"),
+                os.path.join("logs", "frontend.log")
+            ]
+            for lf in log_files:
+                if os.path.exists(lf):
+                     # Truncate ao invés de delete para evitar lock errors se ainda tiver processo zumbi
+                    try: open(lf, 'w').close()
+                    except: pass
+        except: pass
+
+        self.root.destroy()
+        sys.exit(0)
+
     def center_window(self, width, height):
         """Centraliza janela na tela"""
         screen_width = self.root.winfo_screenwidth()

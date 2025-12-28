@@ -56,6 +56,7 @@ class Equipment(Base):
     # Status
     is_online = Column(Boolean, default=False)
     last_checked = Column(DateTime, default=datetime.utcnow)
+    last_ping = Column(Float, nullable=True) # Unix timestamp float
     last_latency = Column(Integer, nullable=True) # ms
     
     # Maintenance Mode
@@ -117,6 +118,13 @@ class TrafficLog(Base):
     out_mbps = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
+class LatencyHistory(Base):
+    __tablename__ = "latency_history"
+    id = Column(Integer, primary_key=True, index=True)
+    equipment_id = Column(Integer, index=True)
+    latency = Column(Float)
+    packet_loss = Column(Float)
+    timestamp = Column(Float, index=True)
 
 class Parameters(Base):
     __tablename__ = "parameters"

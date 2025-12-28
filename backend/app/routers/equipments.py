@@ -15,7 +15,7 @@ from backend.app.models import Equipment, PingLog, TrafficLog
 from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate, EquipmentUpdate
 from backend.app.services.cache import cache
 from backend.app.services.ssh_commander import reboot_device
-from backend.app.services.pinger_fast import scan_range_generator
+from backend.app.services.pinger_fast import scan_network
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
@@ -171,7 +171,7 @@ async def scan_network_stream(ip_range: str):
                  raise HTTPException(status_code=400, detail="IP Inválido")
 
         async def event_generator():
-            async for result in scan_range_generator(ips_to_scan):
+            async for result in scan_network(ips_to_scan):
                 yield f"data: {json.dumps(result)}\n\n"
             yield "event: done\ndata: {}\n\n"
 

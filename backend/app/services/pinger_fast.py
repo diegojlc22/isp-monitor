@@ -131,29 +131,28 @@ class PingerService:
 import ipaddress
 
 # --- Utility Functions (Legacy Compatibility) ---
-def scan_range_generator(target_input: str):
+async def scan_network(ips: List[str]):
     """
-    Gera IPs a partir de string CIDR (192.168.1.0/24) ou IP unico.
-    Usado pelo endpoint de Scanner.
+    Realiza ping em uma lista de IPs e gera resultados assincronamente.
     """
-    try:
-        if '/' in target_input:
-            # CIDR
-            net = ipaddress.ip_network(target_input.strip(), strict=False)
-            for ip in net.hosts():
-                yield str(ip)
-        elif '-' in target_input:
-            # Range simples ex: 192.168.1.10-20 (implementacao basica)
-            # Para evitar complexidade, vamos focar no CIDR que é o padrao do sistema
-            parts = target_input.split('-')
-            if len(parts) == 2:
-                # Logica complexa omitida, retorna vazio para evitar erro
-                pass 
-        else:
-            # IP Unico
-            yield target_input.strip()
-    except Exception as e:
-        logger.warning(f"Scan generator error for {target_input}: {e}")
+    chunk_size = 50
+    for i in range(0, len(ips), chunk_size):
+        chunk = ips[i : i + chunk_size]
+        try:
+            # Ping rapido para scanner
+            results = await async_multiping(chunk, count=1, interval=0.05, timeout=1.5, privileged=False)
+            for host in results:
+                yield {
+                    "ip": host.address,
+                    "is_online": host.is_alive,
+                    "latency": host.avg_rtt,
+                    "packet_loss": host.packet_loss
+                }
+        except Exception as e:
+            logger.error(f"Scan error for chunk {chunk}: {e}")
+            # Yield some error or offline status for these ips if needed, 
+            # but for now just continue
+
 
 if __name__ == "__main__":
     service = PingerService()
