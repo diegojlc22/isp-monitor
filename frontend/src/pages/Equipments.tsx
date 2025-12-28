@@ -703,23 +703,7 @@ export function Equipments() {
 
     return (
         <div className="h-[calc(100vh-2rem)] flex flex-col relative">
-            {/* Batch Actions Bar */}
-            {selectedIds.length > 0 && (
-                <div className="absolute top-0 left-0 right-0 z-20 bg-blue-600 text-white p-4 shadow-xl flex items-center justify-between rounded-b-xl animate-in slide-in-from-top-4">
-                    <div className="flex items-center gap-4 font-semibold">
-                        <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.length} selecionados</span>
-                        <span className="text-blue-100 text-sm cursor-pointer hover:underline" onClick={() => setSelectedIds([])}>Cancelar</span>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={handleBatchReboot} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded text-sm flex items-center gap-2 transition-colors">
-                            <Power size={16} /> Reiniciar Selecionados
-                        </button>
-                        <button onClick={handleBatchDelete} className="bg-rose-500 hover:bg-rose-600 px-4 py-2 rounded text-sm flex items-center gap-2 transition-colors shadow-lg">
-                            <Trash2 size={16} /> Excluir
-                        </button>
-                    </div>
-                </div>
-            )}
+
 
             <div className="flex justify-between items-center mb-6 shrink-0 mt-4">
                 <h2 className="text-2xl font-bold text-white">Equipamentos <span className="text-sm font-normal text-slate-500 ml-2">({filteredEquipments.length})</span></h2>
@@ -745,6 +729,22 @@ export function Equipments() {
                         title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Auto-detectar ${selectedIds.length} equipamento(s)`}
                     >
                         <Search size={18} /> Auto-Detectar Marca e Tipo {selectedIds.length > 0 && `(${selectedIds.length})`}
+                    </button>
+                    <button
+                        onClick={handleBatchReboot}
+                        disabled={selectedIds.length === 0}
+                        className="flex gap-2 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Reiniciar ${selectedIds.length} equipamento(s)`}
+                    >
+                        <Power size={18} /> Reiniciar {selectedIds.length > 0 && `(${selectedIds.length})`}
+                    </button>
+                    <button
+                        onClick={handleBatchDelete}
+                        disabled={selectedIds.length === 0}
+                        className="flex gap-2 bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Excluir ${selectedIds.length} equipamento(s)`}
+                    >
+                        <Trash2 size={18} /> Excluir {selectedIds.length > 0 && `(${selectedIds.length})`}
                     </button>
                     <button onClick={handleExportCSV} className="flex gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
                         <Download size={18} /> CSV
