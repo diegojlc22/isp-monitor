@@ -12,8 +12,6 @@ import shutil
 import psutil
 import time
 import threading
-import qrcode
-from PIL import Image, ImageTk
 import socket
 import requests
 
@@ -704,241 +702,7 @@ class ModernLauncher:
                 return decoded_lines[-n:]
         except Exception:
             return []
-    def toggle_ngrok(self):
-        """Liga/Desliga o Ngrok"""
-        if self.ngrok_running:
-            # Desligar Ngrok
-            try:
-                if self.ngrok_process:
-                    self.ngrok_process.terminate()
-                    self.ngrok_process = None
-                
-                # Matar qualquer processo ngrok rodando
-                for proc in psutil.process_iter(['name']):
-                    if 'ngrok' in proc.info['name'].lower():
-                        proc.kill()
-                
-                self.ngrok_running = False
-                self.btn_ngrok.config(
-                    text="🌐 NGROK: DESLIGADO",
-                    bg='#45475a',
-                    fg=COLORS['subtext']
-                )
-                self.info_label.config(text="Ngrok desligado")
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao desligar Ngrok: {e}")
-        else:
-            # Ligar Ngrok
-            try:
-                ngrok_path = os.path.join(os.getcwd(), "tools", "ngrok", "ngrok.exe")
-                domain = "uniconoclastic-addedly-yareli.ngrok-free.dev"
-                
-                if not os.path.exists(ngrok_path):
-                    messagebox.showerror("Erro", f"Ngrok não encontrado em:\n{ngrok_path}")
-                    return
-                
-                # Iniciar Ngrok em background
-                self.ngrok_process = subprocess.Popen(
-                    [ngrok_path, "http", f"--domain={domain}", "8080"],
-                    creationflags=subprocess.CREATE_NO_WINDOW
-                )
-                
-                self.ngrok_running = True
-                self.btn_ngrok.config(
-                    text="🌐 NGROK: LIGADO",
-                    bg=COLORS['success'],
-                    fg='#1e1e2e'
-                )
-                self.info_label.config(text=f"Ngrok iniciado: {domain}")
-                
-                # Abrir dashboard do Ngrok
-                time.sleep(1)
-                import webbrowser
-                webbrowser.open("http://localhost:4040")
-                
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao iniciar Ngrok: {e}")
-                self.ngrok_running = False
-    
-    def toggle_expo(self):
-        """Liga/Desliga o Expo Metro Bundler"""
-        if self.expo_running:
-            # Se já está rodando, mostrar QR code
-            self.show_expo_qr()
-        else:
-            # Ligar Expo
-            try:
-                mobile_path = os.path.join(os.getcwd(), "mobile")
-                
-                if not os.path.exists(mobile_path):
-                    messagebox.showerror("Erro", f"Pasta mobile não encontrada em:\n{mobile_path}")
-                    return
-                
-                # Auto-Install dependencies se necessário
-                # --offline: Evita pedir login na conta Expo e conflitos de host
-                cmd = f'cd /d "{mobile_path}" && (if not exist node_modules npm install) && npx expo start --offline'
-                
-                self.info_label.config(text="Iniciando Expo (Modo Offline)...")
-                self.expo_process = subprocess.Popen(
-                    cmd,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-                )
-                
-                # Iniciar thread para capturar logs
-                self.expo_logs = []
-                log_thread = threading.Thread(target=self.capture_expo_logs, daemon=True)
-                log_thread.start()
-                
-                self.expo_running = True
-                self.btn_expo.config(
-                    text="📱 EXPO: LIGADO (Clique p/ QR)",
-                    bg=COLORS['success'],
-                    fg='#1e1e2e'
-                )
-                self.info_label.config(text="Expo iniciado! Clique no botão para ver QR code")
-                
-                # Aguardar Expo iniciar e mostrar QR code
-                time.sleep(3)
-                self.show_expo_qr()
-                
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao iniciar Expo: {e}")
-                self.expo_running = False
-    
-    def get_local_ip(self):
-        """Obtém o IP local da máquina"""
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except:
-            return "192.168.0.17"  # Fallback
-    
-    def show_expo_qr(self):
-        """Mostra QR code do Expo em popup"""
-        # Obter IP local
-        local_ip = self.get_local_ip()
-        expo_url = f"exp://{local_ip}:8081"
-        
-        # Criar janela popup
-        popup = tk.Toplevel(self.root)
-        popup.title("QR Code - Expo Go")
-        popup.configure(bg=COLORS['bg'])
-        popup.geometry("400x550")
-        popup.resizable(False, False)
-        
-        # Centralizar
-        popup.update_idletasks()
-        x = (popup.winfo_screenwidth() // 2) - (400 // 2)
-        y = (popup.winfo_screenheight() // 2) - (550 // 2)
-        popup.geometry(f"400x550+{x}+{y}")
-        
-        # Título
-        title = tk.Label(
-            popup, text="📱 Escaneie com Expo Go",
-            font=("Segoe UI", 16, "bold"),
-            bg=COLORS['bg'], fg=COLORS['text']
-        )
-        title.pack(pady=20)
-        
-        # Gerar QR code
-        qr = qrcode.QRCode(version=1, box_size=10, border=2)
-        qr.add_data(expo_url)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color=COLORS['text'], back_color=COLORS['card'])
-        
-        # Converter para PhotoImage
-        qr_photo = ImageTk.PhotoImage(qr_img)
-        
-        # Frame para QR code
-        qr_frame = tk.Frame(popup, bg=COLORS['card'], relief=tk.FLAT, bd=0)
-        qr_frame.pack(pady=10, padx=40)
-        
-        # Label com QR code
-        qr_label = tk.Label(qr_frame, image=qr_photo, bg=COLORS['card'])
-        qr_label.image = qr_photo  # Manter referência
-        qr_label.pack(padx=10, pady=10)
-        
-        # URL
-        url_label = tk.Label(
-            popup, text=expo_url,
-            font=("Consolas", 10),
-            bg=COLORS['bg'], fg=COLORS['subtext']
-        )
-        url_label.pack(pady=10)
-        
-        # Instruções
-        instructions = tk.Label(
-            popup,
-            text="1. Abra o Expo Go no celular\n2. Escaneie o QR code acima\n3. Aguarde o app carregar",
-            font=("Segoe UI", 10),
-            bg=COLORS['bg'], fg=COLORS['subtext'],
-            justify=tk.LEFT
-        )
-        instructions.pack(pady=10)
-        
-        # Botão fechar
-        btn_close = tk.Button(
-            popup, text="Fechar",
-            command=popup.destroy,
-            bg=COLORS['primary'], fg='#1e1e2e',
-            font=("Segoe UI", 11, "bold"),
-            relief=tk.FLAT, cursor="hand2",
-            padx=30, pady=10
-        )
-        btn_close.pack(pady=20)
-    
-    def capture_expo_logs(self):
-        """Captura logs do processo Expo em tempo real"""
-        try:
-            with open("expo.log", "w", encoding="utf-8") as f:
-                if self.expo_process and self.expo_process.stdout:
-                    for line in iter(self.expo_process.stdout.readline, ''):
-                        if line:
-                            self.expo_logs.append(line)
-                            f.write(line)
-                            f.flush()
-                            
-                            # Limitar a 500 linhas na memória
-                            if len(self.expo_logs) > 500:
-                                self.expo_logs = self.expo_logs[-500:]
-        except:
-            pass
-    
-    def stop_expo(self):
-        """Para o Expo Metro Bundler"""
-        try:
-            if self.expo_process:
-                self.expo_process.terminate()
-                self.expo_process = None
-            
-            # Matar qualquer processo expo/node rodando
-            for proc in psutil.process_iter(['name', 'cmdline']):
-                try:
-                    if 'node' in proc.info['name'].lower():
-                        cmdline = ' '.join(proc.info['cmdline']).lower()
-                        if 'expo' in cmdline or 'metro' in cmdline:
-                            proc.kill()
-                except:
-                    pass
-            
-            self.expo_running = False
-            self.btn_expo.config(
-                text="📱 EXPO: DESLIGADO",
-                bg='#45475a',
-                fg=COLORS['subtext']
-            )
-            self.btn_expo_stop.config(state=tk.DISABLED, bg='#45475a')
-            self.info_label.config(text="Expo desligado")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao desligar Expo: {e}")
+
     
     def refresh_logs(self):
         """Atualiza logs do sistema"""
@@ -951,8 +715,7 @@ class ModernLauncher:
             "STARTUP.LOG": "startup.log",
             "API.LOG": os.path.join("logs", "api.log"),
             "COLLECTOR.LOG": os.path.join("logs", "collector.log"),
-            "FRONTEND.LOG": os.path.join("logs", "frontend.log"),
-            "EXPO.LOG": os.path.join("logs", "expo.log")
+            "FRONTEND.LOG": os.path.join("logs", "frontend.log")
         }
         
         for display_name, real_path in log_files.items():
@@ -988,33 +751,7 @@ class ModernLauncher:
         self.log_text.see(tk.END)
         self.log_text.config(state=tk.DISABLED)
     
-    def refresh_expo_logs(self):
-        """Atualiza logs do Expo"""
-        self.expo_log_text.config(state=tk.NORMAL)
-        self.expo_log_text.delete(1.0, tk.END)
-        
-        if not self.process_expo:
-            self.expo_log_text.insert(tk.END, "Expo não está rodando.\n\nVá na aba '📱 MOBILE' e clique em iniciar.", "warning")
-        elif not self.expo_logs:
-            self.expo_log_text.insert(tk.END, "Aguardando logs do Expo...\n\nO Metro Bundler está iniciando.", "warning")
-        else:
-            # Mostrar últimas 100 linhas
-            for log in self.expo_logs[-100:]:
-                if "error" in log.lower() or "failed" in log.lower():
-                    self.expo_log_text.insert(tk.END, log, "error")
-                elif "success" in log.lower() or "bundled" in log.lower():
-                    self.expo_log_text.insert(tk.END, log, "success")
-                elif "warning" in log.lower():
-                    self.expo_log_text.insert(tk.END, log, "warning")
-                else:
-                    self.expo_log_text.insert(tk.END, log)
-        
-        self.expo_log_text.see(tk.END)
-        self.expo_log_text.config(state=tk.DISABLED)
-        
-        # Auto-refresh a cada 2 segundos se Expo estiver rodando
-        if self.process_expo:
-            self.root.after(2000, self.refresh_expo_logs)
+
 
 
     def on_closing(self):
