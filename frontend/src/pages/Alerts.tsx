@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getTelegramConfig, updateTelegramConfig, testTelegramMessage, testWhatsappMessage, getWhatsappGroups, getWhatsappStatus } from '../services/api';
-import { Bell, Save, MessageCircle, Send, Search, Copy, Check, X, RefreshCw, AlertTriangle } from 'lucide-react';
+import { getTelegramConfig, updateTelegramConfig, testTelegramMessage, testWhatsappMessage, testBackup, getWhatsappGroups, getWhatsappStatus } from '../services/api';
+import { Bell, Save, MessageCircle, Send, Search, Copy, Check, X, RefreshCw, AlertTriangle, Database, BrainCircuit, Radio } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,12 +11,17 @@ export function Alerts() {
     const [config, setConfig] = useState({
         bot_token: '',
         chat_id: '',
+        backup_chat_id: '',
         template_down: '',
         template_up: '',
         telegram_enabled: true,
         whatsapp_enabled: false,
         whatsapp_target: '',
-        whatsapp_target_group: ''
+        whatsapp_target_group: '',
+        // Notification Types
+        notify_equipment_status: true,
+        notify_backups: true,
+        notify_agent: true
     });
     const [configLoading, setConfigLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -54,10 +59,9 @@ export function Alerts() {
     useEffect(() => {
         if (showQrModal) {
             checkWhatsappStatus();
-            const interval = setInterval(checkWhatsappStatus, 3000); // Poll a cada 3s com modal aberto
+            const interval = setInterval(checkWhatsappStatus, 3000);
             return () => clearInterval(interval);
         } else {
-            // Checa uma vez ao carregar a página
             checkWhatsappStatus();
         }
     }, [showQrModal]);
@@ -70,7 +74,11 @@ export function Alerts() {
                     telegram_enabled: res.telegram_enabled !== false,
                     whatsapp_enabled: res.whatsapp_enabled === true,
                     whatsapp_target: res.whatsapp_target || '',
-                    whatsapp_target_group: res.whatsapp_target_group || ''
+                    whatsapp_target_group: res.whatsapp_target_group || '',
+                    backup_chat_id: res.backup_chat_id || '',
+                    notify_equipment_status: res.notify_equipment_status !== false,
+                    notify_backups: res.notify_backups !== false,
+                    notify_agent: res.notify_agent !== false
                 });
                 if (res.template_down) setTemplateDown(res.template_down);
                 if (res.template_up) setTemplateUp(res.template_up);
@@ -118,10 +126,10 @@ export function Alerts() {
                 template_down: templateDown,
                 template_up: templateUp
             });
-            setMsg('Configuração salva com sucesso!');
+            setMsg('✅ Configuração salva com sucesso!');
             setTimeout(() => setMsg(''), 3000);
         } catch (e: any) {
-            setMsg('Erro ao salvar configuração.');
+            setMsg('❌ Erro ao salvar configuração.');
         } finally {
             setConfigLoading(false);
         }
@@ -131,9 +139,9 @@ export function Alerts() {
         setMsg(''); setConfigLoading(true);
         try {
             await testTelegramMessage();
-            setMsg('Teste Telegram enviado!');
+            setMsg('✅ Teste Telegram enviado!');
         } catch (e: any) {
-            setMsg('Erro Telegram: ' + (e.response?.data?.error || e.message));
+            setMsg('❌ Erro Telegram: ' + (e.response?.data?.error || e.message));
         } finally {
             setConfigLoading(false);
         }
@@ -143,9 +151,21 @@ export function Alerts() {
         setMsg(''); setConfigLoading(true);
         try {
             await testWhatsappMessage(targetOverride || config.whatsapp_target);
-            setMsg('Teste WhatsApp enviado com sucesso!');
+            setMsg('✅ Teste WhatsApp enviado com sucesso!');
         } catch (e: any) {
-            setMsg('Erro WhatsApp: ' + (e.response?.data?.error || e.message));
+            setMsg('❌ Erro WhatsApp: ' + (e.response?.data?.error || e.message));
+        } finally {
+            setConfigLoading(false);
+        }
+    }
+
+    async function handleTestBackup() {
+        setMsg(''); setConfigLoading(true);
+        try {
+            await testBackup();
+            setMsg('✅ Backup solicitado! Verifique seu Telegram.');
+        } catch (e: any) {
+            setMsg('❌ Erro Backup: ' + (e.response?.data?.error || e.message));
         } finally {
             setConfigLoading(false);
         }
@@ -153,8 +173,16 @@ export function Alerts() {
 
     const filteredGroups = groups.filter(g => g.name.toLowerCase().includes(groupFilter.toLowerCase()));
 
+    if (user?.role !== 'admin') {
+        return (
+            <div className="p-8 text-center text-slate-500">
+                Acesso restrito a administradores.
+            </div>
+        );
+    }
+
     return (
-        <div className="space-y-6 relative">
+        <div className="space-y-6 relative max-w-6xl">
             {/* Modal de Busca de Grupos */}
             {showGroupModal && (
                 <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -255,20 +283,25 @@ export function Alerts() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Bell className="w-8 h-8 text-yellow-500" /> Alertas Multicanal
+                        <Bell className="w-8 h-8 text-yellow-500" /> Central de Notificações
                     </h1>
-                    <p className="text-slate-400">Configure para onde enviar os avisos de queda.</p>
+                    <p className="text-slate-400">Configure canais e tipos de alertas do sistema.</p>
                 </div>
             </div>
 
-            {user?.role === 'admin' && (
-                <form onSubmit={handleSaveConfig} className="space-y-6">
+            <form onSubmit={handleSaveConfig} className="space-y-6">
 
-                    {/* Canais */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Canais de Comunicação */}
+                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-800 bg-gradient-to-r from-blue-500/10 to-green-500/10">
+                        <h2 className="text-lg font-bold text-white">📡 Canais de Comunicação</h2>
+                        <p className="text-sm text-slate-400">Ative e configure os canais para envio de notificações.</p>
+                    </div>
+
+                    <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                         {/* Telegram Panel */}
-                        <div className={`rounded-xl border p-6 transition-colors ${config.telegram_enabled ? 'bg-slate-900 border-blue-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
+                        <div className={`rounded-xl border p-6 transition-all ${config.telegram_enabled ? 'bg-blue-500/5 border-blue-500/30 shadow-lg shadow-blue-500/10' : 'bg-slate-800/30 border-slate-700'}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-blue-500/10 rounded-lg"><Send className="text-blue-500" size={20} /></div>
@@ -284,13 +317,19 @@ export function Alerts() {
                             <div className={`space-y-4 ${!config.telegram_enabled && 'opacity-50 pointer-events-none'}`}>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-400 mb-1">Bot Token</label>
-                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
-                                        value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })} placeholder="123456...:ABCD..." />
+                                    <input type="password" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
+                                        value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })} placeholder="123456:ABC-DEF..." />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Chat ID</label>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Chat ID (Alertas Gerais)</label>
                                     <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
                                         value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })} placeholder="-100..." />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Chat ID (Backups) <span className="text-slate-600">- Opcional</span></label>
+                                    <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
+                                        value={config.backup_chat_id} onChange={e => setConfig({ ...config, backup_chat_id: e.target.value })} placeholder="-100..." />
+                                    <p className="text-xs text-slate-500 mt-1">Se vazio, usa o Chat ID de Alertas Gerais.</p>
                                 </div>
                                 <button type="button" onClick={handleTestTelegram} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                                     <Bell size={12} /> Testar Envio Telegram
@@ -299,7 +338,7 @@ export function Alerts() {
                         </div>
 
                         {/* WhatsApp Panel */}
-                        <div className={`rounded-xl border p-6 transition-colors ${config.whatsapp_enabled ? 'bg-slate-900 border-green-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
+                        <div className={`rounded-xl border p-6 transition-all ${config.whatsapp_enabled ? 'bg-green-500/5 border-green-500/30 shadow-lg shadow-green-500/10' : 'bg-slate-800/30 border-slate-700'}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-green-500/10 rounded-lg"><MessageCircle className="text-green-500" size={20} /></div>
@@ -344,16 +383,16 @@ export function Alerts() {
                                     <label className="block text-xs font-medium text-slate-400 mb-1">ID do Grupo</label>
                                     <div className="flex gap-2">
                                         <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
-                                            value={(config as any).whatsapp_target_group || ''}
-                                            onChange={e => setConfig({ ...config, whatsapp_target_group: e.target.value } as any)}
+                                            value={config.whatsapp_target_group || ''}
+                                            onChange={e => setConfig({ ...config, whatsapp_target_group: e.target.value })}
                                             placeholder="12036...@g.us" />
 
                                         <button type="button" onClick={openGroupSelector} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 text-slate-300 transition-colors" title="Buscar Grupo">
                                             <Search size={16} />
                                         </button>
 
-                                        <button type="button" onClick={() => handleTestWhatsapp((config as any).whatsapp_target_group)}
-                                            disabled={!(config as any).whatsapp_target_group}
+                                        <button type="button" onClick={() => handleTestWhatsapp(config.whatsapp_target_group)}
+                                            disabled={!config.whatsapp_target_group}
                                             className="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-600 text-xs disabled:opacity-50">
                                             Testar
                                         </button>
@@ -363,41 +402,95 @@ export function Alerts() {
                         </div>
 
                     </div>
+                </div>
 
-                    {/* Feedback e Salvar */}
-                    <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 flex items-center justify-between">
-                        <div className="text-sm">
-                            {msg && <span className={`${msg.includes('Erro') ? 'text-red-400' : 'text-emerald-400'}`}>{msg}</span>}
+                {/* Tipos de Notificações */}
+                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-800 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+                        <h2 className="text-lg font-bold text-white">🔔 Tipos de Notificações</h2>
+                        <p className="text-sm text-slate-400">Escolha quais eventos devem gerar alertas.</p>
+                    </div>
+
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Equipamentos */}
+                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${config.notify_equipment_status ? 'bg-blue-500/5 border-blue-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                            <input type="checkbox" checked={config.notify_equipment_status}
+                                onChange={e => setConfig({ ...config, notify_equipment_status: e.target.checked })}
+                                className="mt-1 w-5 h-5 rounded border-slate-600 text-blue-600 focus:ring-blue-500" />
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Radio className="text-blue-400" size={18} />
+                                    <span className="font-semibold text-white">Equipamentos</span>
+                                </div>
+                                <p className="text-xs text-slate-400">Alertas de queda e retorno de torres e equipamentos.</p>
+                            </div>
+                        </label>
+
+                        {/* Backups */}
+                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${config.notify_backups ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                            <input type="checkbox" checked={config.notify_backups}
+                                onChange={e => setConfig({ ...config, notify_backups: e.target.checked })}
+                                className="mt-1 w-5 h-5 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500" />
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Database className="text-emerald-400" size={18} />
+                                    <span className="font-semibold text-white">Backups</span>
+                                </div>
+                                <p className="text-xs text-slate-400">Confirmação de backups automáticos do banco de dados.</p>
+                                <button type="button" onClick={handleTestBackup} className="text-xs text-emerald-400 hover:text-emerald-300 mt-2 underline">
+                                    Testar Backup Agora
+                                </button>
+                            </div>
+                        </label>
+
+                        {/* Agente IA */}
+                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${config.notify_agent ? 'bg-purple-500/5 border-purple-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                            <input type="checkbox" checked={config.notify_agent}
+                                onChange={e => setConfig({ ...config, notify_agent: e.target.checked })}
+                                className="mt-1 w-5 h-5 rounded border-slate-600 text-purple-600 focus:ring-purple-500" />
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <BrainCircuit className="text-purple-400" size={18} />
+                                    <span className="font-semibold text-white">Agente IA</span>
+                                </div>
+                                <p className="text-xs text-slate-400">Relatórios e análises do sistema inteligente.</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {/* Templates de Mensagens */}
+                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="p-4 border-b border-slate-800 bg-slate-900/50">
+                        <h2 className="text-base font-semibold text-white">✍️ Mensagens Personalizadas</h2>
+                        <p className="text-xs text-slate-400 mt-1">Use [Device.Name] e [Device.IP] para dados dinâmicos.</p>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Alertar Queda (Down)</label>
+                            <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-4 py-2 text-white font-mono text-sm border-l-4 border-l-red-500"
+                                value={templateDown} onChange={e => setTemplateDown(e.target.value)} />
                         </div>
-                        <button type="submit" disabled={configLoading} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-bold transition-all shadow-lg hover:shadow-blue-500/20">
-                            <Save size={18} />
-                            {configLoading ? 'Salvando...' : 'Salvar Tudo'}
-                        </button>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Alertar Retorno (Up)</label>
+                            <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-4 py-2 text-white font-mono text-sm border-l-4 border-l-emerald-500"
+                                value={templateUp} onChange={e => setTemplateUp(e.target.value)} />
+                        </div>
                     </div>
-                </form>
-            )}
+                </div>
 
-            {/* Templates Section */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="p-4 border-b border-slate-800 bg-slate-900/50">
-                    <h3 className="text-base font-semibold text-white">Mensagens Personalizadas</h3>
+                {/* Feedback e Salvar */}
+                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl border border-blue-500/30 p-6 flex items-center justify-between shadow-lg">
+                    <div className="text-sm">
+                        {msg && <span className={`font-medium ${msg.includes('❌') ? 'text-red-400' : 'text-emerald-400'}`}>{msg}</span>}
+                        {!msg && <span className="text-slate-400">Todas as alterações serão salvas ao clicar no botão.</span>}
+                    </div>
+                    <button type="submit" disabled={configLoading} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-blue-500/30 disabled:opacity-50">
+                        <Save size={18} />
+                        {configLoading ? 'Salvando...' : 'Salvar Configurações'}
+                    </button>
                 </div>
-                <div className="p-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Alertar Queda (Down)</label>
-                        <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-4 py-2 text-white font-mono text-sm border-l-4 border-l-red-500"
-                            value={templateDown} onChange={e => setTemplateDown(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Alertar Retorno (Up)</label>
-                        <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-4 py-2 text-white font-mono text-sm border-l-4 border-l-emerald-500"
-                            value={templateUp} onChange={e => setTemplateUp(e.target.value)} />
-                    </div>
-                    <div className="flex justify-end">
-                        <button onClick={handleSaveConfig} className="text-sm text-slate-400 hover:text-white underline">Salvar Templates junto com config</button>
-                    </div>
-                </div>
-            </div>
+            </form>
         </div>
     );
 }

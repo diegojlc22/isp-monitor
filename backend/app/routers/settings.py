@@ -47,7 +47,11 @@ async def get_telegram_config(db: AsyncSession = Depends(get_db)):
         telegram_enabled=(await get_val("telegram_enabled") != "false"), # Default True
         whatsapp_enabled=(await get_val("whatsapp_enabled") == "true"),  # Default False
         whatsapp_target=await get_val("whatsapp_target") or "",
-        whatsapp_target_group=await get_val("whatsapp_target_group") or ""
+        whatsapp_target_group=await get_val("whatsapp_target_group") or "",
+        # Notification Types
+        notify_equipment_status=(await get_val("notify_equipment_status") != "false"),
+        notify_backups=(await get_val("notify_backups") != "false"),
+        notify_agent=(await get_val("notify_agent") != "false")
     )
 
 @router.post("/telegram")
@@ -82,6 +86,11 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     
     await upsert("whatsapp_target", config.whatsapp_target)
     await upsert("whatsapp_target_group", config.whatsapp_target_group)
+    
+    # Notification Types
+    await upsert("notify_equipment_status", "true" if config.notify_equipment_status else "false")
+    await upsert("notify_backups", "true" if config.notify_backups else "false")
+    await upsert("notify_agent", "true" if config.notify_agent else "false")
 
     await db.commit()
     return {"message": "Configurações de alerta atualizadas"}

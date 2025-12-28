@@ -90,7 +90,11 @@ class TelegramConfig(BaseModel):
     whatsapp_enabled: Optional[bool] = False
     whatsapp_target: Optional[str] = None 
     whatsapp_target_group: Optional[str] = None
-    # ex: 120363029253788824@g.us
+    
+    # Notification Types
+    notify_equipment_status: Optional[bool] = True
+    notify_backups: Optional[bool] = True
+    notify_agent: Optional[bool] = True
 
 # Auth Schemas
 class UserBase(BaseModel):
