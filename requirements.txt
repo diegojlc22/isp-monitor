@@ -10,3 +10,6 @@ asyncpg
 psycopg2-binary
 pillow
 qrcode
+pysnmp-lextudio
+icmplib
+python-dotenv

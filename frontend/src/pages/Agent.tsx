@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, Send, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SyntheticLog {
@@ -39,8 +39,6 @@ const Agent: React.FC = () => {
     const [latencyThreshold, setLatencyThreshold] = useState(300);
     const [anomalyCycles, setAnomalyCycles] = useState(2);
     const [checkInterval, setCheckInterval] = useState(300);
-    const [telegramToken, setTelegramToken] = useState('');
-    const [telegramChatId, setTelegramChatId] = useState('');
 
     const fetchData = async () => {
         setLoading(true);
@@ -65,8 +63,6 @@ const Agent: React.FC = () => {
             setLatencyThreshold(parseInt(res.data.agent_latency_threshold || '300'));
             setAnomalyCycles(parseInt(res.data.agent_anomaly_cycles || '2'));
             setCheckInterval(parseInt(res.data.agent_check_interval || '300'));
-            setTelegramToken(res.data.telegram_token || '');
-            setTelegramChatId(res.data.telegram_chat_id || '');
             setShowSettingsModal(true);
         } catch (err) {
             toast.error('Erro ao carregar configurações.');
@@ -79,38 +75,16 @@ const Agent: React.FC = () => {
             await api.post('/agent/settings', {
                 latency_threshold: latencyThreshold,
                 anomaly_cycles: anomalyCycles,
-                check_interval: checkInterval,
-                telegram_token: telegramToken,
-                telegram_chat_id: telegramChatId
+                check_interval: checkInterval
             });
             toast.success('Configurações salvas!');
-            // Don't close modal immediately so user can test telegram
+            setShowSettingsModal(false);
         } catch (err) {
             toast.error('Erro ao salvar configurações.');
         }
     };
 
-    const testTelegram = async () => {
-        // First save current settings to ensure backend has latest token
-        try {
-            await api.post('/agent/settings', {
-                latency_threshold: latencyThreshold,
-                anomaly_cycles: anomalyCycles,
-                check_interval: checkInterval,
-                telegram_token: telegramToken,
-                telegram_chat_id: telegramChatId
-            });
 
-            const res = await api.post('/agent/telegram-test');
-            if (res.data.success) {
-                toast.success(res.data.message);
-            } else {
-                toast.error(res.data.message);
-            }
-        } catch (err) {
-            toast.error('Erro ao testar Telegram.');
-        }
-    };
 
     const handleAddTarget = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -453,42 +427,6 @@ const Agent: React.FC = () => {
                                     <option value="600">10 Minutos (Leve)</option>
                                     <option value="1800">30 Minutos</option>
                                 </select>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-700/50">
-                                <div className="flex justify-between items-center mb-3">
-                                    <h4 className="text-white font-semibold">Notificações Telegram</h4>
-                                    <button
-                                        type="button"
-                                        onClick={testTelegram}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded flex items-center gap-1 transition-colors"
-                                    >
-                                        <Send size={12} /> Testar Envio
-                                    </button>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-400 mb-1">Bot Token</label>
-                                        <input
-                                            type="text"
-                                            value={telegramToken}
-                                            onChange={e => setTelegramToken(e.target.value)}
-                                            placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xs"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-400 mb-1">Chat ID</label>
-                                        <input
-                                            type="text"
-                                            value={telegramChatId}
-                                            onChange={e => setTelegramChatId(e.target.value)}
-                                            placeholder="-100123456789"
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xs"
-                                        />
-                                    </div>
-                                </div>
                             </div>
 
                             <div className="pt-2 flex gap-3">
