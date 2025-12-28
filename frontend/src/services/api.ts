@@ -90,3 +90,8 @@ export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then
 export const getExpoStatus = () => api.get('/expo/status').then(res => res.data);
 export const startExpo = () => api.post('/expo/start').then(res => res.data);
 export const stopExpo = () => api.post('/expo/stop').then(res => res.data);
+
+// Ngrok / External Access
+export const getNgrokStatus = () => api.get('/ngrok/status').then(res => res.data);
+export const startNgrok = () => api.post('/ngrok/start').then(res => res.data);
+export const stopNgrok = () => api.post('/ngrok/stop').then(res => res.data);

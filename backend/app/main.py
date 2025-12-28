@@ -9,7 +9,7 @@ import os
 import time
 import logging
 
-from backend.app.routers import towers, equipments, settings, auth, users, alerts, agent, mobile, metrics, expo
+from backend.app.routers import towers, equipments, settings, auth, users, alerts, agent, mobile, metrics, expo, ngrok
 from backend.app.database import engine, Base, AsyncSessionLocal
 from backend.app import models, auth_utils
 from backend.app.utils.network_diagnostics import run_diagnostics
@@ -149,6 +149,7 @@ app.include_router(agent.router, prefix="/api")
 app.include_router(mobile.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(expo.router, prefix="/api")
+app.include_router(ngrok.router, prefix="/api")
 
 # Static Files
 frontend_path = os.path.join(os.getcwd(), 'frontend', 'dist')
