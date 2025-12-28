@@ -18,7 +18,7 @@ os.environ["PYTHONUTF8"] = "1"
 SERVICES = {
     "whatsapp": {
         "cmd": "node server.js",
-        "port": 3001,
+        # "port": 3001, (Removed to force process check)
         "check": ["node", "server.js"],
         "log": "logs/whatsapp.log",
         "cwd": "tools/whatsapp"
@@ -49,6 +49,52 @@ SERVICES = {
 
 PARENT_PID = int(sys.argv[1]) if len(sys.argv) > 1 else None
 SPAWNED_PROCS = {} # Nome -> Popen Object
+
+def log(message, level="INFO"):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg = f"[{timestamp}] [{level}] {message}"
+    print(msg)
+    os.makedirs("logs", exist_ok=True)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except: pass
+
+def check_port(port):
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex(('127.0.0.1', port)) == 0
+    except: return False
+
+def kill_duplicates(name, config):
+    check_list = config.get("check", [name])
+    my_pid = os.getpid()
+    killed_any = False
+    for proc in psutil.process_iter(['pid', 'cmdline']):
+        try:
+            if proc.info['pid'] == my_pid: continue
+            cmdline = " ".join(proc.info['cmdline'] or []).lower()
+            if all(word.lower() in cmdline for word in check_list):
+                 if "self_heal.py" not in cmdline:
+                     proc.kill()
+                     killed_any = True
+        except: continue
+    return killed_any
+
+def is_running(name, config):
+    if "port" in config and check_port(config["port"]):
+        return True
+    
+    check_list = config.get("check", [name])
+    for proc in psutil.process_iter(['pid', 'cmdline']):
+        try:
+            cmdline = " ".join(proc.info['cmdline'] or []).lower()
+            if all(word.lower() in cmdline for word in check_list):
+                 if "self_heal.py" not in cmdline: return True
+        except: continue
+    return False
 
 def kill_process_tree(pid):
     """Mata uma árvore de processos inteira (Pai + Filhos)"""
@@ -123,7 +169,8 @@ def run_doctor():
                     mode = "w" if first_run else "a"
                     
                     if name == "frontend":
-                        config["cmd"] = "cmd /c npm run dev"
+                        # Bypass npm/cmd entirely to avoid hangs
+                        config["cmd"] = ["node", "node_modules/vite/bin/vite.js"]
                     
                     with open(log_path, mode, encoding="utf-8") as f:
                         f.write(f"\n--- [SYSTEM START] {datetime.now()} ---\n")
