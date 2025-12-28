@@ -158,6 +158,10 @@ def run_doctor():
                     time.sleep(0.5)
                 else:
                     if not is_running(name, config):
+                        # Frontend Optimization: Skip starting dev server if dist exists
+                        if name == "frontend" and os.path.exists("frontend/dist/index.html"):
+                            # log("⚡ [OPTIMIZATION] Frontend skipped (Using Production Build served by Backend)", "INFO")
+                            continue 
                         should_start = True
 
                 if should_start:

@@ -64,11 +64,11 @@ async def send_notification(
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
-async def _post_with_retry(url: str, json_data: dict, retries: int = 3):
+async def _post_with_retry(url: str, json_data: dict, retries: int = 3, headers: dict = None):
     client = get_client()
     for attempt in range(retries):
         try:
-            response = await client.post(url, json=json_data)
+            response = await client.post(url, json=json_data, headers=headers)
             response.raise_for_status()
             return response
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
@@ -98,7 +98,8 @@ async def send_whatsapp(message: str, target: str):
     }
     try:
         logger.info(f"Enviando WhatsApp para {target}: {message[:50]}...")
-        await _post_with_retry(WHATSAPP_API_URL, payload)
+        headers = {"x-api-key": settings.msg_secret}
+        await _post_with_retry(WHATSAPP_API_URL, payload, headers=headers)
         logger.info(f"WhatsApp enviado com sucesso para {target}")
     except Exception as e:
         logger.error(f"Falha ao enviar WhatsApp para {target}: {e}")

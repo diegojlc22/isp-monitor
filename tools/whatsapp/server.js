@@ -11,6 +11,23 @@ const PORT = process.env.PORT || 3001; // Mudado para 3001 para evitar conflito 
 app.use(express.json());
 app.use(cors());
 
+// --- SECURITY: API KEY PROTECTION ---
+const MSG_SECRET = process.env.MSG_SECRET || "msg-secret-key";
+
+// Middleware to protect private endpoints
+const authMiddleware = (req, res, next) => {
+    // Public endpoints
+    if (req.path === '/status' || req.path === '/qr') return next();
+
+    const token = req.headers['x-api-key'];
+    if (token !== MSG_SECRET) {
+        return res.status(403).json({ error: 'Acesso negado: API Key inválida' });
+    }
+    next();
+};
+
+app.use(authMiddleware);
+
 // Status
 let isReady = false;
 let qrCodeUrl = null;

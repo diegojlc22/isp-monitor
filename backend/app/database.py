@@ -19,10 +19,12 @@ else:
 engine_kwargs = {
     "echo": False,
     "connect_args": connect_args,
-    "poolclass": pool_class,
     "pool_pre_ping": True,
     "pool_recycle": 3600
 }
+
+if is_sqlite:
+    engine_kwargs["poolclass"] = NullPool
 
 if not is_sqlite:
     engine_kwargs.update({

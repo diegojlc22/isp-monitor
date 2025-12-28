@@ -74,7 +74,7 @@ async def seed_initial_data():
                 await db.commit()
             
             # Seed Telegram defaults if env vars exist
-            tg_token = os.getenv("TELEGRAM_TOKEN", "8158269697:AAGJGljtEFYy3pvouZrhs1QobIaXYzvrImc")
+            tg_token = os.getenv("TELEGRAM_TOKEN", "")
             tg_chat = os.getenv("TELEGRAM_CHAT_ID", "-1003601324129")
             
             from backend.app.models import Parameters

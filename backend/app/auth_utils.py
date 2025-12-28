@@ -1,10 +1,12 @@
-import bcrypt
 from datetime import datetime, timedelta, timezone
 from jose import jwt
+import bcrypt
+from backend.app.config import settings
 
-SECRET_KEY = "SUPER_SECRET_KEY_CHANGE_ME_IN_PROD" # In a real app, use env var
+# Security: Load from Settings
+SECRET_KEY = settings.secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day currently
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 def verify_password(plain_password, hashed_password):
     # Ensure bytes
