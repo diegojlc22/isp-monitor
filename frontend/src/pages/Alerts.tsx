@@ -163,9 +163,34 @@ export function Alerts() {
         setMsg(''); setConfigLoading(true);
         try {
             await testBackup();
-            setMsg('✅ Backup solicitado! Verifique seu Telegram.');
+            setMsg('✅ Backup solicitado! Verifique suas notificações.');
         } catch (e: any) {
             setMsg('❌ Erro Backup: ' + (e.response?.data?.error || e.message));
+        } finally {
+            setConfigLoading(false);
+        }
+    }
+
+
+    async function handleTestAgent() {
+        setMsg(''); setConfigLoading(true);
+        try {
+            // Envia para WhatsApp se estiver ativo
+            if (config.whatsapp_enabled && config.notify_agent) {
+                const target = config.whatsapp_target_group || config.whatsapp_target;
+                if (target) {
+                    await testWhatsappMessage(target);
+                }
+            }
+
+            // Envia para Telegram se estiver ativo
+            if (config.telegram_enabled && config.notify_agent) {
+                await testTelegramMessage();
+            }
+
+            setMsg('✅ Teste do Agente IA enviado! Verifique suas notificações.');
+        } catch (e: any) {
+            setMsg('❌ Erro: ' + (e.response?.data?.error || e.message));
         } finally {
             setConfigLoading(false);
         }
@@ -448,12 +473,15 @@ export function Alerts() {
                             <input type="checkbox" checked={config.notify_agent}
                                 onChange={e => setConfig({ ...config, notify_agent: e.target.checked })}
                                 className="mt-1 w-5 h-5 rounded border-slate-600 text-purple-600 focus:ring-purple-500" />
-                            <div>
+                            <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                     <BrainCircuit className="text-purple-400" size={18} />
                                     <span className="font-semibold text-white">Agente IA</span>
                                 </div>
                                 <p className="text-xs text-slate-400">Relatórios e análises do sistema inteligente.</p>
+                                <button type="button" onClick={(e) => { e.preventDefault(); handleTestAgent(); }} className="text-xs text-purple-400 hover:text-purple-300 mt-2 underline">
+                                    Testar Agora
+                                </button>
                             </div>
                         </label>
                     </div>

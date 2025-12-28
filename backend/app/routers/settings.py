@@ -6,7 +6,9 @@ from backend.app.database import get_db
 from backend.app.models import Parameters
 from backend.app.schemas import TelegramConfig
 from backend.app.dependencies import get_current_admin_user
+from backend.app.config import settings
 from pydantic import BaseModel
+import aiohttp
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -322,7 +324,6 @@ async def test_whatsapp_message_route(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        import aiohttp
         print(f"[DEBUG SETTINGS] Teste WhatsApp solicitado via Painel.")
         
         target_value = None
@@ -403,9 +404,6 @@ async def test_telegram_backup():
 @router.get("/whatsapp/groups")
 async def get_whatsapp_groups(db: AsyncSession = Depends(get_db)):
     try:
-        import aiohttp
-        from backend.app.config import settings
-        
         url = "http://127.0.0.1:3001/groups"
         headers = {"x-api-key": settings.msg_secret}
         
