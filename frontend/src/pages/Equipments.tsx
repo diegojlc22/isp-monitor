@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, getWhatsappGroups, detectEquipmentBrand } from '../services/api'; // removed unused getLatencyConfig
+import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand } from '../services/api';
 
 
-import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, MessageCircle, Check } from 'lucide-react';
+import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
 
@@ -265,9 +265,7 @@ export function Equipments() {
     const [formData, setFormData] = useState<FormData>(INITIAL_FORM_STATE);
     const [networkDefaults, setNetworkDefaults] = useState<any>({});
 
-    // WhatsApp Groups State
-    const [whatsappGroups, setWhatsappGroups] = useState<any[]>([]);
-    const [scanningGroupIndex, setScanningGroupIndex] = useState<number | null>(null);
+
 
     // Scanner State
     const [showScanner, setShowScanner] = useState(false);
@@ -280,34 +278,6 @@ export function Equipments() {
     const [scanRange, setScanRange] = useState('');
 
     // Configurações do scanner
-
-
-    // Load Groups
-    useEffect(() => {
-        getWhatsappGroups().then(g => {
-            if (Array.isArray(g)) setWhatsappGroups(g);
-        }).catch(err => console.log('Erro load groups', err));
-    }, []);
-
-    const toggleGroupForDevice = (index: number, groupId: string) => {
-        setScannedDevices(prev => {
-            const newDevices = [...prev];
-            const device = { ...newDevices[index] };
-            const groups = device.whatsapp_groups || [];
-
-            if (groups.includes(groupId)) {
-                device.whatsapp_groups = groups.filter((id: string) => id !== groupId);
-            } else {
-                device.whatsapp_groups = [...groups, groupId];
-            }
-            newDevices[index] = device;
-            return newDevices;
-        });
-    };
-
-    const openGroupSelector = (index: number) => {
-        setScanningGroupIndex(index);
-    };
 
     // Batch Selection State
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -869,7 +839,7 @@ export function Equipments() {
                         </div>
                         <div className="flex-1 bg-slate-950 rounded border border-slate-800 p-2 overflow-y-auto">
                             {/* Select All Header */}
-                            {scannedDevices.map((device, index) => (
+                            {scannedDevices.map((device) => (
                                 <div key={device.ip} className="flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer border-b border-slate-800/50 last:border-0" onClick={() => setSelectedIps(p => p.includes(device.ip) ? p.filter(i => i !== device.ip) : [...p, device.ip])}>
                                     {selectedIps.includes(device.ip) ? <CheckSquare className="text-blue-500 shrink-0" size={16} /> : <Square className="text-slate-500 shrink-0" size={16} />}
 
@@ -893,21 +863,6 @@ export function Equipments() {
                                             onChange={e => setIpNames({ ...ipNames, [device.ip]: e.target.value })}
                                         />
                                     </div>
-
-                                    {/* Botão de Grupos */}
-                                    <div className="ml-2" onClick={e => e.stopPropagation()}>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); openGroupSelector(index); }}
-                                            className={`p-2 rounded text-xs font-bold border transition-colors ${device.whatsapp_groups && device.whatsapp_groups.length > 0
-                                                ? 'bg-green-500/20 border-green-500 text-green-400 hover:bg-green-500/30'
-                                                : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'
-                                                }`}
-                                            title="Selecionar Grupos de Notificação"
-                                        >
-                                            <MessageCircle size={14} className="inline mr-1" />
-                                            {device.whatsapp_groups?.length || 0}
-                                        </button>
-                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -930,53 +885,6 @@ export function Equipments() {
                                     Salvar Selecionados ({selectedIps.length})
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL DE GRUPOS DO SCANNER */}
-            {scanningGroupIndex !== null && scannedDevices[scanningGroupIndex] && (
-                <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm flex flex-col max-h-[60vh] shadow-2xl">
-                        <div className="p-3 border-b border-slate-700 flex justify-between items-center bg-slate-800/50 rounded-t-xl">
-                            <h3 className="text-white font-bold text-sm">
-                                Grupos para <span className="text-blue-400">{scannedDevices[scanningGroupIndex].ip}</span>
-                            </h3>
-                            <button onClick={() => setScanningGroupIndex(null)} className="text-slate-400 hover:text-white transition-colors">✕</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                            {whatsappGroups.length === 0 ? (
-                                <div className="text-center p-8 text-slate-500 text-sm flex flex-col items-center">
-                                    <MessageCircle size={24} className="mb-2 opacity-50" />
-                                    Nenhum grupo carregado.<br />Verifique se o WhatsApp está conectado.
-                                </div>
-                            ) : (
-                                whatsappGroups.map(g => {
-                                    const isSelected = scannedDevices[scanningGroupIndex].whatsapp_groups?.includes(g.id);
-                                    return (
-                                        <div key={g.id}
-                                            onClick={() => toggleGroupForDevice(scanningGroupIndex, g.id)}
-                                            className={`flex items-center gap-3 p-2 rounded cursor-pointer border transition-all ${isSelected
-                                                ? 'bg-blue-600/20 border-blue-500/50'
-                                                : 'hover:bg-slate-800 border-transparent'
-                                                }`}
-                                        >
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800'
-                                                }`}>
-                                                {isSelected && <Check size={12} className="text-white" />}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>{g.name}</div>
-                                                <div className="text-[10px] text-slate-500 font-mono truncate opacity-60">{g.id}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                        <div className="p-3 border-t border-slate-700 bg-slate-800/30 rounded-b-xl flex justify-end">
-                            <button onClick={() => setScanningGroupIndex(null)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition-colors">OK</button>
                         </div>
                     </div>
                 </div>
