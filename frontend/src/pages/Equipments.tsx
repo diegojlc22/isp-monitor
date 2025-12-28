@@ -443,6 +443,55 @@ export function Equipments() {
         }
     };
 
+    // Batch auto-detect for selected equipments
+    const handleBatchAutoDetect = async () => {
+        if (selectedIds.length === 0) {
+            alert('Selecione pelo menos um equipamento');
+            return;
+        }
+
+        if (!confirm(`Deseja auto-detectar marca e tipo de ${selectedIds.length} equipamento(s)?`)) {
+            return;
+        }
+
+        setIsDetecting(true);
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const id of selectedIds) {
+            const equipment = equipments.find(eq => eq.id === id);
+            if (!equipment) continue;
+
+            try {
+                const result = await detectEquipmentBrand(
+                    equipment.ip,
+                    equipment.snmp_community || networkDefaults.snmp_community || 'public',
+                    equipment.snmp_port || networkDefaults.snmp_port || 161
+                );
+
+                // Update equipment with detected info
+                await updateEquipment(id, {
+                    ...equipment,
+                    brand: result.brand,
+                    equipment_type: result.equipment_type,
+                    name: result.name || equipment.name,
+                    is_mikrotik: result.brand === 'mikrotik'
+                });
+
+                successCount++;
+            } catch (error) {
+                console.error(`Erro ao detectar ${equipment.ip}:`, error);
+                errorCount++;
+            }
+        }
+
+        setIsDetecting(false);
+        setSelectedIds([]); // Clear selection
+        load(); // Reload data
+
+        alert(`✅ Detecção concluída!\n\nSucesso: ${successCount}\nErros: ${errorCount}`);
+    };
+
     const [templateName, setTemplateName] = useState('');
 
     // --- Actions ---
@@ -677,6 +726,14 @@ export function Equipments() {
                 <div className="flex gap-2">
                     <button onClick={() => setShowScanner(true)} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
                         <MonitorPlay size={18} /> Scan
+                    </button>
+                    <button
+                        onClick={handleBatchAutoDetect}
+                        disabled={selectedIds.length === 0 || isDetecting}
+                        className="flex gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Auto-detectar ${selectedIds.length} equipamento(s)`}
+                    >
+                        <Search size={18} /> Auto-Detectar Marca e Tipo {selectedIds.length > 0 && `(${selectedIds.length})`}
                     </button>
                     <button onClick={handleExportCSV} className="flex gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
                         <Download size={18} /> CSV
