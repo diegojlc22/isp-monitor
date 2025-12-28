@@ -19,6 +19,31 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 
 ---
 
+
+## 🚀 Novidades da Versão 3.4 (28/12/2025)
+
+### 📡 1. Monitoramento Wireless Multi-Fabricante
+Sistema completo de monitoramento SNMP para equipamentos wireless:
+- **Ubiquiti**: Suporte total (M5, AC, AirFiber) com detecção automática de tabelas dinâmicas.
+- **Mikrotik**: Station e AP mode com CCQ e contagem de clientes.
+- **Mimosa**: C5c e similares com SNR como métrica de qualidade.
+- **Intelbras**: WOM series (compatível com OIDs Ubiquiti).
+- **Métricas**: Signal Strength (dBm), CCQ/SNR, Clientes Conectados.
+
+### 🔍 2. Auto-Detecção Inteligente
+Cadastro de equipamentos agora é automático:
+- **Botão "Auto-Detectar"**: Identifica marca e tipo via SNMP.
+- **Detecção de Marca**: Analisa sysDescr, sysObjectID e testa OIDs específicos.
+- **Detecção de Tipo**: Diferencia automaticamente Station (Cliente) vs Transmitter (AP).
+- **Priorização Intelbras**: Identifica corretamente Intelbras WOM (não confunde com Ubiquiti).
+- **Endpoint API**: `POST /api/equipments/detect-brand`
+
+### 🎨 3. Interface Aprimorada
+- **Modal Wireless**: Gráficos em tempo real de Sinal e Clientes Conectados.
+- **Formulário Inteligente**: Campos de marca e tipo preenchidos automaticamente.
+- **Opções Expandidas**: Suporte a 5 fabricantes (Generic, Ubiquiti, Mikrotik, Mimosa, Intelbras).
+- **Loading States**: Feedback visual durante detecção SNMP.
+
 ## 🚀 Novidades da Versão 3.3 (27/12/2025)
 
 ### 📱 1. Mobile & Expo Offline Mode
@@ -161,8 +186,10 @@ O sistema tenta se corrigir sozinho. Se falhar 3x, verifique a aba **LOGS** no L
 - ✅ Gateway WhatsApp: **Online**
 - ✅ App Mobile: **Online**
 
-**Última atualização:** 27/12/2025
-**Build:** v3.3.0 (Stability Edition)
+
+**Última atualização:** 28/12/2025
+**Build:** v3.4.0 (Wireless Multi-Vendor Edition)
+
 
 ---
 
