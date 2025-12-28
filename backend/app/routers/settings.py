@@ -356,13 +356,21 @@ async def test_whatsapp_message_route(
         alert_msg = "🔔 *[WhatsApp]* Teste de Notificação: *Sucesso!* 🚀"
         
         url = "http://127.0.0.1:3001/send"
+        headers = {"x-api-key": settings.msg_secret}
+        payload = {"number": target_value, "message": alert_msg}
+        
         print(f"[DEBUG SETTINGS] Enviando POST para {url}...")
+        print(f"[DEBUG SETTINGS] Headers: {headers}")
+        print(f"[DEBUG SETTINGS] Payload: {payload}")
         
         async with aiohttp.ClientSession() as session:
             try:
                 # Timeout curto pois é localhost
-                async with session.post(url, json={"number": target_value, "message": alert_msg}, timeout=10) as resp:
+                async with session.post(url, json=payload, headers=headers, timeout=10) as resp:
                     print(f"[DEBUG SETTINGS] Resposta Gateway: Status {resp.status}")
+                    response_text = await resp.text()
+                    print(f"[DEBUG SETTINGS] Resposta Corpo: {response_text}")
+                    
                     if resp.status == 200:
                         return {"message": f"Mensagem enviada para {target_value}"}
                     elif resp.status == 404:
@@ -370,11 +378,11 @@ async def test_whatsapp_message_route(
                     elif resp.status == 503:
                          return {"error": "WhatsApp sincronizando/carregando. Tente em breve."}
                     else:
-                        text = await resp.text()
-                        print(f"[DEBUG SETTINGS] Erro Corpo: {text}")
-                        return {"error": f"Erro Gateway: {text}"}
+                        return {"error": f"Erro Gateway ({resp.status}): {response_text}"}
             except Exception as conn_err:
                  print(f"[DEBUG SETTINGS] Exception Conexão: {conn_err}")
+                 import traceback
+                 traceback.print_exc()
                  return {"error": f"Falha ao conectar no Gateway Zap (Porta 3001): {conn_err}"}
 
     except Exception as e:
@@ -396,10 +404,14 @@ async def test_telegram_backup():
 async def get_whatsapp_groups(db: AsyncSession = Depends(get_db)):
     try:
         import aiohttp
+        from backend.app.config import settings
+        
         url = "http://127.0.0.1:3001/groups"
+        headers = {"x-api-key": settings.msg_secret}
+        
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get(url, timeout=5) as resp:
+                async with session.get(url, headers=headers, timeout=5) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         # Sort by name

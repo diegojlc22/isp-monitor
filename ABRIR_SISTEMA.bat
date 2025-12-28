@@ -1,3 +1,4 @@
 @echo off
-start pyw launcher.pyw
+:: Força o uso de pythonw (GUI mode) para evitar console
+start pythonw launcher.pyw
 exit
