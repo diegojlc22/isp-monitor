@@ -60,6 +60,12 @@ Cadastro de equipamentos agora é automático:
 - **Opções Expandidas**: Suporte a 5 fabricantes (Generic, Ubiquiti, Mikrotik, Mimosa, Intelbras).
 - **Loading States**: Feedback visual durante detecção SNMP.
 
+## ⚡ Versão 3.8 (Ultra Performance & Fixes) - 28/12/2025
+*   **Turbo SNMP V2**: Refatoração completa do serviço de monitoramento de tráfego. Agora utiliza **Bulk Updates** no banco de dados, reduzindo o uso de CPU/Disk IO drasticamente (de N transações para 1 por ciclo).
+*   **Fix Frontend Hang**: Correção definitiva do travamento ao iniciar o Frontend no Windows (usando chamada direta ao Node/Vite).
+*   **WhatsApp Repair**: Solução para o erro "Execution Context Destroyed" e atualização do motor do WhatsApp Web para versão mais recente.
+*   **Boot Instantâneo**: Otimização do Launcher (`ABRIR_SISTEMA.bat`) para iniciar em milissegundos.
+
 ## 🚀 Novidades da Versão 3.3 (27/12/2025)
 
 ### 📱 1. Mobile & Expo Offline Mode

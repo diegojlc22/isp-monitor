@@ -134,68 +134,72 @@ async def snmp_monitor_job():
             tasks = [fetch_device_data(eq) for eq in equipments_data]
             results = await asyncio.gather(*tasks)
             
-            # 3. Batch Update DB
+            # 3. Batch Update DB (Optimized)
+            from sqlalchemy import update, insert
+            
             async with AsyncSessionLocal() as session:
+                updates_buffer = []      # List of dicts for Table Equipment
+                traffic_logs_buffer = [] # List of dicts for Table TrafficLog
+                
                 updates_count = 0
+                
                 for res in results:
                     if not res or not res["updates"]: continue
                     
-                    # Re-fetch object to attach to this session
-                    # Or use update statement. Using get is easier for mix of fields.
-                    eq_obj = await session.get(Equipment, res["id"])
-                    if not eq_obj: continue
+                    # Prepare Equipment Update
+                    upd_data = res["updates"]
+                    upd_data["id"] = res["id"] # PK for bind
+                    updates_buffer.append(upd_data)
                     
-                    # Apply updates
-                    for k, v in res["updates"].items():
-                        setattr(eq_obj, k, v)
-                    
-                    # ✅ SPRINT 3: Smart Logging para Traffic
-                    # Salva apenas se houver variação significativa
-                    should_log_traffic = False
+                    # ✅ SPRINT 3: Smart Logging para Traffic (Memory based, no DB read needed)
                     if res["log"]:
                         in_mbps, out_mbps = res["log"]
                         eq_id = res["id"]
                         current_time = time.time()
                         
-                        # Verificar se deve logar
+                        should_log_traffic = False
+                        
+                        # Verificar se deve logar (Lógica puramente em memória)
                         if eq_id not in snmp_last_logged:
-                            # Primeira vez - sempre loga
                             should_log_traffic = True
                         else:
                             last_log = snmp_last_logged[eq_id]
                             time_since_last = current_time - last_log.get("time", 0)
                             
-                            # Logar se:
-                            # 1. Passou 10 minutos (600s)
+                            # 1. Periodo de 10 min
                             if time_since_last > 600:
                                 should_log_traffic = True
-                            # 2. Variação > 10% no tráfego
+                            # 2. Variação > 10%
                             elif last_log.get("in") is not None:
                                 in_variation = abs(in_mbps - last_log["in"]) / max(last_log["in"], 0.1)
                                 out_variation = abs(out_mbps - last_log["out"]) / max(last_log["out"], 0.1)
-                                if in_variation > 0.1 or out_variation > 0.1:  # >10% variação
+                                if in_variation > 0.1 or out_variation > 0.1:
                                     should_log_traffic = True
                         
-                        # Salvar log se necessário
                         if should_log_traffic:
-                            session.add(TrafficLog(
-                                equipment_id=eq_id,
-                                in_mbps=in_mbps,
-                                out_mbps=out_mbps
-                            ))
+                            traffic_logs_buffer.append({
+                                "equipment_id": eq_id,
+                                "in_mbps": in_mbps,
+                                "out_mbps": out_mbps,
+                                "timestamp": datetime.now(timezone.utc)
+                            })
                             # Atualizar tracking
                             snmp_last_logged[eq_id] = {
                                 "in": in_mbps,
                                 "out": out_mbps,
                                 "time": current_time
                             }
-                    
-                    session.add(eq_obj)
-                    updates_count += 1
                 
-                if updates_count > 0:
-                    await session.commit()
-                    # print(f"[SNMP] Updated {updates_count} devices in parallel.")
+                # Execute Batch Operations
+                if updates_buffer:
+                    await session.execute(update(Equipment), updates_buffer)
+                    updates_count = len(updates_buffer)
+                    
+                if traffic_logs_buffer:
+                    await session.execute(insert(TrafficLog), traffic_logs_buffer)
+                
+                await session.commit()
+                # print(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
 
         except Exception as e:
             print(f"Errors in SNMP loop: {e}")
