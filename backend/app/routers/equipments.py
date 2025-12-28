@@ -8,6 +8,7 @@ import io
 import csv
 import json
 import ipaddress
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from backend.app.database import get_db
@@ -103,15 +104,37 @@ async def detect_equipment_brand(request: DetectBrandRequest):
     Returns detected brand (ubiquiti, mikrotik, mimosa, intelbras, generic),
     type (station, transmitter, other), and name (from sysName)
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
-        # Detect brand first
+        logger.info(f"Iniciando detecção para IP: {request.ip}")
+        # 1. Detect brand first (fastest and gives context for others)
         brand = await detect_brand(request.ip, request.snmp_community, request.snmp_port)
+        logger.info(f"Marca detectada para {request.ip}: {brand}")
+
+        # If brand is generic, the device is likely offline or has no SNMP
+        # We can still try name, but it's likely to fail/timeout too.
+        # Running name and type concurrently:
         
-        # Then detect type based on brand
-        equipment_type = await detect_equipment_type(request.ip, brand, request.snmp_community, request.snmp_port)
+        async def get_type():
+            try:
+                return await detect_equipment_type(request.ip, brand, request.snmp_community, request.snmp_port)
+            except Exception as e:
+                logger.error(f"Erro ao detectar tipo para {request.ip}: {e}")
+                return 'other'
+
+        async def get_name():
+            try:
+                return await detect_equipment_name(request.ip, request.snmp_community, request.snmp_port)
+            except Exception as e:
+                logger.error(f"Erro ao detectar nome para {request.ip}: {e}")
+                return None
+
+        # Run type and name concurrently to save time
+        equipment_type, name = await asyncio.gather(get_type(), get_name())
         
-        # Detect equipment name
-        name = await detect_equipment_name(request.ip, request.snmp_community, request.snmp_port)
+        logger.info(f"Detecção concluída para {request.ip}: {brand}, {equipment_type}, {name}")
         
         return {
             "brand": brand,
@@ -120,6 +143,7 @@ async def detect_equipment_brand(request: DetectBrandRequest):
             "ip": request.ip
         }
     except Exception as e:
+        logger.error(f"Erro fatal na detecção para {request.ip}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro na detecção: {str(e)}")
 
 

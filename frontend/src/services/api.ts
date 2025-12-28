@@ -82,7 +82,7 @@ export const importEquipmentsCSV = (file: File) => {
 
 // Auto-detect equipment brand and type
 export const detectEquipmentBrand = (ip: string, snmp_community: string = 'public', snmp_port: number = 161) =>
-    api.post('/equipments/detect-brand', { ip, snmp_community, snmp_port }).then(res => res.data);
+    api.post('/equipments/detect-brand', { ip, snmp_community, snmp_port }, { timeout: 60000 }).then(res => res.data);
 
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
 

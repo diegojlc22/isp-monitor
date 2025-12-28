@@ -31,12 +31,17 @@ const INITIAL_FORM_STATE: FormData = {
 };
 
 // --- Custom Hooks ---
-function usePoll(callback: () => void, intervalMs: number) {
+function usePoll(callback: () => Promise<void> | void, intervalMs: number) {
     useEffect(() => {
-        callback();
-        const interval = setInterval(() => {
+        // Initial call
+        const initial = async () => {
+            try { await callback(); } catch (e) { /* Silent */ }
+        };
+        initial();
+
+        const interval = setInterval(async () => {
             if (!document.hidden) {
-                callback();
+                try { await callback(); } catch (e) { /* Silent */ }
             }
         }, intervalMs);
         return () => clearInterval(interval);
@@ -462,40 +467,54 @@ export function Equipments() {
         let successCount = 0;
         let errorCount = 0;
 
-        for (let i = 0; i < selectedIds.length; i++) {
-            const id = selectedIds[i];
-            const equipment = equipments.find(eq => eq.id === id);
-            if (!equipment) continue;
+        // Process in small batches to avoid saturating the backend (Concurrency: 3)
+        const CONCURRENCY = 3;
+        const taskQueue = [...selectedIds];
+        let processed = 0;
 
-            try {
-                const result = await detectEquipmentBrand(
-                    equipment.ip,
-                    equipment.snmp_community || networkDefaults.snmp_community || 'public',
-                    equipment.snmp_port || networkDefaults.snmp_port || 161
-                );
+        const runWorker = async () => {
+            while (taskQueue.length > 0) {
+                const id = taskQueue.shift();
+                if (!id) break;
 
-                // Update equipment with detected info
-                await updateEquipment(id, {
-                    ...equipment,
-                    brand: result.brand,
-                    equipment_type: result.equipment_type,
-                    name: result.name || equipment.name,
-                    is_mikrotik: result.brand === 'mikrotik'
-                });
+                const equipment = equipments.find(eq => eq.id === id);
+                if (!equipment) continue;
 
-                successCount++;
-            } catch (error) {
-                console.error(`Erro ao detectar ${equipment.ip}:`, error);
-                errorCount++;
+                try {
+                    const result = await detectEquipmentBrand(
+                        equipment.ip,
+                        equipment.snmp_community || networkDefaults.snmp_community || 'public',
+                        equipment.snmp_port || networkDefaults.snmp_port || 161
+                    );
+
+                    // Update equipment with detected info
+                    await updateEquipment(id, {
+                        ...equipment,
+                        brand: result.brand,
+                        equipment_type: result.equipment_type,
+                        name: result.name || equipment.name,
+                        is_mikrotik: result.brand === 'mikrotik'
+                    });
+
+                    successCount++;
+                } catch (error) {
+                    console.error(`Erro ao detectar ${equipment.ip}:`, error);
+                    errorCount++;
+                } finally {
+                    processed++;
+                    setDetectionProgress(Math.round((processed / selectedIds.length) * 100));
+                }
             }
+        };
 
-            setDetectionProgress(Math.round(((i + 1) / selectedIds.length) * 100));
-        }
+        // Start workers
+        const workers = Array(Math.min(CONCURRENCY, selectedIds.length)).fill(null).map(() => runWorker());
+        await Promise.all(workers);
 
         setIsDetecting(false);
         setDetectionProgress(0);
-        setSelectedIds([]); // Clear selection
-        load(); // Reload data
+        setSelectedIds([]);
+        load(); // Reload data after all done
 
         alert(`✅ Detecção concluída!\n\nSucesso: ${successCount}\nErros: ${errorCount}`);
     };
