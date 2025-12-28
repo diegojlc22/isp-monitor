@@ -277,6 +277,9 @@ export function Equipments() {
     const [ipNames, setIpNames] = useState<{ [key: string]: string }>({});
     const [scanRange, setScanRange] = useState('');
 
+    // Detection Progress
+    const [detectionProgress, setDetectionProgress] = useState(0);
+
     // Configurações do scanner
 
     // Batch Selection State
@@ -455,10 +458,12 @@ export function Equipments() {
         }
 
         setIsDetecting(true);
+        setDetectionProgress(0);
         let successCount = 0;
         let errorCount = 0;
 
-        for (const id of selectedIds) {
+        for (let i = 0; i < selectedIds.length; i++) {
+            const id = selectedIds[i];
             const equipment = equipments.find(eq => eq.id === id);
             if (!equipment) continue;
 
@@ -483,9 +488,12 @@ export function Equipments() {
                 console.error(`Erro ao detectar ${equipment.ip}:`, error);
                 errorCount++;
             }
+
+            setDetectionProgress(Math.round(((i + 1) / selectedIds.length) * 100));
         }
 
         setIsDetecting(false);
+        setDetectionProgress(0);
         setSelectedIds([]); // Clear selection
         load(); // Reload data
 
@@ -725,10 +733,19 @@ export function Equipments() {
                     <button
                         onClick={handleBatchAutoDetect}
                         disabled={selectedIds.length === 0 || isDetecting}
-                        className="flex gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="relative overflow-hidden flex gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Auto-detectar ${selectedIds.length} equipamento(s)`}
                     >
-                        <Search size={18} /> Auto-Detectar Marca e Tipo {selectedIds.length > 0 && `(${selectedIds.length})`}
+                        {isDetecting && (
+                            <div
+                                className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300"
+                                style={{ width: `${detectionProgress}%` }}
+                            />
+                        )}
+                        <span className="relative flex items-center gap-2">
+                            <Search size={18} />
+                            {isDetecting ? `Detectando... ${detectionProgress}%` : `Auto-Detectar Marca e Tipo ${selectedIds.length > 0 ? `(${selectedIds.length})` : ''}`}
+                        </span>
                     </button>
                     <button
                         onClick={handleBatchReboot}
