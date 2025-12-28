@@ -1,5 +1,35 @@
 from pysnmp.hlapi.asyncio import *
 
+async def detect_equipment_name(ip, community='public', port=161):
+    """
+    Detects equipment name via SNMP sysName.
+    Returns the equipment name or None if detection fails.
+    OID: 1.3.6.1.2.1.1.5.0 (sysName)
+    """
+    try:
+        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
+            SnmpEngine(),
+            CommunityData(community, mpModel=0),  # SNMPv1
+            UdpTransportTarget((ip, port), timeout=2.0, retries=1),
+            ContextData(),
+            ObjectType(ObjectIdentity('1.3.6.1.2.1.1.5.0'))  # sysName
+        )
+        
+        if errorIndication or errorStatus:
+            return None
+            
+        name = str(varBinds[0][1]).strip()
+        
+        # Return None if name is empty or default values
+        if not name or name.lower() in ['', 'unknown', 'localhost', 'default']:
+            return None
+            
+        return name
+        
+    except Exception:
+        return None
+
+
 async def detect_brand(ip, community, port=161):
     """
     Auto-detects equipment brand via SNMP.

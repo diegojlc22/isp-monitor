@@ -460,10 +460,12 @@ export function Equipments() {
             setFormData({
                 ...formData,
                 brand: result.brand,
-                equipment_type: result.equipment_type
+                equipment_type: result.equipment_type,
+                name: result.name || formData.name  // Use detected name if available, otherwise keep current
             });
 
-            alert(`Detectado: \n✅ Marca: ${result.brand.toUpperCase()} \n✅ Tipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'} `);
+            const detectedName = result.name ? `\n✅ Nome: ${result.name}` : '';
+            alert(`Detectado: \n✅ Marca: ${result.brand.toUpperCase()} \n✅ Tipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'} ${detectedName}`);
         } catch (error: any) {
             alert(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
         } finally {

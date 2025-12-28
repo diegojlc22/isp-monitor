@@ -16,7 +16,7 @@ from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate, E
 from backend.app.services.cache import cache
 from backend.app.services.ssh_commander import reboot_device
 from backend.app.services.pinger_fast import scan_network
-from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type
+from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
@@ -99,9 +99,9 @@ class DetectBrandRequest(BaseModel):
 @router.post("/detect-brand")
 async def detect_equipment_brand(request: DetectBrandRequest):
     """
-    Auto-detects equipment brand and type via SNMP.
-    Returns detected brand (ubiquiti, mikrotik, mimosa, intelbras, generic)
-    and type (station, transmitter, other)
+    Auto-detects equipment brand, type, and name via SNMP.
+    Returns detected brand (ubiquiti, mikrotik, mimosa, intelbras, generic),
+    type (station, transmitter, other), and name (from sysName)
     """
     try:
         # Detect brand first
@@ -110,9 +110,13 @@ async def detect_equipment_brand(request: DetectBrandRequest):
         # Then detect type based on brand
         equipment_type = await detect_equipment_type(request.ip, brand, request.snmp_community, request.snmp_port)
         
+        # Detect equipment name
+        name = await detect_equipment_name(request.ip, request.snmp_community, request.snmp_port)
+        
         return {
             "brand": brand,
             "equipment_type": equipment_type,
+            "name": name,
             "ip": request.ip
         }
     except Exception as e:
