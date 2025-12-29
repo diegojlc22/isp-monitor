@@ -195,51 +195,104 @@ class ModernLauncher:
         self.info_label.pack(side=tk.BOTTOM, pady=5)
 
     def build_home_tab(self, parent):
-        """Aba Principal: Controles do Sistema"""
+        """Aba Principal: Design Otimizado (Grid)"""
         force_frame = tk.Frame(parent, bg=COLORS['bg'])
-        force_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
+        force_frame.pack(expand=True, fill=tk.BOTH, padx=25, pady=25)
 
-        # --- STATUS DO FRONTEND ---
-        self.frontend_frame = tk.Frame(force_frame, bg=COLORS['card'], padx=10, pady=5)
-        self.frontend_frame.pack(fill=tk.X, pady=(0, 15))
+        # 1. Grid Configuration
+        force_frame.columnconfigure(0, weight=1)
+        force_frame.columnconfigure(1, weight=1)
+
+        # --- STATUS HEADER ---
+        self.frontend_frame = tk.Frame(force_frame, bg=COLORS['card'], padx=10, pady=8)
+        self.frontend_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 20))
         
-        lbl_fe = tk.Label(self.frontend_frame, text="Interface Web:", font=("Segoe UI", 10, "bold"), bg=COLORS['card'], fg=COLORS['text'])
+        lbl_fe = tk.Label(self.frontend_frame, text="Status Web:", font=("Segoe UI", 9, "bold"), bg=COLORS['card'], fg=COLORS['text'])
         lbl_fe.pack(side=tk.LEFT)
         
         self.btn_update_front = tk.Button(self.frontend_frame, text="✔ Sistema Atualizado", 
                                           command=self.run_frontend_build_manual,
-                                          bg=COLORS['card'], fg=COLORS['success'], relief="flat", state="disabled", font=("Segoe UI", 9))
+                                          bg=COLORS['card'], fg=COLORS['success'], relief="flat", state="disabled", font=("Segoe UI", 8))
         self.btn_update_front.pack(side=tk.RIGHT)
 
-        # --- CONTROLES GERAIS ---
-        tk.Label(force_frame, text="Controle do Servidor", font=("Segoe UI", 12, "bold"), bg=COLORS['bg'], fg=COLORS['text']).pack(pady=(0,10))
-
-        self.btn_start = self.create_button(force_frame, "▶ INICIAR SERVIDOR (Prod)", self.start_system, bg=COLORS['success'], fg='#1e1e2e', height=2, font=("Segoe UI", 11, "bold"))
-        self.btn_start.pack(fill=tk.X, pady=5)
+        # --- BOTÃO PRINCIPAL (START) ---
+        self.btn_start = self.create_button(force_frame, "▶  INICIAR SISTEMA", self.start_system, 
+                                          bg=COLORS['success'], fg='#1e1e2e', height=2, font=("Segoe UI", 13, "bold"))
+        self.btn_start.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 5))
         
-        # Botão Modo DEV
-        self.btn_dev_mode = self.create_button(force_frame, "⚡ MODO EDIÇÃO (Hot Reload)", self.start_dev_mode, bg='#9b59b6', fg='#ffffff', height=1, font=("Segoe UI", 10))
-        self.btn_dev_mode.pack(fill=tk.X, pady=5)
+        self.btn_stop = self.create_button(force_frame, "⏹  PARAR SISTEMA", self.stop_system, 
+                                         bg='#45475a', fg=COLORS['danger'], height=1)
+        self.btn_stop.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 20))
 
-        self.btn_stop = self.create_button(force_frame, "⏹ PARAR SISTEMA", self.stop_system, bg='#45475a', fg=COLORS['danger'], height=2)
-        self.btn_stop.pack(fill=tk.X, pady=10)
-
-        self.btn_restart = self.create_button(force_frame, "🔄 REINICIAR TUDO", self.restart_system, bg=COLORS['warning'], fg='#1e1e2e')
-        self.btn_restart.pack(fill=tk.X, pady=10)
-
-        self.btn_update = self.create_button(force_frame, "⬇ ATUALIZAR SISTEMA", self.update_system, bg='#00a8ff', fg='#ffffff')
-        self.btn_update.pack(fill=tk.X, pady=10)
-
-        tk.Frame(force_frame, bg=COLORS['bg'], height=10).pack() # Spacer
-
-        self.btn_kill = self.create_button(force_frame, "💀 FORCE KILL (Emergência)", self.force_kill, bg='#2a2a2a', fg=COLORS['danger'])
-        self.btn_kill.pack(fill=tk.X, pady=5)
+        # --- AÇÕES SECUNDÁRIAS (GRID) ---
         
-        btn_dash = self.create_button(force_frame, "🌐 Abrir Navegador (Produção)", self.open_dashboard, bg=COLORS['primary'], fg='#ffffff')
-        btn_dash.pack(fill=tk.X, pady=10)
+        # Linha 1: Navegador e Atualizar
+        btn_dash = self.create_button(force_frame, "🌐 Abrir Site (Produção)", self.open_dashboard, bg=COLORS['primary'], fg='white')
+        btn_dash.grid(row=3, column=0, sticky="ew", padx=(0, 5), pady=5)
+        
+        self.btn_update = self.create_button(force_frame, "⬇  Atualizar", self.update_system, bg='#00a8ff', fg='white')
+        self.btn_update.grid(row=3, column=1, sticky="ew", padx=(5, 0), pady=5)
+
+        # Linha 2: Mobile e Edição
+        btn_mobile = self.create_button(force_frame, "📱 Mobile (Expo)", self.start_expo, bg='#8e44ad', fg='white')
+        btn_mobile.grid(row=4, column=0, sticky="ew", padx=(0, 5), pady=5)
+
+        self.btn_dev_mode = self.create_button(force_frame, "⚡ Modo Edição", self.start_dev_mode, bg='#f39c12', fg='#1e1e2e')
+        self.btn_dev_mode.grid(row=4, column=1, sticky="ew", padx=(5, 0), pady=5)
+
+        # Linha 3: Reiniciar (Full)
+        self.btn_restart = self.create_button(force_frame, "🔄  Reiniciar Serviços", self.restart_system, bg=COLORS['warning'], fg='#1e1e2e')
+        self.btn_restart.grid(row=5, column=0, columnspan=2, sticky="ew", pady=15)
+        
+        # --- RODAPÉ DISCRETO ---
+        self.btn_kill = self.create_button(force_frame, "💀 Force Kill (Emergência)", self.force_kill, bg=COLORS['bg'], fg='#555')
+        self.btn_kill.config(relief="flat", font=("Segoe UI", 8))
+        self.btn_kill.grid(row=6, column=0, columnspan=2, sticky="ew", pady=0)
         
         # Start background check
         threading.Thread(target=self.check_frontend_updates_async, daemon=True).start()
+
+    def start_expo(self):
+        """Inicia servidor Expo para o APP Mobile"""
+        if not os.path.exists("mobile"):
+            messagebox.showerror("Erro", "Diretório 'mobile' não encontrado.")
+            return
+
+        self.info_label.config(text="Iniciando Expo (Mobile)... Confira o Terminal.")
+        
+        # Comando para iniciar Expo (OFFLINE para evitar login prompt)
+        # --offline: Pula tentativa de login na nuvem da Expo
+        # --tunnel: opcional, mas offline é melhor para LAN
+        cmd = "npx expo start --offline --go"
+        
+        # Abrir em nova janela para permitir interação (QR Code) se possível, 
+        # mas como queremos logs no launcher, usamos subprocess e capturamos.
+        # Porém, o QR Code é ANSI grafismo, pode bugar no Tkinter.
+        # Melhor: disparar em janela CMD separada para o usuário ver o QR Code.
+        
+        if messagebox.askyesno("Mobile", "Deseja abrir o terminal do Expo para escanear o QR Code?"):
+           subprocess.Popen(f"start cmd /k {cmd}", shell=True, cwd="mobile")
+        else:
+           # Roda em background e mostra log (modo antigo)
+           self.status_badge.config(text=" ● EXPO STARTING ", fg=COLORS['warning'])
+           threading.Thread(target=self._run_expo_bg, daemon=True).start()
+
+    def _run_expo_bg(self):
+        try:
+            # Força NO-INTERACTIVE mas com OFFLINE deve ir
+            process = subprocess.Popen("npx expo start --offline", shell=True, cwd="mobile", 
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                                     creationflags=0x08000000, universal_newlines=True)
+            self.child_processes.append(process)
+            
+            for line in process.stdout:
+                if "QR Code" in line or "exp://" in line:
+                     self.info_label.config(text="Expo rodando! Veja Logs.")
+                print(line.strip()) # Vai pro log
+                
+        except Exception as e:
+            print(f"Erro Expo: {e}") 
+
 
     def check_frontend_updates_async(self):
         """Verifica atualizações em background sem travar UI"""
