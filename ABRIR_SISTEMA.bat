@@ -13,13 +13,27 @@ echo.
 echo  [ISP Monitor] Inicializando...
 echo.
 
-:: 2. Iniciar Banco de Dados (PostgreSQL)
+:: 2. Auto-Repair (Dependencias Frontend)
+if exist "frontend\package.json" (
+    if not exist "frontend\node_modules" (
+        echo.
+        echo  [ISP Monitor] Instalando dependencias do sistema...
+        echo  (Isso acontece apenas na primeira vez)
+        echo.
+        cd frontend
+        call npm install
+        cd ..
+        echo.
+    )
+)
+
+:: 3. Iniciar Banco de Dados (PostgreSQL)
 powershell -ExecutionPolicy Bypass -File "start_postgres.ps1"
 
-:: 3. Verificar Schema Rapidinho (Silencioso)
+:: 4. Verificar Schema Rapidinho (Silencioso)
 powershell -Command "$env:PGPASSWORD='110812'; & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -f 'scripts\schema_check.sql' >$null 2>&1"
 
-:: 4. ABRIR O SISTEMA (Finalmente)
+:: 5. ABRIR O SISTEMA (Finalmente)
 echo.
 echo  [OK] Abrindo Launcher...
 start "" pythonw launcher.pyw
