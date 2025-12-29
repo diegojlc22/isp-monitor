@@ -29,6 +29,12 @@ Centralizar todas as configurações de notificações em uma única interface i
 - ✅ **PowerShell Healer**: Script `start_postgres.ps1` que inicia o serviço do banco e aguarda a porta estar ativa.
 - ✅ **Dependency Sync**: O Launcher verifica se as bibliotecas (ex: `pysnmp`) estão acessíveis no contexto de Administrador.
 
+#### 5. **Project Cleanup & Final Polish**
+- ✅ **Extermínio de Arquivos de Teste**: Removidos mais de 25 arquivos de teste e utilitários de debug espalhados pelo projeto.
+- ✅ **Consolidação de Scripts**: Diretórios `archive`, `deprecated` e `captures` foram eliminados.
+- ✅ **Limpeza de Raiz**: Removidos arquivos `postgresql.conf.optimized`, `startup.log` e arquivos `dummy_fix` do backend.
+- ✅ **Production Ready**: O repositório agora contém apenas o código necessário para operação e manutenção essencial.
+
 ### 📦 Arquivos Modificados
 - `frontend/src/pages/Alerts.tsx`: Interface central de notificações.
 - `frontend/src/pages/Agent.tsx`: Remoção de configurações duplicadas.

@@ -53,6 +53,12 @@ A inicialização do sistema foi completamente reescrita para ser **100% invisí
 - **Boot Direto via Python**: O Launcher inicia o Banco de Dados e a API diretamente, sem invocar o Shell do Windows.
 - **Silent Firewall Check**: A verificação de firewall agora roda silenciosamente em background.
 
+### 🧹 6. Project Cleanup & Final Polish
+O projeto foi limpo de arquivos legados e temporários:
+- **Remoção de Testes**: Todos os scripts de teste (`test_*.py`) e históricos de debug foram removidos.
+- **Limpeza de Logs**: Logs antigos e arquivos `dummy` foram excluídos para garantir uma instalação limpa.
+- **Estrutura Enxuta**: Diretórios de backup de scripts (`archive`, `deprecated`) foram consolidados.
+
 
 ---
 
