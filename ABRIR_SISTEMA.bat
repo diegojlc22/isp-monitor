@@ -37,6 +37,20 @@ if %errorLevel% neq 0 (
     echo.
 )
 
+:: 2.2 Auto-Repair (Dependencias Mobile)
+if exist "mobile\package.json" (
+    if not exist "mobile\node_modules" (
+        echo.
+        echo  [ISP Monitor] Configurando modulo Mobile...
+        echo  (Isso pode demorar um pouco...)
+        echo.
+        cd mobile
+        call npm install
+        cd ..
+        echo.
+    )
+)
+
 :: 3. Iniciar Banco de Dados (PostgreSQL)
 powershell -ExecutionPolicy Bypass -File "start_postgres.ps1"
 
