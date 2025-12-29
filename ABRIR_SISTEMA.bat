@@ -8,7 +8,8 @@ cd /d "%~dp0"
 net session >nul 2>&1
 if %errorLevel% neq 0 (
     echo [ISP Monitor] Solicitando Administrador...
-    powershell -Command "Start-Process cmd -ArgumentList '/c cd /d %~dp0 && ABRIR_SISTEMA.bat' -Verb RunAs"
+    :: Usa caminho completo (%~f0) e aspas para garantir que funcione mesmo com espaços
+    powershell -Command "Start-Process cmd -ArgumentList '/ccall,^'""%~f0""^'' -Verb RunAs"
     exit
 )
 
@@ -69,11 +70,8 @@ cd /d "%~dp0"
 :: Tenta encontrar pythonw (modo silencioso)
 where pythonw >nul 2>&1
 if %errorLevel% equ 0 (
-    echo [INFO] Iniciando em modo silencioso (pythonw)...
     start "" pythonw "%~dp0launcher.pyw"
 ) else (
-    echo [AVISO] pythonw.exe nao encontrado no PATH.
-    echo [INFO] Tentando iniciar com python padrao...
     start "" python "%~dp0launcher.pyw"
 )
 
