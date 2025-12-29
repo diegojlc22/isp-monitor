@@ -1,262 +1,165 @@
-
-import { useState, useEffect, useRef } from 'react';
-import { startExpo, stopExpo, getExpoStatus, startNgrok, stopNgrok, getNgrokStatus } from '../services/api';
-import { Smartphone, Play, Square, RefreshCw, Terminal, AlertTriangle, Globe } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Smartphone, RefreshCw, Power, Terminal } from 'lucide-react';
 import QRCode from 'react-qr-code';
+import { getMobileStatus, startMobile, stopMobile } from '../services/api';
+import toast from 'react-hot-toast';
 
 export function MobileApp() {
-    const [status, setStatus] = useState<{ running: boolean, qr: string | null, logs: string[] }>({
-        running: false,
-        qr: null,
-        logs: []
-    });
-
-    // Ngrok State
-    const [ngrokStatus, setNgrokStatus] = useState<{ running: boolean, url: string | null }>({
-        running: false,
-        url: null
-    });
-
+    const [status, setStatus] = useState({ is_running: false, url: null as string | null, logs: [] as string[] });
     const [loading, setLoading] = useState(false);
-    const [ngrokLoading, setNgrokLoading] = useState(false);
-    const [error, setError] = useState('');
     const logsEndRef = useRef<HTMLDivElement>(null);
 
-    const fetchStatus = async () => {
-        try {
-            const data = await getExpoStatus();
-            setStatus(data);
-
-            const ngrokData = await getNgrokStatus();
-            setNgrokStatus(ngrokData);
-        } catch (e) {
-            console.error(e);
-        }
+    const refreshStatus = () => {
+        getMobileStatus().then(setStatus).catch(console.error);
     };
 
     useEffect(() => {
-        fetchStatus();
-        const interval = setInterval(fetchStatus, 3000); // Poll status every 3s
+        refreshStatus();
+        const interval = setInterval(refreshStatus, 2000);
         return () => clearInterval(interval);
     }, []);
 
+    // Auto-scroll logs
     useEffect(() => {
-        // Auto scroll logs
-        if (logsEndRef.current) {
-            logsEndRef.current.scrollIntoView({ behavior: "smooth" });
-        }
+        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [status.logs]);
 
     const handleStart = async () => {
         setLoading(true);
-        setError('');
         try {
-            const res = await startExpo();
-            if (res.error) setError(res.error);
-        } catch (e: any) {
-            setError('Erro ao iniciar Expo: ' + (e.response?.data?.detail || e.message));
+            await startMobile();
+            toast.success("Iniciando Módulo Mobile...");
+        } catch (error: any) {
+            toast.error("Erro ao iniciar: " + (error.response?.data?.detail || error.message));
         } finally {
             setLoading(false);
-            fetchStatus(); // Force update
+            refreshStatus();
         }
     };
 
     const handleStop = async () => {
+        if (!confirm("Isso vai desconectar o App Mobile. Continuar?")) return;
         setLoading(true);
         try {
-            await stopExpo();
-        } catch (e) {
-            console.error(e);
+            await stopMobile();
+            toast.success("Módulo Mobile Parado.");
+        } catch (error) {
+            toast.error("Erro ao parar.");
         } finally {
             setLoading(false);
-            fetchStatus();
+            refreshStatus();
         }
     };
-
-    // Ngrok Handlers
-    const handleStartNgrok = async () => {
-        setNgrokLoading(true);
-        try {
-            const res = await startNgrok();
-            if (res.error) setError('Ngrok Error: ' + res.error);
-        } catch (e: any) {
-            setError('Erro ao iniciar Ngrok: ' + e.message);
-        } finally {
-            setNgrokLoading(false);
-            fetchStatus();
-        }
-    };
-
-    const handleStopNgrok = async () => {
-        setNgrokLoading(true);
-        try {
-            await stopNgrok();
-        } catch (e: any) {
-            setError('Erro ao parar Ngrok: ' + e.message);
-        } finally {
-            setNgrokLoading(false);
-            fetchStatus();
-        }
-    };
-
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Smartphone className="w-8 h-8 text-purple-500" /> Configuração Mobile (Expo)
-                    </h1>
-                    <p className="text-slate-400">Gerencie o servidor de desenvolvimento e acesso externo.</p>
+        <div className="p-6 max-w-6xl mx-auto space-y-6">
+            <header className="flex justify-between items-center bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-purple-500/10 rounded-lg">
+                        <Smartphone size={32} className="text-purple-400" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-white">App Mobile</h1>
+                        <p className="text-slate-400">Controle o servidor do aplicativo móvel.</p>
+                    </div>
                 </div>
-            </div>
 
-            {error && (
-                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-center gap-3 text-red-200">
-                    <AlertTriangle className="flex-shrink-0" />
-                    <span>{error}</span>
+                <div className="flex items-center gap-4">
+                    <div className={`px-4 py-2 rounded-full font-bold flex items-center gap-2 ${status.is_running ? 'bg-green-500/20 text-green-400' : 'bg-slate-700/50 text-slate-400'}`}>
+                        <div className={`w-3 h-3 rounded-full ${status.is_running ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`} />
+                        {status.is_running ? 'ONLINE' : 'OFFLINE'}
+                    </div>
                 </div>
-            )}
+            </header>
 
-            {/* Main Server Control */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                        Servidor Expo (Metro Bundler)
-                        {status.running && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">Online</span>}
-                    </h3>
+            <div className="grid md:grid-cols-2 gap-6">
+                {/* Painel de Controle */}
+                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg space-y-6">
+                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <Power size={20} /> Painel de Controle
+                    </h2>
 
-                    <div className="flex gap-4">
-                        {status.running ? (
-                            <button
-                                onClick={handleStop}
-                                disabled={loading}
-                                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-red-900/20 disabled:opacity-50 text-sm"
-                            >
-                                {loading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Square size={16} fill="currentColor" />}
-                                Parar Expo
-                            </button>
-                        ) : (
+                    <div className="flex flex-col gap-4">
+                        {!status.is_running ? (
                             <button
                                 onClick={handleStart}
                                 disabled={loading}
-                                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 text-sm"
+                                className="w-full py-6 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-xl transition-all shadow-lg hover:shadow-purple-500/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {loading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Play size={16} fill="currentColor" />}
-                                Iniciar Expo
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* External Access (Ngrok) */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                            <Globe size={20} className="text-blue-400" /> Acesso Externo (Ngrok)
-                            {ngrokStatus.running && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">Online</span>}
-                        </h3>
-                        <p className="text-sm text-slate-400 mt-1">
-                            Cria um túnel seguro para acessar a API externamente (necessário para o App funcionar fora da rede local).
-                        </p>
-                    </div>
-
-                    <div className="flex gap-4">
-                        {ngrokStatus.running ? (
-                            <button
-                                onClick={handleStopNgrok}
-                                disabled={ngrokLoading}
-                                className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold transition-all disabled:opacity-50 text-sm"
-                            >
-                                {ngrokLoading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Square size={16} fill="currentColor" />}
-                                Desligar Túnel
+                                {loading ? <RefreshCw className="animate-spin" /> : <Power />}
+                                Iniciar Servidor Mobile
                             </button>
                         ) : (
                             <button
-                                onClick={handleStartNgrok}
-                                disabled={ngrokLoading}
-                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 text-sm"
+                                onClick={handleStop}
+                                disabled={loading}
+                                className="w-full py-6 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-xl transition-all shadow-lg hover:shadow-red-500/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {ngrokLoading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Globe size={16} />}
-                                Ligar Ngrok
+                                {loading ? <RefreshCw className="animate-spin" /> : <Power />}
+                                Parar Servidor
                             </button>
                         )}
-                    </div>
-                </div>
 
-                {ngrokStatus.running && ngrokStatus.url && (
-                    <div className="mt-4 p-3 bg-slate-950 border border-slate-700 rounded-lg flex items-center justify-between animate-in slide-in-from-top-2">
-                        <div className="flex items-center gap-3 overflow-hidden">
-                            <span className="text-xs font-bold text-slate-500 uppercase">URL Pública:</span>
-                            <code className="text-green-400 font-mono text-sm truncate">{ngrokStatus.url}</code>
+                        <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-sm text-slate-400 space-y-2">
+                            <p className="text-white font-medium">Instruções:</p>
+                            <ol className="list-decimal pl-4 space-y-1">
+                                <li>Instale o app <strong>Expo Go</strong> no seu celular (Android/iOS).</li>
+                                <li>Conecte o celular no <strong>mesmo Wi-Fi</strong> do servidor.</li>
+                                <li>Clique em Iniciar e escaneie o QR Code.</li>
+                            </ol>
                         </div>
-                        <button
-                            onClick={() => navigator.clipboard.writeText(ngrokStatus.url || '')}
-                            className="text-xs text-blue-400 hover:text-blue-300 font-medium px-2 py-1 rounded hover:bg-blue-400/10 transition-colors"
-                        >
-                            Copiar
-                        </button>
                     </div>
-                )}
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* QR Code Section */}
-                <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 flex flex-col items-center justify-center min-h-[400px]">
-                    <h3 className="text-lg font-semibold text-white mb-6">Conexão Expo Go</h3>
-
-                    {status.running ? (
-                        status.qr ? (
-                            <div className="flex flex-col items-center animate-in fade-in duration-500">
-                                <div className="p-4 bg-white rounded-xl mb-4">
-                                    <QRCode value={status.qr} size={200} />
+                    {/* QR Code Area */}
+                    <div className="mt-6 border-t border-slate-700 pt-6">
+                        {status.is_running && status.url ? (
+                            <div className="flex flex-col items-center justify-center bg-white p-8 rounded-xl shadow-inner animate-in fade-in zoom-in duration-300">
+                                <QRCode value={status.url} size={220} />
+                                <div className="mt-4 text-center">
+                                    <p className="text-slate-900 font-mono font-bold bg-slate-100 px-3 py-1 rounded border border-slate-200 text-sm select-all cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => { navigator.clipboard.writeText(status.url || ''); toast.success("Link copiado!") }}>
+                                        {status.url}
+                                    </p>
+                                    <p className="mt-2 text-slate-500 text-xs">Scan com Expo Go</p>
                                 </div>
-                                <code className="bg-slate-950 px-3 py-1 rounded text-sm font-mono text-purple-400 mb-2">
-                                    {status.qr}
-                                </code>
-                                <p className="text-slate-400 text-center max-w-xs">
-                                    Abra o app <strong>Expo Go</strong> no Android/iOS e escaneie este código.
-                                </p>
+                            </div>
+                        ) : status.is_running ? (
+                            <div className="flex flex-col items-center justify-center h-64 bg-slate-900/50 rounded-xl border border-slate-700 border-dashed animate-pulse">
+                                <RefreshCw className="animate-spin text-purple-400 mb-4" size={32} />
+                                <p className="text-purple-300">Iniciando Expo...</p>
+                                <p className="text-slate-500 text-sm mt-2">Aguardando geração do link...</p>
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center text-slate-500">
-                                <RefreshCw size={48} className="animate-spin mb-4 text-purple-500" />
-                                <p>Gerando QR Code...</p>
-                                <p className="text-xs mt-2">Aguardando output do Metro Bundler</p>
+                            <div className="flex flex-col items-center justify-center h-64 bg-slate-900/30 rounded-xl border border-slate-800 border-dashed">
+                                <Smartphone className="text-slate-700 mb-4" size={48} />
+                                <p className="text-slate-500">O servidor está desligado.</p>
                             </div>
-                        )
-                    ) : (
-                        <div className="text-center text-slate-500">
-                            <Smartphone size={64} className="mx-auto mb-4 opacity-20" />
-                            <p>Servidor parado.</p>
-                            <p className="text-sm">Inicie o servidor para ver o QR Code.</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
-                {/* Logs Section */}
-                <div className="bg-slate-900 rounded-xl border border-slate-800 flex flex-col overflow-hidden max-h-[500px]">
-                    <div className="p-3 bg-slate-950 border-b border-slate-800 flex items-center gap-2">
-                        <Terminal size={16} className="text-slate-400" />
-                        <span className="text-sm font-mono text-slate-300">Terminal Output (Metro)</span>
+                {/* Logs Terminal */}
+                <div className="bg-[#0c0c0c] p-0 rounded-xl border border-slate-800 shadow-lg flex flex-col h-[600px] overflow-hidden">
+                    <div className="bg-slate-900 p-3 border-b border-slate-800 flex justify-between items-center">
+                        <h2 className="text-sm font-semibold text-slate-400 flex items-center gap-2">
+                            <Terminal size={16} /> Terminal Logs
+                        </h2>
+                        <span className="text-xs text-slate-600">tail -f expo.log</span>
                     </div>
-                    <div className="flex-1 overflow-auto p-4 font-mono text-xs space-y-1 bg-[#0d1117]">
-                        {status.logs.length === 0 ? (
-                            <span className="text-slate-600 block italic">Nenhum log disponível.</span>
-                        ) : (
-                            status.logs.map((log, i) => (
-                                <div key={i} className="break-all whitespace-pre-wrap text-slate-300 border-b border-white/5 pb-0.5 mb-0.5 last:border-0">
+                    <div className="flex-1 overflow-y-auto font-mono text-xs space-y-1 p-4 text-slate-300 h-full scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                        {status.logs.length === 0 && <p className="text-slate-600 italic opactiy-50">Esperando output...</p>}
+                        {status.logs.map((log, i) => (
+                            <div key={i} className="break-all whitespace-pre-wrap hover:bg-white/5 py-0.5 px-1 rounded transition-colors">
+                                <span className="text-slate-600 select-none mr-2 w-16 inline-block opacity-50">
+                                    {new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                                <span className={log.includes("ERROR") ? "text-red-400" : log.includes("exp://") ? "text-green-400 font-bold" : "text-slate-300"}>
                                     {log}
-                                </div>
-                            ))
-                        )}
+                                </span>
+                            </div>
+                        ))}
                         <div ref={logsEndRef} />
                     </div>
                 </div>
-
             </div>
         </div>
     );

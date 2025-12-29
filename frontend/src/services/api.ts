@@ -103,3 +103,7 @@ export const stopExpo = () => api.post('/expo/stop').then(res => res.data);
 export const getNgrokStatus = () => api.get('/ngrok/status').then(res => res.data);
 export const startNgrok = () => api.post('/ngrok/start').then(res => res.data);
 export const stopNgrok = () => api.post('/ngrok/stop').then(res => res.data);
+// Mobile
+export const startMobile = () => api.post('/mobile/start').then(res => res.data);
+export const stopMobile = () => api.post('/mobile/stop').then(res => res.data);
+export const getMobileStatus = () => api.get('/mobile/status').then(res => res.data);
