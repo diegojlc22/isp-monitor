@@ -584,52 +584,146 @@ class ModernLauncher:
         return True
 
     def run_frontend_build(self, new_hash, hash_file):
+        """Build inteligente com progresso real"""
         # Janela de Progresso
         build_win = tk.Toplevel(self.root)
         build_win.title("Atualizando Interface...")
-        build_win.geometry("400x150")
+        build_win.geometry("450x180")
         build_win.configure(bg=COLORS['bg'])
+        build_win.resizable(False, False)
         
         # Centralizar
-        x = (self.root.winfo_screenwidth() - 400) // 2
-        y = (self.root.winfo_screenheight() - 150) // 2
+        x = (self.root.winfo_screenwidth() - 450) // 2
+        y = (self.root.winfo_screenheight() - 180) // 2
         build_win.geometry(f"+{x}+{y}")
         
-        tk.Label(build_win, text="Otimizando e Compilando...", 
-                fg=COLORS['text'], bg=COLORS['bg'], font=("Segoe UI", 12)).pack(pady=20)
+        # Labels
+        title_label = tk.Label(build_win, text="Otimizando e Compilando...", 
+                fg=COLORS['text'], bg=COLORS['bg'], font=("Segoe UI", 12, "bold"))
+        title_label.pack(pady=(20, 5))
         
-        bar = ttk.Progressbar(build_win, mode='indeterminate')
+        status_label = tk.Label(build_win, text="Iniciando build...", 
+                fg=COLORS['subtext'], bg=COLORS['bg'], font=("Segoe UI", 9))
+        status_label.pack(pady=5)
+        
+        # Barra de Progresso (Determinada)
+        bar = ttk.Progressbar(build_win, mode='determinate', maximum=100)
         bar.pack(fill=tk.X, padx=30, pady=10)
-        bar.start(10)
+        
+        # Label de Porcentagem
+        percent_label = tk.Label(build_win, text="0%", 
+                fg=COLORS['primary'], bg=COLORS['bg'], font=("Segoe UI", 10, "bold"))
+        percent_label.pack(pady=5)
+        
         build_win.update()
         
-        # Executar npm run build
+        # Executar npm run build em thread separada
         success = False
-        try:
-            frontend_dir = os.path.join(os.getcwd(), "frontend")
-            
-            # Usar shell=True para 'npm' ser reconhecido
-            process = subprocess.Popen("npm run build", shell=True, cwd=frontend_dir, 
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-            
-            while process.poll() is None:
+        error_msg = ""
+        
+        def update_progress(percent, message):
+            """Atualiza UI de forma thread-safe"""
+            try:
+                bar['value'] = percent
+                percent_label.config(text=f"{int(percent)}%")
+                status_label.config(text=message)
                 build_win.update()
-                time.sleep(0.1)
-            
-            if process.returncode == 0:
-                # Salvar novo hash
-                with open(hash_file, "w") as f:
-                    f.write(new_hash)
-                success = True
-            else:
-                out, err = process.communicate()
-                messagebox.showerror("Erro no Build", f"Falha ao compilar:\n{err.decode(errors='ignore')}")
+            except:
+                pass
+        
+        def run_build():
+            nonlocal success, error_msg
+            try:
+                frontend_dir = os.path.join(os.getcwd(), "frontend")
                 
-        except Exception as e:
-             messagebox.showerror("Erro Crítico", str(e))
-             
+                # Verificar se npm existe
+                try:
+                    subprocess.run(["npm", "--version"], capture_output=True, shell=True, creationflags=0x08000000)
+                except:
+                    error_msg = "Node.js/NPM não encontrado no sistema!"
+                    return
+                
+                update_progress(10, "Preparando ambiente...")
+                
+                # Executar build
+                process = subprocess.Popen(
+                    "npm run build", 
+                    shell=True, 
+                    cwd=frontend_dir,
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,
+                    universal_newlines=True,
+                    bufsize=1
+                )
+                
+                # Monitorar output em tempo real
+                progress = 10
+                output_lines = []
+                
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    
+                    output_lines.append(line)
+                    line_lower = line.lower()
+                    
+                    # Detectar etapas do Vite
+                    if 'vite' in line_lower and 'building' in line_lower:
+                        progress = 20
+                        update_progress(progress, "Iniciando Vite...")
+                    elif 'transforming' in line_lower or 'transform' in line_lower:
+                        progress = min(progress + 15, 50)
+                        update_progress(progress, "Transformando arquivos...")
+                    elif 'rendering' in line_lower or 'render' in line_lower:
+                        progress = min(progress + 15, 70)
+                        update_progress(progress, "Renderizando componentes...")
+                    elif 'computing' in line_lower or 'chunk' in line_lower:
+                        progress = min(progress + 10, 85)
+                        update_progress(progress, "Otimizando chunks...")
+                    elif 'writing' in line_lower or 'dist' in line_lower:
+                        progress = min(progress + 10, 95)
+                        update_progress(progress, "Gerando arquivos...")
+                    elif 'built in' in line_lower or 'done' in line_lower:
+                        progress = 100
+                        update_progress(progress, "Build concluído!")
+                
+                process.wait()
+                
+                if process.returncode == 0:
+                    update_progress(100, "✓ Build concluído com sucesso!")
+                    # Salvar novo hash
+                    with open(hash_file, "w") as f:
+                        f.write(new_hash)
+                    success = True
+                else:
+                    error_msg = f"Build falhou (código {process.returncode})\n\nÚltimas linhas:\n" + "\n".join(output_lines[-10:])
+                    
+            except Exception as e:
+                error_msg = f"Erro crítico durante build:\n{str(e)}"
+        
+        # Executar build em thread
+        build_thread = threading.Thread(target=run_build, daemon=True)
+        build_thread.start()
+        
+        # Aguardar conclusão (com timeout de 120s)
+        timeout = 120
+        start_time = time.time()
+        while build_thread.is_alive():
+            if time.time() - start_time > timeout:
+                error_msg = "Build timeout (>120s). Verifique se há erros no código."
+                break
+            build_win.update()
+            time.sleep(0.1)
+        
         build_win.destroy()
+        
+        # Mostrar resultado
+        if error_msg:
+            messagebox.showerror("Erro no Build", error_msg)
+        elif success:
+            messagebox.showinfo("Sucesso", "Interface atualizada com sucesso!")
+        
         return success
         
     def wait_for_start(self):
