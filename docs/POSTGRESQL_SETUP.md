@@ -1,5 +1,29 @@
 # Configuração do PostgreSQL
 
+## Configurações Flexíveis
+
+### Nome do Banco de Dados
+```powershell
+# Padrão: isp_monitor
+# Personalizado:
+$env:POSTGRES_DB = "meu_banco_personalizado"
+.\ABRIR_SISTEMA.bat
+```
+
+### Senha do PostgreSQL
+```powershell
+$env:POSTGRES_PASSWORD = "sua_senha_aqui"
+.\ABRIR_SISTEMA.bat
+```
+
+### Exemplo Completo
+```powershell
+# Configurar tudo de uma vez
+$env:POSTGRES_DB = "isp_monitor_dev"
+$env:POSTGRES_PASSWORD = "senha_dev_123"
+.\ABRIR_SISTEMA.bat
+```
+
 ## Detecção Automática de Senha
 
 O sistema tenta detectar a senha do PostgreSQL automaticamente na seguinte ordem:

@@ -18,6 +18,10 @@ $dbUrl = "sqlite+aiosqlite:///./isp_monitor_v2.db"
 $dbType = "SQLite"
 $usePostgres = $false
 
+# Nome do banco de dados (configurável via variável de ambiente)
+$dbName = if ($env:POSTGRES_DB) { $env:POSTGRES_DB } else { "isp_monitor" }
+Write-Host "[Setup] Nome do banco: $dbName" -ForegroundColor Cyan
+
 # 1. Verificar se o serviço PostgreSQL existe
 $pgService = Get-Service -Name "postgresql*" -ErrorAction SilentlyContinue | Select-Object -First 1
 
@@ -108,24 +112,24 @@ if ($null -ne $pgService) {
                     $env:PGPASSWORD = $pgPassword
                 }
                 
-                # 5. Verificar se o banco 'isp_monitor' já existe
+                # 5. Verificar se o banco já existe
                 $checkDbCmd = "& `"$psqlPath`" -U postgres -lqt"
                 $databases = Invoke-Expression $checkDbCmd 2>$null
                 
-                if ($databases -match "isp_monitor") {
-                    Write-Host "[OK] Banco 'isp_monitor' já existe! Usando PostgreSQL." -ForegroundColor Green
+                if ($databases -match $dbName) {
+                    Write-Host "[OK] Banco '$dbName' já existe! Usando PostgreSQL." -ForegroundColor Green
                     $usePostgres = $true
                     $dbType = "PostgreSQL (banco existente)"
                 }
                 else {
-                    Write-Host "[!] Banco 'isp_monitor' não existe." -ForegroundColor Yellow
-                    Write-Host "[Setup] Criando banco 'isp_monitor'..." -ForegroundColor Cyan
+                    Write-Host "[!] Banco '$dbName' não existe." -ForegroundColor Yellow
+                    Write-Host "[Setup] Criando banco '$dbName'..." -ForegroundColor Cyan
                     
                     # Criar banco
-                    $createDbCmd = "& `"$psqlPath`" -U postgres -c `"CREATE DATABASE isp_monitor;`""
+                    $createDbCmd = "& `"$psqlPath`" -U postgres -c `"CREATE DATABASE $dbName;`""
                     try {
                         Invoke-Expression $createDbCmd 2>$null
-                        Write-Host "[OK] Banco 'isp_monitor' criado com sucesso!" -ForegroundColor Green
+                        Write-Host "[OK] Banco '$dbName' criado com sucesso!" -ForegroundColor Green
                         $usePostgres = $true
                         $dbType = "PostgreSQL (banco criado)"
                     }
@@ -159,7 +163,7 @@ if ($null -ne $pgService) {
 if ($usePostgres) {
     # Usar senha detectada ou fallback para 'postgres'
     $dbPassword = if ($script:detectedPassword) { $script:detectedPassword } else { "postgres" }
-    $dbUrl = "postgresql+asyncpg://postgres:$dbPassword@localhost:5432/isp_monitor"
+    $dbUrl = "postgresql+asyncpg://postgres:$dbPassword@localhost:5432/$dbName"
 }
 
 Write-Host "[Setup] Banco de dados selecionado: $dbType" -ForegroundColor Cyan
