@@ -25,20 +25,41 @@ powershell -ExecutionPolicy Bypass -File "auto_setup_env.ps1"
 echo [1/4] Iniciando PostgreSQL...
 powershell -ExecutionPolicy Bypass -File "start_postgres.ps1"
 
-:: 3. Garante Dependências (Caso falte algo no ambiente Admin)
-echo [2/4] Verificando dependencias...
+:: 3. Garante Dependências Python
+echo [2/5] Verificando dependencias Python...
 python -c "import pysnmp.hlapi.asyncio" >nul 2>&1
 if %errorLevel% neq 0 (
     echo [!] Dependencias faltando no ambiente Administrador. Instalando...
     python -m pip install -r requirements.txt >nul
 )
 
-:: 4. Inicia Launcher
-echo [3/4] Abrindo Launcher...
+:: 4. Garante Dependências WhatsApp (Node.js)
+echo [3/6] Verificando dependencias WhatsApp...
+if exist "tools\whatsapp\package.json" (
+    if not exist "tools\whatsapp\node_modules" (
+        echo [!] Instalando dependencias do WhatsApp...
+        cd tools\whatsapp
+        call npm install >nul 2>&1
+        cd ..\..
+        echo [OK] Dependencias do WhatsApp instaladas!
+    )
+)
+
+:: 5. Inicializa Schema do Banco de Dados
+echo [4/6] Verificando schema do banco...
+python scripts\init_database.py >nul 2>&1
+if %errorLevel% equ 0 (
+    echo [OK] Schema do banco verificado!
+) else (
+    echo [!] Aviso: Erro ao verificar schema do banco
+)
+
+:: 6. Inicia Launcher
+echo [5/6] Abrindo Launcher...
 start pythonw launcher.pyw
 
 echo.
-echo [4/4] Sistema iniciado com sucesso!
+echo [6/6] Sistema iniciado com sucesso!
 echo [OK] Tudo pronto! Esta janela fechara em 5 segundos.
 timeout /t 5 /nobreak >nul
 exit
