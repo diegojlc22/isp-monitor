@@ -65,7 +65,17 @@ powershell -Command "$env:PGPASSWORD='110812'; if (Test-Path 'C:\Program Files\P
 :: 7. Inicia Launcher
 echo [6/7] Abrindo Launcher...
 cd /d "%~dp0"
-start pythonw launcher.pyw
+
+:: Tenta encontrar pythonw (modo silencioso)
+where pythonw >nul 2>&1
+if %errorLevel% equ 0 (
+    echo [INFO] Iniciando em modo silencioso (pythonw)...
+    start "" pythonw "%~dp0launcher.pyw"
+) else (
+    echo [AVISO] pythonw.exe nao encontrado no PATH.
+    echo [INFO] Tentando iniciar com python padrao...
+    start "" python "%~dp0launcher.pyw"
+)
 
 echo.
 echo [7/7] Sistema iniciado com sucesso!
