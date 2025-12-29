@@ -288,7 +288,7 @@ class ModernLauncher:
 
         if messagebox.askyesno("Atualizar Sistema", "O sistema será fechado para baixar a nova versão do GitHub.\nIsso preservará seus dados e configurações.\n\nDeseja continuar?"):
             try:
-                self.log(f"Iniciando atualização via: {update_script}")
+                print(f"[LAUNCHER] Iniciando atualização via: {update_script}")
                 # Executa o BAT em uma nova janela e fecha o Launcher
                 subprocess.Popen(["start", "cmd", "/c", update_script], shell=True, cwd=os.path.dirname(update_script))
                 
