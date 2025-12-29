@@ -93,7 +93,7 @@ timeout /t 3 /nobreak >nul
 :: -------------------------------
 echo [40%%] Criando backup de seguranca...
 mkdir "%BACKUP_DIR%" >nul 2>&1
-robocopy "%APP_DIR%" "%BACKUP_DIR%" /E /NFL /NDL /NJH /NJS >nul
+robocopy "%APP_DIR%" "%BACKUP_DIR%" /E /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" "data" "python_bin" "dist" "build" /XF "*.pyc" "*.pyd" "*.pyx" /NFL /NDL /NJH /NJS >nul 2>&1
 if %errorLevel% geq 8 (
     echo [ERRO CRITICO] Falha ao criar backup!
     echo codigo de erro: %errorLevel%
@@ -120,10 +120,9 @@ echo [80%%] Instalando arquivos...
 :: Backup da configuração local
 copy "%APP_DIR%\.env" "%TEMP%\.env.preserve" >nul 2>&1
 
-:: Copiar arquivos novos usando Robocopy (Mais seguro)
-:: /MIR = Espelhar (remove arquivos que não existem mais na origem)
-:: /XD = Excluir diretórios (logs, venv, node_modules)
-robocopy "%TEMP_DIR%" "%APP_DIR%" /MIR /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" /XF ".env" /NFL /NDL /NJH /NJS 
+:: Restaurar arquivos novos
+echo [80%%] Instalando arquivos...
+robocopy "%TEMP_DIR%" "%APP_DIR%" /MIR /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" "data" "python_bin" "dist" "build" /XF "INSTALL.bat" "UPDATE.bat" ".env" "*.pyc" "*.pyd" "*.pyx" /NFL /NDL /NJH /NJS >nul 2>&1
 if %errorLevel% geq 8 (
     echo [ERRO] Falha na copia de arquivos.
     goto :ROLLBACK

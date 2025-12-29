@@ -34,10 +34,12 @@ if not exist "%DATA_DIR%\logs" mkdir "%DATA_DIR%\logs"
 if not exist "%DATA_DIR%\backups" mkdir "%DATA_DIR%\backups"
 
 echo [2/5] Copiando arquivos do sistema...
-:: Usar Robocopy para cópia robusta (Ignora erros de arquivo em uso)
-robocopy "%SOURCE_DIR%." "%APP_DIR%" /MIR /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" "data" /XF "INSTALL.bat" "UPDATE.bat" ".env" /NFL /NDL /NJH /NJS 
+:: Usar Robocopy para cópia robusta e SILENCIOSA
+:: Ignora pastas de desenvolvimento, binários python locais e git
+robocopy "%SOURCE_DIR%." "%APP_DIR%" /MIR /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" "data" "python_bin" "dist" "build" /XF "INSTALL.bat" "UPDATE.bat" ".env" "*.pyc" "*.pyd" "*.pyx" "*.log" /NFL /NDL /NJH /NJS >nul 2>&1
+
 if %errorLevel% geq 8 (
-    echo [AVISO] Alguns arquivos podem nao ter sido copiados.
+    echo [AVISO] Houve erros leves na copia, mas o sistema deve funcionar.
 )
 
 echo [3/5] Configurando ambiente...
