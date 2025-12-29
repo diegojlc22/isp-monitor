@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { getTowers, createTower, deleteTower } from '../services/api';
-import { Plus, Trash2, MapPin, Search } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { getTowers, createTower, deleteTower, importTowersCsv } from '../services/api';
+import { Plus, Trash2, MapPin, Search, Upload } from 'lucide-react';
 
 
 export function Towers() {
     const [towers, setTowers] = useState<any[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({ name: '', ip: '', latitude: 0, longitude: 0, observations: '' });
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     async function load() {
         try {
@@ -45,14 +46,47 @@ export function Towers() {
         }
     }
 
+    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+
+        if (!confirm(`Importar arquivo "${file.name}"?`)) {
+            e.target.value = ''; // Reset input
+            return;
+        }
+
+        try {
+            const res = await importTowersCsv(file);
+            alert(`Importação concluída!\n\nCadastrados: ${res.imported}\nPulados (Duplicados): ${res.skipped}`);
+            load();
+        } catch (error: any) {
+            alert('Falha na importação: ' + (error.response?.data?.detail || error.message));
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-white">Torres</h2>
-                <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                    <Plus size={20} />
-                    Nova Torre
-                </button>
+                <div className="flex gap-2">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleImport}
+                        className="hidden"
+                        accept=".csv,.txt"
+                    />
+                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition-colors border border-slate-700">
+                        <Upload size={20} />
+                        Importar CSV
+                    </button>
+                    <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        <Plus size={20} />
+                        Nova Torre
+                    </button>
+                </div>
             </div>
 
             <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">

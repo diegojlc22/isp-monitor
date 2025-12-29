@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
+import csv
+import io
 from backend.app.database import get_db
 from backend.app.models import Tower, NetworkLink
 from backend.app.schemas import Tower as TowerSchema, TowerCreate
@@ -38,6 +40,91 @@ async def create_tower(tower: TowerCreate, db: AsyncSession = Depends(get_db)):
     await cache.delete("towers_list_0_100")
     
     return db_tower
+
+@router.post("/import_csv")
+async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Importa torres via arquivo CSV (formato Excel/BR suportado)"""
+    try:
+        content = await file.read()
+        # Decode UTF-8 e remove BOM se existir
+        decoded = content.decode('utf-8-sig')
+        
+        # Tenta detectar dialeto
+        try:
+            dialect = csv.Sniffer().sniff(decoded[:1024], delimiters=',;\t')
+        except:
+            class Dialect(csv.Dialect):
+                delimiter = '\t'
+                quotechar = '"'
+                doublequote = True
+                skipinitialspace = True
+                lineterminator = '\n'
+                quoting = csv.QUOTE_MINIMAL
+            dialect = Dialect
+
+        f = io.StringIO(decoded)
+        reader = csv.DictReader(f, dialect=dialect)
+        
+        # Normalizar Colunas
+        if reader.fieldnames:
+            norm_names = []
+            for field in reader.fieldnames:
+                fname = field.lower().strip()
+                if fname in ['descrição', 'descricao', 'obs']: fname = 'observacoes'
+                if fname in ['lat']: fname = 'latitude'
+                if fname in ['lon', 'long']: fname = 'longitude'
+                norm_names.append(fname)
+            reader.fieldnames = norm_names
+        
+        if 'nome' not in reader.fieldnames:
+             raise HTTPException(status_code=400, detail="CSV deve conter coluna 'Nome'")
+
+        imported_count = 0
+        skipped_count = 0
+        
+        for row in reader:
+            name = row.get('nome', '').strip()
+            if not name: continue
+            
+            # Checar duplicidade (por nome)
+            stmt = select(Tower).where(Tower.name == name)
+            res = await db.execute(stmt)
+            if res.scalars().first():
+                skipped_count += 1
+                continue
+
+            lat = row.get('latitude')
+            lon = row.get('longitude')
+            obs = row.get('observacoes') or row.get('descricao')
+            ip = row.get('ip')
+            
+            # Limpar Floats
+            def clean_float(v):
+                if not v: return None
+                try: return float(str(v).replace(',', '.'))
+                except: return None
+            
+            new_tower = Tower(
+                name=name,
+                latitude=clean_float(lat),
+                longitude=clean_float(lon),
+                ip=ip.strip() if ip else None,
+                observations=obs,
+                is_online=True
+            )
+            db.add(new_tower)
+            imported_count += 1
+        
+        await db.commit()
+        
+        # Invalida cache
+        await cache.delete("towers_list_0_100")
+        
+        return {"message": "Importação concluída", "imported": imported_count, "skipped": skipped_count}
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro na importação: {str(e)}")
 
 # --- Network Links Endpoints (MUST come before /{tower_id} to avoid route conflict) ---
 

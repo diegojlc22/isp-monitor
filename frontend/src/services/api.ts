@@ -17,6 +17,14 @@ export const getTowers = () => api.get('/towers/').then(res => res.data);
 export const createTower = (data: any) => api.post('/towers/', data).then(res => res.data);
 export const deleteTower = (id: number) => api.delete(`/towers/${id}`).then(res => res.data);
 
+export const importTowersCsv = (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/towers/import_csv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+};
+
 export const getEquipments = () => api.get('/equipments/').then(res => res.data);
 export const createEquipment = (data: any) => api.post('/equipments/', data).then(res => res.data);
 export const updateEquipment = (id: number, data: any) => api.put(`/equipments/${id}`, data).then(res => res.data);
