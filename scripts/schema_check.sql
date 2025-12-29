@@ -38,4 +38,19 @@ BEGIN
         ALTER TABLE equipments ADD COLUMN connected_clients INTEGER;
     END IF;
 
+    -- whatsapp_groups
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='equipments' AND column_name='whatsapp_groups') THEN
+        ALTER TABLE equipments ADD COLUMN whatsapp_groups TEXT;
+    END IF;
+
+    -- equipment_type
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='equipments' AND column_name='equipment_type') THEN
+        ALTER TABLE equipments ADD COLUMN equipment_type VARCHAR(50) DEFAULT 'station';
+    END IF;
+
+    -- maintenance_until
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='equipments' AND column_name='maintenance_until') THEN
+        ALTER TABLE equipments ADD COLUMN maintenance_until TIMESTAMP;
+    END IF;
+
 END $$;
