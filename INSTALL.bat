@@ -34,10 +34,14 @@ if not exist "%DATA_DIR%\logs" mkdir "%DATA_DIR%\logs"
 if not exist "%DATA_DIR%\backups" mkdir "%DATA_DIR%\backups"
 
 echo [2/5] Copiando arquivos do sistema...
-xcopy "%SOURCE_DIR%*" "%APP_DIR%\" /E /I /Y /EXCLUDE:%SOURCE_DIR%install_exclude.txt >nul 2>&1
+:: Usar Robocopy para cópia robusta (Ignora erros de arquivo em uso)
+robocopy "%SOURCE_DIR%." "%APP_DIR%" /MIR /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" "data" /XF "INSTALL.bat" "UPDATE.bat" ".env" /NFL /NDL /NJH /NJS 
+if %errorLevel% geq 8 (
+    echo [AVISO] Alguns arquivos podem nao ter sido copiados.
+)
 
 echo [3/5] Configurando ambiente...
-:: Copiar .env.example para data se não existir
+:: Copiar .env.example para data se não existir e se .env não existir
 if not exist "%DATA_DIR%\.env" (
     if exist "%APP_DIR%\.env.example" (
         copy "%APP_DIR%\.env.example" "%DATA_DIR%\.env" >nul
@@ -45,17 +49,24 @@ if not exist "%DATA_DIR%\.env" (
     )
 )
 
-:: Criar symlink para .env
-if exist "%APP_DIR%\.env" del "%APP_DIR%\.env"
+:: Criar symlink para .env (apagar arquivo se existir antes de linkar)
+if exist "%APP_DIR%\.env" del /F /Q "%APP_DIR%\.env" >nul
 mklink "%APP_DIR%\.env" "%DATA_DIR%\.env" >nul 2>&1
 
 :: Criar symlink para logs
 if exist "%APP_DIR%\logs" rmdir "%APP_DIR%\logs" /S /Q >nul 2>&1
 mklink /D "%APP_DIR%\logs" "%DATA_DIR%\logs" >nul 2>&1
 
-echo [4/5] Instalando dependencias...
-cd /d "%APP_DIR%"
-call "%APP_DIR%\ABRIR_SISTEMA.bat"
+echo [4/5] Instalando dependencias e iniciando...
+if exist "%APP_DIR%\ABRIR_SISTEMA.bat" (
+    :: Vamos abrir o sistema em uma nova janela para não travar o instalador
+    echo [OK] Iniciando ABRIR_SISTEMA.bat...
+    start "" "%APP_DIR%\ABRIR_SISTEMA.bat"
+) else (
+    echo [ERRO] ABRIR_SISTEMA.bat nao encontrado em %APP_DIR%
+    echo Verifique se a copia foi bem sucedida.
+    pause
+)
 
 echo.
 echo [5/5] Criando atalhos...

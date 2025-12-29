@@ -45,8 +45,10 @@ if %errorLevel% neq 0 (
 :: Definir Diretorios
 set "APP_DIR=%~dp0app"
 set "DATA_DIR=%~dp0data"
-set "TIMESTAMP=%date:~-4%%date:~3,2%%date:~0,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
-set "TIMESTAMP=%TIMESTAMP: =0%"
+:: Gerar Timestamp seguro (YYYYMMDD_HHMMSS)
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
+set TIMESTAMP=%datetime:~0,8%_%datetime:~8,6%
+
 set "BACKUP_DIR=%DATA_DIR%\backups\backup_%TIMESTAMP%"
 set "TEMP_DIR=%TEMP%\isp-monitor-update-%TIMESTAMP%"
 
