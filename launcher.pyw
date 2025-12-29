@@ -267,13 +267,13 @@ class ModernLauncher:
             self.btn_update_front.config(text="✔ Sistema Atualizado", bg=COLORS['card'], fg=COLORS['success'], state="disabled")
 
     def update_system(self):
-        """Chama o script de atualização externo (UPDATE.bat)"""
+        """Chama o script de atualização externo (SETUP.bat)"""
         # Tenta encontrar o script em locais comuns
-        # 1. Pasta pai (Instalação Padrão: C:\ISP-Monitor\UPDATE.bat)
+        # 1. Pasta pai (Instalação Padrão: C:\ISP-Monitor\SETUP.bat)
         # 2. Pasta atual (Desenvolvimento)
         possible_paths = [
-            os.path.abspath(os.path.join(os.getcwd(), "..", "UPDATE.bat")),
-            os.path.abspath("UPDATE.bat")
+            os.path.abspath(os.path.join(os.getcwd(), "..", "SETUP.bat")),
+            os.path.abspath("SETUP.bat")
         ]
         
         update_script = None
@@ -283,7 +283,7 @@ class ModernLauncher:
                 break
         
         if not update_script:
-            messagebox.showerror("Erro de Atualização", "O script UPDATE.bat não foi encontrado.\n\nVerifique se o sistema foi instalado corretamente usando o INSTALL.bat.")
+            messagebox.showerror("Erro de Atualização", "O script SETUP.bat não foi encontrado.\n\nVerifique se o sistema foi instalado corretamente.")
             return
 
         if messagebox.askyesno("Atualizar Sistema", "O sistema será fechado para baixar a nova versão do GitHub.\nIsso preservará seus dados e configurações.\n\nDeseja continuar?"):
