@@ -45,7 +45,7 @@ if exist "mobile\package.json" (
         echo  (Isso pode demorar um pouco...)
         echo.
         cd mobile
-        call npm install
+        call npm install --legacy-peer-deps
         cd ..
         echo.
     )
