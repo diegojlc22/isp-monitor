@@ -4,7 +4,7 @@ ISP Monitor - Launcher v3.0 (Professional Edition)
 Interface gráfica moderna e robusta para gerenciamento do sistema.
 """
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, filedialog
 import subprocess
 import os
 import sys
@@ -233,7 +233,7 @@ class ModernLauncher:
         tk.Frame(force_frame, bg=COLORS['bg'], height=10).pack() # Spacer
 
         self.btn_kill = self.create_button(force_frame, "💀 FORCE KILL (Emergência)", self.force_kill, bg='#2a2a2a', fg=COLORS['danger'])
-        self.btn_kill.pack(fill=tk.X, pady=10)
+        self.btn_kill.pack(fill=tk.X, pady=5)
         
         btn_dash = self.create_button(force_frame, "🌐 Abrir Navegador (Produção)", self.open_dashboard, bg=COLORS['primary'], fg='#ffffff')
         btn_dash.pack(fill=tk.X, pady=10)
