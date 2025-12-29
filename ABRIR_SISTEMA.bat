@@ -60,10 +60,11 @@ if exist "frontend\package.json" (
 
 :: 6. Inicializa Schema do Banco de Dados (PostgreSQL)
 echo [5/7] Verificando schema do banco...
-powershell -Command "$env:PGPASSWORD='110812'; if (Test-Path 'C:\Program Files\PostgreSQL\17\bin\psql.exe') { & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -c 'ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_ping FLOAT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_latency FLOAT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_traffic_in BIGINT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_traffic_out BIGINT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS signal_dbm INTEGER; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS ccq INTEGER; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS connected_clients INTEGER;' 2>$null; if ($LASTEXITCODE -eq 0) { Write-Host '[OK] Schema verificado!' -ForegroundColor Green } } else { Write-Host '[!] PostgreSQL nao encontrado, pulando...' -ForegroundColor Yellow }"
+powershell -Command "$env:PGPASSWORD='110812'; if (Test-Path 'C:\Program Files\PostgreSQL\17\bin\psql.exe') { & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -f 'scripts\schema_check.sql' 2>$null; if ($LASTEXITCODE -eq 0) { Write-Host '[OK] Schema verificado!' -ForegroundColor Green } } else { Write-Host '[!] PostgreSQL nao encontrado, pulando...' -ForegroundColor Yellow }"
 
 :: 7. Inicia Launcher
 echo [6/7] Abrindo Launcher...
+cd /d "%~dp0"
 start pythonw launcher.pyw
 
 echo.
