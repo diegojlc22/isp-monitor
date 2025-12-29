@@ -43,73 +43,137 @@ async def create_tower(tower: TowerCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/import_csv")
 async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    """Importa torres via arquivo CSV (formato Excel/BR suportado)"""
+    """Importa torres via arquivo CSV ou Excel (.xlsx)"""
     try:
         content = await file.read()
-        # Decode UTF-8 e remove BOM se existir
-        decoded = content.decode('utf-8-sig')
-        
-        # Tenta detectar dialeto
-        try:
-            dialect = csv.Sniffer().sniff(decoded[:1024], delimiters=',;\t')
-        except:
-            class Dialect(csv.Dialect):
-                delimiter = '\t'
-                quotechar = '"'
-                doublequote = True
-                skipinitialspace = True
-                lineterminator = '\n'
-                quoting = csv.QUOTE_MINIMAL
-            dialect = Dialect
+        filename = file.filename.lower()
+        rows = []
+        columns = []
 
-        f = io.StringIO(decoded)
-        reader = csv.DictReader(f, dialect=dialect)
+        # Lógica para EXCEL (XLSX)
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            try:
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=io.BytesIO(content), data_only=True)
+                ws = wb.active # Pega a primeira aba
+                
+                # Ler todas as linhas
+                all_rows = list(ws.iter_rows(values_only=True))
+                if not all_rows:
+                     raise HTTPException(status_code=400, detail="Planilha vazia")
+                
+                # Cabeçalho é a primeira linha
+                columns = [str(c).lower().strip() if c else "" for c in all_rows[0]]
+                
+                # Dados são o resto
+                for row_data in all_rows[1:]:
+                    row_dict = {}
+                    for idx, val in enumerate(row_data):
+                        if idx < len(columns) and columns[idx]:
+                            row_dict[columns[idx]] = val
+                    if any(row_dict.values()): # Se a linha não for vazia
+                        rows.append(row_dict)
+                        
+            except ImportError:
+                 raise HTTPException(status_code=500, detail="Biblioteca openpyxl não instalada no servidor.")
+            except Exception as e:
+                 raise HTTPException(status_code=400, detail=f"Erro ao ler Excel: {str(e)}")
+
+        # Lógica para CSV (Texto)
+        else:
+            # Decode UTF-8 e remove BOM se existir
+            try:
+                decoded = content.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                # Tenta latin-1 se utf-8 falhar (comum no Brasil)
+                decoded = content.decode('latin-1')
+
+            # Tenta detectar dialeto
+            try:
+                dialect = csv.Sniffer().sniff(decoded[:2048], delimiters=',;\t')
+            except:
+                class Dialect(csv.Dialect):
+                    delimiter = '\t'
+                    quotechar = '"'
+                    doublequote = True
+                    skipinitialspace = True
+                    lineterminator = '\n'
+                    quoting = csv.QUOTE_MINIMAL
+                dialect = Dialect
+
+            f = io.StringIO(decoded)
+            reader = csv.DictReader(f, dialect=dialect)
+            columns = reader.fieldnames or []
+            rows = list(reader)
         
-        # Normalizar Colunas
-        if reader.fieldnames:
-            norm_names = []
-            for field in reader.fieldnames:
-                fname = field.lower().strip()
-                if fname in ['descrição', 'descricao', 'obs']: fname = 'observacoes'
-                if fname in ['lat']: fname = 'latitude'
-                if fname in ['lon', 'long']: fname = 'longitude'
-                norm_names.append(fname)
-            reader.fieldnames = norm_names
+        # --- Processamento Unificado (Normalização de Colunas) ---
         
-        if 'nome' not in reader.fieldnames:
-             raise HTTPException(status_code=400, detail="CSV deve conter coluna 'Nome'")
+        # Mapeamento de colunas (Excel ou CSV)
+        # Procura índice ou chave das colunas
+        def find_key(candidates, keys):
+            for k in keys:
+                if k in candidates: return k
+                # Tenta match parcial ex: "Nome da Torre" -> "nome"
+                for cand in candidates:
+                    if k in cand: return cand
+            return None
+
+        # Normaliza chaves de cada linha
+        normalized_rows = []
+        
+        # Identificar nomes reais das colunas no arquivo
+        keys_map = {} # map internal_name -> file_column_name
+        
+        # Lista de candidatos
+        possible_cols = list(rows[0].keys()) if rows else columns
+        # Se for CSV list(reader) já são dicts, se excel rows são dicts. 
+        # Mas excel columns headers podem estar sujos.
+        
+        # Função auxiliar para pegar valor flexível
+        def get_val(row, aliases):
+            for alias in aliases:
+                for key in row.keys():
+                    if alias in key.lower():
+                        return row[key]
+            return None
+
+        if not rows:
+             raise HTTPException(status_code=400, detail="Arquivo vazio ou sem dados")
 
         imported_count = 0
         skipped_count = 0
         
-        for row in reader:
-            name = row.get('nome', '').strip()
-            if not name: continue
+        for row in rows:
+            # Busca nome
+            name = get_val(row, ['nome', 'name', 'torre'])
+            if not name or not str(name).strip(): continue
+            name = str(name).strip()
             
-            # Checar duplicidade (por nome)
+            # Checar duplicidade
             stmt = select(Tower).where(Tower.name == name)
             res = await db.execute(stmt)
             if res.scalars().first():
                 skipped_count += 1
                 continue
 
-            lat = row.get('latitude')
-            lon = row.get('longitude')
-            obs = row.get('observacoes') or row.get('descricao')
-            ip = row.get('ip')
+            lat = get_val(row, ['lat', 'latitude'])
+            lon = get_val(row, ['lon', 'long', 'longitude'])
+            obs = get_val(row, ['obs', 'descri', 'description'])
+            ip = get_val(row, ['ip', 'address'])
             
             # Limpar Floats
             def clean_float(v):
                 if not v: return None
-                try: return float(str(v).replace(',', '.'))
+                s = str(v).strip().replace(',', '.')
+                try: return float(s)
                 except: return None
             
             new_tower = Tower(
                 name=name,
                 latitude=clean_float(lat),
                 longitude=clean_float(lon),
-                ip=ip.strip() if ip else None,
-                observations=obs,
+                ip=str(ip).strip() if ip else None,
+                observations=str(obs) if obs else None,
                 is_online=True
             )
             db.add(new_tower)
@@ -124,6 +188,8 @@ async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession
 
     except Exception as e:
         await db.rollback()
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro na importação: {str(e)}")
 
 # --- Network Links Endpoints (MUST come before /{tower_id} to avoid route conflict) ---

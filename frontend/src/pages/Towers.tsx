@@ -76,7 +76,7 @@ export function Towers() {
                         ref={fileInputRef}
                         onChange={handleImport}
                         className="hidden"
-                        accept=".csv,.txt"
+                        accept=".csv,.txt,.xlsx,.xls"
                     />
                     <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition-colors border border-slate-700">
                         <Upload size={20} />

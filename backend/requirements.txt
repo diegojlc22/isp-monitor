@@ -22,3 +22,4 @@ qrcode>=7.4.2
 scapy>=2.5.0
 # netifaces removed due to build issues on Windows
 aiofiles>=23.2.1
+openpyxl>=3.1.2

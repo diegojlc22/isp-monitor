@@ -27,6 +27,16 @@ if exist "frontend\package.json" (
     )
 )
 
+:: 2.1 Auto-Repair (Dependencias Backend - Ex: openpyxl)
+python -c "import openpyxl" >nul 2>&1
+if %errorLevel% neq 0 (
+    echo.
+    echo  [ISP Monitor] Atualizando bibliotecas Python...
+    pip install -r backend\requirements.txt >nul
+    echo  [OK] Python atualizado.
+    echo.
+)
+
 :: 3. Iniciar Banco de Dados (PostgreSQL)
 powershell -ExecutionPolicy Bypass -File "start_postgres.ps1"
 
