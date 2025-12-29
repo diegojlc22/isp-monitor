@@ -65,8 +65,48 @@ if ($null -ne $pgService) {
             if ($psqlPath) {
                 Write-Host "[OK] psql encontrado: $psqlPath" -ForegroundColor Green
                 
-                # Configurar senha do PostgreSQL (evita prompt interativo)
-                $env:PGPASSWORD = "110812"
+                # Tentar detectar senha do PostgreSQL
+                # Prioridade: 1. Variável de ambiente, 2. Arquivo .pgpass, 3. Senhas comuns
+                $pgPassword = $null
+                
+                # 1. Verificar variável de ambiente
+                if ($env:POSTGRES_PASSWORD) {
+                    $pgPassword = $env:POSTGRES_PASSWORD
+                    Write-Host "[Setup] Usando senha da variável POSTGRES_PASSWORD" -ForegroundColor Cyan
+                }
+                # 2. Verificar arquivo .pgpass (padrão PostgreSQL)
+                elseif (Test-Path "$env:APPDATA\postgresql\pgpass.conf") {
+                    Write-Host "[Setup] Arquivo .pgpass encontrado" -ForegroundColor Cyan
+                    # Não precisa configurar PGPASSWORD, psql vai usar automaticamente
+                }
+                # 3. Testar senhas comuns
+                else {
+                    Write-Host "[Setup] Testando senhas comuns do PostgreSQL..." -ForegroundColor Cyan
+                    $commonPasswords = @("postgres", "110812", "admin", "password", "")
+                    
+                    foreach ($testPass in $commonPasswords) {
+                        $env:PGPASSWORD = $testPass
+                        $testCmd = "& `"$psqlPath`" -U postgres -c `"SELECT 1;`" 2>&1"
+                        $result = Invoke-Expression $testCmd
+                        
+                        if ($result -match "1 row" -or $result -notmatch "password") {
+                            $pgPassword = $testPass
+                            Write-Host "[OK] Senha detectada automaticamente!" -ForegroundColor Green
+                            break
+                        }
+                    }
+                    
+                    if (-not $pgPassword) {
+                        Write-Host "[AVISO] Não foi possível detectar senha do PostgreSQL." -ForegroundColor Yellow
+                        Write-Host "        Configure a variável POSTGRES_PASSWORD ou use SQLite." -ForegroundColor Yellow
+                        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+                    }
+                }
+                
+                # Se conseguiu senha, configurar PGPASSWORD
+                if ($pgPassword) {
+                    $env:PGPASSWORD = $pgPassword
+                }
                 
                 # 5. Verificar se o banco 'isp_monitor' já existe
                 $checkDbCmd = "& `"$psqlPath`" -U postgres -lqt"
@@ -96,6 +136,11 @@ if ($null -ne $pgService) {
                 
                 # Limpar senha da memória
                 Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+                
+                # Salvar senha para uso no .env (se detectada)
+                if ($pgPassword -and $usePostgres) {
+                    $script:detectedPassword = $pgPassword
+                }
             }
             else {
                 Write-Host "[AVISO] psql não encontrado. Assumindo que banco existe. Usando PostgreSQL." -ForegroundColor Yellow
@@ -112,7 +157,9 @@ if ($null -ne $pgService) {
 
 # Configurar URL do banco
 if ($usePostgres) {
-    $dbUrl = "postgresql+asyncpg://postgres:110812@localhost:5432/isp_monitor"
+    # Usar senha detectada ou fallback para 'postgres'
+    $dbPassword = if ($script:detectedPassword) { $script:detectedPassword } else { "postgres" }
+    $dbUrl = "postgresql+asyncpg://postgres:$dbPassword@localhost:5432/isp_monitor"
 }
 
 Write-Host "[Setup] Banco de dados selecionado: $dbType" -ForegroundColor Cyan
