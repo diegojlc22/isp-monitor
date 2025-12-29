@@ -1,82 +1,28 @@
 @echo off
-setlocal enabledelayedexpansion
-
-:: ISP Monitor Launcher - Versão de Reparo Automático
 cd /d "%~dp0"
 
-:: 1. Tenta iniciar o PostgreSQL (precisa de Admin)
+:: 1. Verificacao Simples de Admin
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo [ISP Monitor] Solicitando Administrador...
-    :: Usa caminho completo (%~f0) e aspas para garantir que funcione mesmo com espaços
-    powershell -Command "Start-Process cmd -ArgumentList '/ccall,^'""%~f0""^'' -Verb RunAs"
+    echo [ISP Monitor] Preciso de permissao de Administrador...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
     exit
 )
 
-echo ========================================
-echo  ISP Monitor - Iniciando Sistema
-echo ========================================
+echo.
+echo  [ISP Monitor] Inicializando...
 echo.
 
-:: 1. Auto-Setup (Cria .env se não existir)
-echo [0/4] Configuracao automatica...
-powershell -ExecutionPolicy Bypass -File "auto_setup_env.ps1"
-
-:: 2. Garante PostgreSQL
-echo [1/4] Iniciando PostgreSQL...
+:: 2. Iniciar Banco de Dados (PostgreSQL)
 powershell -ExecutionPolicy Bypass -File "start_postgres.ps1"
 
-:: 3. Garante Dependências Python
-echo [2/5] Verificando dependencias Python...
-python -c "import pysnmp.hlapi.asyncio" >nul 2>&1
-if %errorLevel% neq 0 (
-    echo [!] Dependencias faltando no ambiente Administrador. Instalando...
-    python -m pip install -r requirements.txt >nul
-)
+:: 3. Verificar Schema Rapidinho (Silencioso)
+powershell -Command "$env:PGPASSWORD='110812'; & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -f 'scripts\schema_check.sql' >$null 2>&1"
 
-:: 4. Garante Dependências WhatsApp (Node.js)
-echo [3/6] Verificando dependencias WhatsApp...
-if exist "tools\whatsapp\package.json" (
-    if not exist "tools\whatsapp\node_modules" (
-        echo [!] Instalando dependencias do WhatsApp...
-        cd tools\whatsapp
-        call npm install >nul 2>&1
-        cd ..\..
-        echo [OK] Dependencias do WhatsApp instaladas!
-    )
-)
-
-:: 5. Garante Dependências Frontend (Node.js)
-echo [4/7] Verificando dependencias Frontend...
-if exist "frontend\package.json" (
-    :: Verifica se o compilador TypeScript (tsc) existe. Se não, instala tudo.
-    if not exist "frontend\node_modules\.bin\tsc.cmd" (
-        echo [!] Instalando dependencias do Frontend (aguarde, pode demorar)...
-        cd frontend
-        call npm install
-        cd ..
-        echo [OK] Dependencias do Frontend instaladas!
-    )
-)
-
-:: 6. Inicializa Schema do Banco de Dados (PostgreSQL)
-echo [5/7] Verificando schema do banco...
-powershell -Command "$env:PGPASSWORD='110812'; if (Test-Path 'C:\Program Files\PostgreSQL\17\bin\psql.exe') { & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -f 'scripts\schema_check.sql' 2>$null; if ($LASTEXITCODE -eq 0) { Write-Host '[OK] Schema verificado!' -ForegroundColor Green } } else { Write-Host '[!] PostgreSQL nao encontrado, pulando...' -ForegroundColor Yellow }"
-
-:: 7. Inicia Launcher
-echo [6/7] Abrindo Launcher...
-cd /d "%~dp0"
-
-:: Tenta encontrar pythonw (modo silencioso)
-where pythonw >nul 2>&1
-if %errorLevel% equ 0 (
-    start "" pythonw "%~dp0launcher.pyw"
-) else (
-    start "" python "%~dp0launcher.pyw"
-)
-
+:: 4. ABRIR O SISTEMA (Finalmente)
 echo.
-echo [7/7] Sistema iniciado com sucesso!
-echo [OK] Tudo pronto! Esta janela fechara em 5 segundos.
-timeout /t 5 /nobreak >nul
+echo  [OK] Abrindo Launcher...
+start "" pythonw launcher.pyw
+
+:: Fecha o console rapido
 exit
