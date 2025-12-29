@@ -131,7 +131,20 @@ if %errorLevel% neq 0 (
 )
 
 echo  [4/4] Instalando nova versao...
-:: Preservar arquivo .env e atalhos se existirem (mas .env é symlink, então ok)
+echo      - Sincronizando arquivos (modo Mirror)...
+echo      - (Arquivos que voce deletou do GitHub serao removidos aqui)
+
+:: Limpeza preventiva de arquivos legados (para nao confundir)
+if exist "%APP_DIR%\INSTALL.bat" (
+    echo      - Removendo legado: INSTALL.bat
+    del /F /Q "%APP_DIR%\INSTALL.bat" >nul 2>&1
+)
+if exist "%APP_DIR%\UPDATE.bat" (
+    echo      - Removendo legado: UPDATE.bat
+    del /F /Q "%APP_DIR%\UPDATE.bat" >nul 2>&1
+)
+
+:: Preservar arquivo .env e SETUP.bat
 robocopy "%TEMP_DIR%" "%APP_DIR%" /MIR /XD ".git" ".venv" "venv" "node_modules" "logs" "__pycache__" "data" "python_bin" "dist" "build" /XF "SETUP.bat" ".env" "*.pyc" "*.pyd" "*.pyx" /NFL /NDL /NJH /NJS >nul 2>&1
 
 :: Limpar Temp
