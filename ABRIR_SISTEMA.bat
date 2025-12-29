@@ -48,10 +48,11 @@ if exist "tools\whatsapp\package.json" (
 :: 5. Garante Dependências Frontend (Node.js)
 echo [4/7] Verificando dependencias Frontend...
 if exist "frontend\package.json" (
-    if not exist "frontend\node_modules" (
-        echo [!] Instalando dependencias do Frontend...
+    :: Verifica se o compilador TypeScript (tsc) existe. Se não, instala tudo.
+    if not exist "frontend\node_modules\.bin\tsc.cmd" (
+        echo [!] Instalando dependencias do Frontend (aguarde, pode demorar)...
         cd frontend
-        call npm install >nul 2>&1
+        call npm install
         cd ..
         echo [OK] Dependencias do Frontend instaladas!
     )
