@@ -45,21 +45,28 @@ if exist "tools\whatsapp\package.json" (
     )
 )
 
-:: 5. Inicializa Schema do Banco de Dados
-echo [4/6] Verificando schema do banco...
-python scripts\init_database.py >nul 2>&1
-if %errorLevel% equ 0 (
-    echo [OK] Schema do banco verificado!
-) else (
-    echo [!] Aviso: Erro ao verificar schema do banco
+:: 5. Garante Dependências Frontend (Node.js)
+echo [4/7] Verificando dependencias Frontend...
+if exist "frontend\package.json" (
+    if not exist "frontend\node_modules" (
+        echo [!] Instalando dependencias do Frontend...
+        cd frontend
+        call npm install >nul 2>&1
+        cd ..
+        echo [OK] Dependencias do Frontend instaladas!
+    )
 )
 
-:: 6. Inicia Launcher
-echo [5/6] Abrindo Launcher...
+:: 6. Inicializa Schema do Banco de Dados (PostgreSQL)
+echo [5/7] Verificando schema do banco...
+powershell -Command "$env:PGPASSWORD='110812'; if (Test-Path 'C:\Program Files\PostgreSQL\17\bin\psql.exe') { & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -c 'ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_ping FLOAT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_latency FLOAT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_traffic_in BIGINT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS last_traffic_out BIGINT; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS signal_dbm INTEGER; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS ccq INTEGER; ALTER TABLE equipments ADD COLUMN IF NOT EXISTS connected_clients INTEGER;' 2>$null; if ($LASTEXITCODE -eq 0) { Write-Host '[OK] Schema verificado!' -ForegroundColor Green } } else { Write-Host '[!] PostgreSQL nao encontrado, pulando...' -ForegroundColor Yellow }"
+
+:: 7. Inicia Launcher
+echo [6/7] Abrindo Launcher...
 start pythonw launcher.pyw
 
 echo.
-echo [6/6] Sistema iniciado com sucesso!
+echo [7/7] Sistema iniciado com sucesso!
 echo [OK] Tudo pronto! Esta janela fechara em 5 segundos.
 timeout /t 5 /nobreak >nul
 exit
