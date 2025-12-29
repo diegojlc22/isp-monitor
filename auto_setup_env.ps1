@@ -86,7 +86,7 @@ if ($null -ne $pgService) {
                 # 3. Testar senhas comuns
                 else {
                     Write-Host "[Setup] Testando senhas comuns do PostgreSQL..." -ForegroundColor Cyan
-                    $commonPasswords = @("postgres", "110812", "admin", "password", "")
+                    $commonPasswords = @("110812", "postgres", "admin", "password", "")
                     
                     foreach ($testPass in $commonPasswords) {
                         $env:PGPASSWORD = $testPass
