@@ -227,6 +227,9 @@ class ModernLauncher:
         self.btn_restart = self.create_button(force_frame, "🔄 REINICIAR TUDO", self.restart_system, bg=COLORS['warning'], fg='#1e1e2e')
         self.btn_restart.pack(fill=tk.X, pady=10)
 
+        self.btn_update = self.create_button(force_frame, "⬇ ATUALIZAR SISTEMA", self.update_system, bg='#00a8ff', fg='#ffffff')
+        self.btn_update.pack(fill=tk.X, pady=10)
+
         tk.Frame(force_frame, bg=COLORS['bg'], height=10).pack() # Spacer
 
         self.btn_kill = self.create_button(force_frame, "💀 FORCE KILL (Emergência)", self.force_kill, bg='#2a2a2a', fg=COLORS['danger'])
@@ -262,6 +265,38 @@ class ModernLauncher:
         hash_file = os.path.join("frontend", ".build_hash")
         if self.run_frontend_build(current, hash_file):
             self.btn_update_front.config(text="✔ Sistema Atualizado", bg=COLORS['card'], fg=COLORS['success'], state="disabled")
+
+    def update_system(self):
+        """Chama o script de atualização externo (UPDATE.bat)"""
+        # Tenta encontrar o script em locais comuns
+        # 1. Pasta pai (Instalação Padrão: C:\ISP-Monitor\UPDATE.bat)
+        # 2. Pasta atual (Desenvolvimento)
+        possible_paths = [
+            os.path.abspath(os.path.join(os.getcwd(), "..", "UPDATE.bat")),
+            os.path.abspath("UPDATE.bat")
+        ]
+        
+        update_script = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                update_script = path
+                break
+        
+        if not update_script:
+            messagebox.showerror("Erro de Atualização", "O script UPDATE.bat não foi encontrado.\n\nVerifique se o sistema foi instalado corretamente usando o INSTALL.bat.")
+            return
+
+        if messagebox.askyesno("Atualizar Sistema", "O sistema será fechado para baixar a nova versão do GitHub.\nIsso preservará seus dados e configurações.\n\nDeseja continuar?"):
+            try:
+                self.log(f"Iniciando atualização via: {update_script}")
+                # Executa o BAT em uma nova janela e fecha o Launcher
+                subprocess.Popen(["start", "cmd", "/c", update_script], shell=True, cwd=os.path.dirname(update_script))
+                
+                # Para o sistema de forma limpa
+                self.stop_system()
+                self.root.quit()
+            except Exception as e:
+                messagebox.showerror("Erro Crítico", f"Falha ao iniciar o atualizador: {e}")
 
     def start_dev_mode(self):
         """Inicia servidor Vite para desenvolvimento rápido"""

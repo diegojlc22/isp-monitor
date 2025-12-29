@@ -1,0 +1,13 @@
+.git\
+.gitignore
+node_modules\
+__pycache__\
+*.pyc
+.env
+logs\
+*.log
+data\
+backups\
+INSTALL.bat
+UPDATE.bat
+install_exclude.txt
