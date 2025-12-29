@@ -14,6 +14,8 @@ import time
 import threading
 import socket
 import requests
+import qrcode
+from PIL import Image, ImageTk
 
 # --- LOGGING SETUP ---
 class Unbuffered(object):
@@ -233,16 +235,20 @@ class ModernLauncher:
         self.btn_update = self.create_button(force_frame, "⬇  Atualizar", self.update_system, bg='#00a8ff', fg='white')
         self.btn_update.grid(row=3, column=1, sticky="ew", padx=(5, 0), pady=5)
 
-        # Linha 2: Mobile e Edição
+        # Linha 2: Mobile e Ngrok
         btn_mobile = self.create_button(force_frame, "📱 Mobile (Expo)", self.start_expo, bg='#8e44ad', fg='white')
         btn_mobile.grid(row=4, column=0, sticky="ew", padx=(0, 5), pady=5)
+        
+        btn_ngrok = self.create_button(force_frame, "🌍 Acesso Externo", self.start_ngrok, bg='#27ae60', fg='white')
+        btn_ngrok.grid(row=4, column=1, sticky="ew", padx=(5, 0), pady=5)
 
+        # Linha 3: Modo Edição
         self.btn_dev_mode = self.create_button(force_frame, "⚡ Modo Edição", self.start_dev_mode, bg='#f39c12', fg='#1e1e2e')
-        self.btn_dev_mode.grid(row=4, column=1, sticky="ew", padx=(5, 0), pady=5)
+        self.btn_dev_mode.grid(row=5, column=0, columnspan=2, sticky="ew", pady=5)
 
-        # Linha 3: Reiniciar (Full)
+        # Linha 4: Reiniciar
         self.btn_restart = self.create_button(force_frame, "🔄  Reiniciar Serviços", self.restart_system, bg=COLORS['warning'], fg='#1e1e2e')
-        self.btn_restart.grid(row=5, column=0, columnspan=2, sticky="ew", pady=15)
+        self.btn_restart.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(5, 15))
         
         # --- RODAPÉ DISCRETO ---
         self.btn_kill = self.create_button(force_frame, "💀 Force Kill (Emergência)", self.force_kill, bg=COLORS['bg'], fg='#555')
@@ -252,46 +258,203 @@ class ModernLauncher:
         # Start background check
         threading.Thread(target=self.check_frontend_updates_async, daemon=True).start()
 
+    def start_ngrok(self):
+        """Inicia Ngrok e mostra QR Code"""
+        # Usa domínio fixo para bater com a configuração do App Mobile
+        domain = "uniconoclastic-addedly-yareli.ngrok-free.dev"
+        cmd = f"npx ngrok http --domain={domain} 8081 --log=stdout"
+        self.open_console_window("🌍 Acesso Externo (Ngrok)", cmd, ".", qr_mode=True)
+
     def start_expo(self):
-        """Inicia servidor Expo para o APP Mobile"""
-        if not os.path.exists("mobile"):
-            messagebox.showerror("Erro", "Diretório 'mobile' não encontrado.")
-            return
+        """Inicia Expo e mostra QR Code"""
+        if not os.path.exists("mobile"): 
+             messagebox.showerror("Erro", "Pasta mobile não encontrada.")
+             return
+        # --no-interactive removido (causa erro), controlado por env CI=1
+        self.open_console_window("📱 Mobile Expo", "npx expo start --offline --go", "mobile", qr_mode=True)
 
-        self.info_label.config(text="Iniciando Expo (Mobile)... Confira o Terminal.")
+    def open_console_window(self, title, cmd, cwd, qr_mode=False):
+        """Janela flutuante com Log e QR Code (Gerenciada)"""
         
-        # Comando para iniciar Expo (OFFLINE para evitar login prompt)
-        # --offline: Pula tentativa de login na nuvem da Expo
-        # --tunnel: opcional, mas offline é melhor para LAN
-        cmd = "npx expo start --offline --go"
+        # 1. Verifica se já existe janela ativa com este título
+        if not hasattr(self, 'active_consoles'): self.active_consoles = {}
         
-        # Abrir em nova janela para permitir interação (QR Code) se possível, 
-        # mas como queremos logs no launcher, usamos subprocess e capturamos.
-        # Porém, o QR Code é ANSI grafismo, pode bugar no Tkinter.
-        # Melhor: disparar em janela CMD separada para o usuário ver o QR Code.
-        
-        if messagebox.askyesno("Mobile", "Deseja abrir o terminal do Expo para escanear o QR Code?"):
-           subprocess.Popen(f"start cmd /k {cmd}", shell=True, cwd="mobile")
-        else:
-           # Roda em background e mostra log (modo antigo)
-           self.status_badge.config(text=" ● EXPO STARTING ", fg=COLORS['warning'])
-           threading.Thread(target=self._run_expo_bg, daemon=True).start()
+        if title in self.active_consoles:
+            existing_win = self.active_consoles[title]
+            if existing_win.winfo_exists():
+                existing_win.deiconify() # Traz de volta se estiver oculta
+                existing_win.lift()      # Traz para frente
+                return
+            else:
+                del self.active_consoles[title] # Limpa referência morta
 
-    def _run_expo_bg(self):
-        try:
-            # Força NO-INTERACTIVE mas com OFFLINE deve ir
-            process = subprocess.Popen("npx expo start --offline", shell=True, cwd="mobile", 
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                                     creationflags=0x08000000, universal_newlines=True)
-            self.child_processes.append(process)
+        # 2. Cria Nova Janela
+        win = tk.Toplevel(self.root)
+        win.title(title)
+        win.geometry("900x600")
+        win.configure(bg=COLORS['bg'])
+        
+        # Registra janela
+        self.active_consoles[title] = win
+
+        # ... (Resto da UI igual) ...
+
+        # Header
+        tk.Label(win, text=title, font=("Segoe UI", 14, "bold"), bg=COLORS['bg'], fg="white").pack(pady=10)
+        
+        if "Ngrok" in title:
+            tk.Label(win, text="⚠️ IMPORTANTE: Mantenha a janela 'Mobile (Expo)' aberta!", font=("Segoe UI", 10), bg=COLORS['bg'], fg='#ffcc00').pack(pady=(0, 10))
+        
+        container = tk.Frame(win, bg=COLORS['bg'])
+        container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Log (Esquerda)
+        log_frame = tk.Frame(container, bg="#0c0c0c", relief="sunken", bd=1)
+        log_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        text_log = tk.Text(log_frame, bg="#0c0c0c", fg="#ccc", font=("Consolas", 10), state="disabled", relief="flat")
+        text_log.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        sb = tk.Scrollbar(text_log)
+        text_log.config(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        sb.config(command=text_log.yview)
+
+        # QR Code (Direita)
+        lbl_qr_img = None
+        lbl_qr_text = None
+        
+        if qr_mode:
+            qr_frame = tk.Frame(container, bg=COLORS['bg'], width=320)
+            qr_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(15, 0))
+            qr_frame.pack_propagate(False)
             
-            for line in process.stdout:
-                if "QR Code" in line or "exp://" in line:
-                     self.info_label.config(text="Expo rodando! Veja Logs.")
-                print(line.strip()) # Vai pro log
+            tk.Label(qr_frame, text="ESCANEIE PARA CONECTAR", font=("Segoe UI", 10, "bold"), bg=COLORS['bg'], fg=COLORS['primary']).pack(pady=(0, 20))
+            
+            qr_bg = tk.Frame(qr_frame, bg="white", padx=10, pady=10, bd=2, relief="solid")
+            qr_bg.pack()
+            
+            lbl_qr_img = tk.Label(qr_bg, bg="white")
+            lbl_qr_img.pack()
+            
+            lbl_qr_text = tk.Label(qr_frame, text="Aguardando Link...", bg=COLORS['bg'], fg="#aaa", font=("Consolas", 9), wraplength=280, justify="center")
+            lbl_qr_text.pack(pady=20, fill=tk.X)
+
+        def run_thread():
+            proc = None
+            try:
+                env = os.environ.copy()
+                # CI=1 quebra o Expo Interativo/QR Code. Remover se for expo.
+                if "expo" not in cmd:
+                    env["CI"] = "1"
+                env["NO_COLOR"] = "1"
                 
-        except Exception as e:
-            print(f"Erro Expo: {e}") 
+                creation_flags = 0x08000000 if os.name == 'nt' else 0
+                proc = subprocess.Popen(cmd, shell=True, cwd=cwd, 
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                                      stdin=subprocess.PIPE, text=True, env=env, bufsize=1,
+                                      creationflags=creation_flags)
+                win.proc = proc
+
+                for line in iter(proc.stdout.readline, ''):
+                    if not line: break
+                    line = line.strip()
+                    if not line: continue
+                    
+                    def up_log(l):
+                        text_log.config(state="normal")
+                        text_log.insert(tk.END, l + "\n")
+                        text_log.see(tk.END)
+                        text_log.config(state="disabled")
+                    
+                    try: self.root.after(0, up_log, line)
+                    except: pass 
+
+                    # Detect Ngrok Auth Error
+                    if "ERR_NGROK_4018" in line:
+                         def ask_token():
+                             if messagebox.askyesno("Autenticação Necessária", "O Ngrok requer um token gratuito.\nDeseja configurar agora?"):
+                                 token = simpledialog.askstring("Ngrok Token", "Cole seu Aunthentication Token aqui:\n(dashboard.ngrok.com)")
+                                 if token:
+                                     subprocess.run(f"npx ngrok config add-authtoken {token}", shell=True, creationflags=0x08000000)
+                                     messagebox.showinfo("Sucesso", "Token salvo! Feche a janela e tente de novo.")
+                         self.root.after(0, ask_token)
+
+                    if qr_mode:
+                        found = None
+                        
+                        # Expo Fallback
+                        if "Waiting on http://localhost:8081" in line:
+                             try:
+                                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                 s.connect(("8.8.8.8", 80))
+                                 my_ip = s.getsockname()[0]
+                                 s.close()
+                                 found = f"exp://{my_ip}:8081"
+                                 def log_force(u):
+                                     text_log.config(state="normal")
+                                     text_log.insert(tk.END, f"\n[AUTO-DETECT] Gerando QR Code para: {u}\n")
+                                     text_log.see(tk.END)
+                                     text_log.config(state="disabled")
+                                 self.root.after(0, log_force, found)
+                             except: pass
+
+                        if "exp://" in line:
+                            found = "exp://" + line.split("exp://")[1].split()[0]
+                        
+                        # Detecção Genérica de Ngrok (.app, .dev, etc)
+                        elif "ngrok" in line and "https://" in line:
+                            parts = line.split()
+                            for p in parts: 
+                                if "https://" in p and "ngrok" in p: 
+                                    # Limpa prefixos 'url=' se houver
+                                    clean_url = p.replace("url=", "").strip()
+                                    # Converte https:// -> exp:// para o Expo Go abrir direto
+                                    found = clean_url.replace("https://", "exp://")
+                        
+                        if found:
+                            found = found.replace('│', '').strip()
+                            def up_qr(u):
+                                if lbl_qr_img:
+                                    try:
+                                        img = qrcode.make(u)
+                                        img = img.resize((220, 220))
+                                        tk_img = ImageTk.PhotoImage(img)
+                                        lbl_qr_img.config(image=tk_img)
+                                        lbl_qr_img.image = tk_img 
+                                        lbl_qr_text.config(text=u, fg="white")
+                                    except: pass
+                            try: self.root.after(0, up_qr, found)
+                            except: pass
+
+            except Exception as e:
+                print(e)
+
+        def on_destroy():
+            # Pergunta inteligente
+            action = messagebox.askyesnocancel("Gerenciador de Janelas", 
+                                             "Deseja ENCERRAR este processo?\n\n"
+                                             "✅ SIM: Para o processo e fecha a janela.\n"
+                                             "🙈 NÃO: Apenas oculta a janela (continua rodando em background).")
+            
+            if action is None: return # Cancelou
+
+            if action is False: # Clicou em NÃO -> Ocultar
+                win.withdraw()
+                return
+
+            # Clicou em SIM -> Matar processo
+            if hasattr(win, 'proc') and win.proc:
+                subprocess.run(f"taskkill /F /PID {win.proc.pid} /T", shell=True)
+            
+            # Limpa referência da lista
+            if hasattr(self, 'active_consoles') and title in self.active_consoles:
+                del self.active_consoles[title]
+                
+            win.destroy()
+            
+        win.protocol("WM_DELETE_WINDOW", on_destroy)
+        threading.Thread(target=run_thread, daemon=True).start() 
 
 
     def check_frontend_updates_async(self):
