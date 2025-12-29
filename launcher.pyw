@@ -108,6 +108,37 @@ class ModernLauncher:
         # Handle Exit
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        # 🛡️ Auto-Check: Banco de Dados na inicialização
+        self.root.after(1000, self.check_and_recover_postgres)
+
+    def check_and_recover_postgres(self):
+        """Verifica se o PostgreSQL está rodando e tenta iniciar se necessário"""
+        service_name = "postgresql-x64-17" 
+        try:
+            # 1. Verifica status via PowerShell
+            cmd = f'powershell "Get-Service {service_name} | Select -ExpandProperty Status"'
+            result = subprocess.run(cmd, capture_output=True, text=True, shell=True, creationflags=0x08000000)
+            status = result.stdout.strip()
+            
+            if "Running" not in status:
+                print(f"[DB WARN] PostgreSQL ({service_name}) não está rodando. Status: {status}")
+                
+                # 2. Tenta Iniciar (Requer Admin, mas tentamos 'net start')
+                subprocess.run(f"net start {service_name}", shell=True, creationflags=0x08000000)
+                
+                # 3. Re-verifica
+                time.sleep(2)
+                result_retry = subprocess.run(cmd, capture_output=True, text=True, shell=True, creationflags=0x08000000)
+                if "Running" not in result_retry.stdout:
+                    messagebox.showerror("ERRO CRÍTICO: Banco de Dados", 
+                        f"O serviço de Banco de Dados '{service_name}' está PARADO e não conseguimos iniciar automaticamente.\n\n"
+                        "⚠️ O SISTEMA (MOBILE/BACKEND) VAI FALHAR SEM ISSO.\n\n"
+                        "COMO RESOLVER:\n"
+                        "🔹 Opção A: Abra o 'Menu Iniciar' -> 'Serviços' -> Inicie o '{service_name}'.\n"
+                        "🔹 Opção B: Feche este programa e execute-o como ADMINISTRADOR.")
+        except Exception as e:
+            print(f"[Check DB Error] {e}")
+
     def on_close(self):
         """Limpa logs e fecha"""
         if self.is_running:

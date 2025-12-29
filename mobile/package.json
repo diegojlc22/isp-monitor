@@ -28,6 +28,7 @@
   },
   "private": true,
   "devDependencies": {
-    "babel-preset-expo": "^54.0.9"
+    "babel-preset-expo": "^54.0.9",
+    "http-proxy-middleware": "^3.0.5"
   }
 }

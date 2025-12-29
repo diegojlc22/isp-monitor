@@ -64,13 +64,21 @@ export default function MapScreen() {
                 longitude: lon
             });
             console.log('Towers response:', response.data?.length);
+
             if (isMounted.current) setTowers(response.data);
         } catch (error) {
             console.error('Fetch Towers Error:', error);
+
+            let msg = error.message;
             if (error.response) {
-                console.error('Data:', error.response.data);
-                console.error('Status:', error.response.status);
+                msg = `Status: ${error.response.status}`;
+                if (error.response.status === 405) msg += " (Método não permitido)";
+                if (error.response.status === 404) msg += " (API não encontrada)";
+                if (error.response.status === 502) msg += " (Ngrok Bad Gateway)";
             }
+            if (msg.includes("Network Error")) msg += "\nVerifique se o Ngrok está rodando e a janela Mobile aberta.";
+
+            Alert.alert("Erro de Conexão", msg);
         } finally {
             if (isMounted.current) setLoading(false);
         }
@@ -153,23 +161,56 @@ export default function MapScreen() {
                                         <RadioTower size={24} color="white" />
                                     </View>
 
-                                    {/* Label */}
                                     <View style={{
-                                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                                        borderRadius: 4,
+                                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                                        borderRadius: 6,
                                         paddingHorizontal: 8,
-                                        paddingVertical: 4,
+                                        paddingVertical: 5,
+                                        marginTop: 4,
+                                        borderWidth: 1,
+                                        borderColor: '#334155'
                                     }}>
                                         <Text style={{
-                                            color: '#cbd5e1',
-                                            fontSize: 10,
+                                            color: '#fbbf24',
+                                            fontSize: 11,
                                             fontWeight: 'bold',
                                             textAlign: 'center'
                                         }}>
                                             {tower.name}
                                         </Text>
+
+                                        {/* Exibir Distância */}
+                                        {typeof tower.distance === 'number' && (
+                                            <Text style={{
+                                                color: '#fff',
+                                                fontSize: 10,
+                                                textAlign: 'center',
+                                                marginTop: 1
+                                            }}>
+                                                📍 {tower.distance < 1
+                                                    ? Math.round(tower.distance * 1000) + ' m'
+                                                    : tower.distance.toFixed(1) + ' km'}
+                                            </Text>
+                                        )}
                                     </View>
                                 </View>
+
+                                {/* Info Window (Clicável) */}
+                                <Callout tooltip={true}>
+                                    <View style={{
+                                        backgroundColor: 'white',
+                                        padding: 10,
+                                        borderRadius: 8,
+                                        width: 160,
+                                        alignItems: 'center'
+                                    }}>
+                                        <Text style={{ fontWeight: 'bold', marginBottom: 2 }}>{tower.name}</Text>
+                                        <Text>Distância: {tower.distance?.toFixed(2)} km</Text>
+                                        <Text style={{ fontSize: 9, color: 'gray', marginTop: 4 }}>
+                                            Lat: {tower.latitude}, Lon: {tower.longitude}
+                                        </Text>
+                                    </View>
+                                </Callout>
                             </Marker>
                         );
                     })}

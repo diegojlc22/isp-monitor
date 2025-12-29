@@ -51,11 +51,7 @@ if exist "mobile\package.json" (
     )
 )
 
-:: 3. Iniciar Banco de Dados (PostgreSQL)
-powershell -ExecutionPolicy Bypass -File "start_postgres.ps1"
-
-:: 4. Verificar Schema Rapidinho (Silencioso)
-powershell -Command "$env:PGPASSWORD='110812'; & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -U postgres -d isp_monitor -f 'scripts\schema_check.sql' >$null 2>&1"
+:: 3. ABRIR O SISTEMA (Finalmente)
 
 :: 5. ABRIR O SISTEMA (Finalmente)
 echo.

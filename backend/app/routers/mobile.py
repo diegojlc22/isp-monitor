@@ -2,26 +2,34 @@ import subprocess
 import os
 import threading
 import time
-import shutil
-from fastapi import APIRouter, HTTPException
+import math
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from backend.app.database import get_db
+from backend.app.models import Tower
 
 router = APIRouter(prefix="/mobile", tags=["mobile"])
 
+# --- Models ---
 class MobileStatus(BaseModel):
     is_running: bool
     url: str | None = None
     logs: list[str] = []
 
-# Estado Global em Memória
-# (Como só tem 1 instância do backend, isso funciona bem)
+class GeoLocation(BaseModel):
+    latitude: float
+    longitude: float
+
+# --- State ---
 expo_process = None
 expo_url = None
 expo_logs = []
 logs_lock = threading.Lock()
 
+# --- Helpers ---
 def add_log(msg: str):
-    """Adiciona log thread-safe"""
     global expo_logs
     with logs_lock:
         expo_logs.append(msg)
@@ -29,103 +37,125 @@ def add_log(msg: str):
             expo_logs.pop(0)
 
 def monitor_expo(proc):
-    """Lê stdout do processo Expo em background"""
     global expo_url
     try:
-        # Ler linha a linha
         for line in iter(proc.stdout.readline, ''):
             if not line: break
             line = line.strip()
             if not line: continue
             
-            # Detectar URL do Expo (exp://...)
             if "exp://" in line:
-                # Tenta isolar a URL
                 parts = line.split()
                 for p in parts:
                     if "exp://" in p:
-                        # Remove caracteres estranhos de terminal se houver
                         clean_url = p.replace('│', '').strip()
                         expo_url = clean_url
                         add_log(f"URL DETECTADA: {clean_url}")
-            
-            # Adicionar ao log (limpando códigos ANSI de cor se possivel, mas ok deixar)
             add_log(line)
     except Exception as e:
         add_log(f"Erro no monitor: {e}")
 
+# --- Routes ---
 @router.get("/status", response_model=MobileStatus)
 def get_status():
     global expo_process, expo_url
     is_running = False
-    if expo_process:
+    if expo_process is not None:
         if expo_process.poll() is None:
             is_running = True
         else:
-            expo_process = None # Morreu
+            expo_process = None
     
     return MobileStatus(is_running=is_running, url=expo_url, logs=list(expo_logs))
 
 @router.post("/start")
 def start_mobile():
     global expo_process, expo_url, expo_logs
-    
     if expo_process is not None and expo_process.poll() is None:
-        return {"message": "Servidor Mobile já está rodando"}
+        return {"message": "Já rodando"}
     
-    # Reset estado
     expo_url = None
-    with logs_lock:
-        expo_logs = ["Iniciando servidor Expo..."]
+    with logs_lock: expo_logs = ["Iniciando..."]
 
     try:
-        # Localizar pasta mobile
-        # Assumindo que CWD é a raiz do projeto (onde roda o launcher/main.py)
         cwd = os.getcwd()
         mobile_dir = os.path.join(cwd, "mobile")
-        
         if not os.path.exists(mobile_dir):
-            # Tenta subir um nível se tiver dentro de backend
-            if os.path.exists(os.path.join(cwd, "..", "mobile")):
+             if os.path.exists(os.path.join(cwd, "..", "mobile")):
                 mobile_dir = os.path.abspath(os.path.join(cwd, "..", "mobile"))
-            else:
-                 raise HTTPException(404, "Diretório 'mobile' não encontrado no servidor.")
+             else:
+                 raise HTTPException(404, "Pasta mobile não achada")
 
-        # Comando
-        # --offline: Evita login 
-        # --go: Abre direto no link
-        # Usamos shell=True no windows para npx funcionar direto
+        env = os.environ.copy()
+        env["CI"] = "1"
+        env["EXPO_NO_TELEMETRY"] = "1"
+        env["NO_COLOR"] = "1"
+
+        # --offline --go
         cmd = "npx expo start --offline --go"
-        
-        expo_process = subprocess.Popen(
-            cmd,
-            shell=True,
-            cwd=mobile_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE, # Necessário para não travar esperando input
-            text=True, # Python 3.7+ (universal_newlines)
-            encoding='utf-8',
-            errors='ignore',
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        )
-        
-        # Iniciar monitor
-        threading.Thread(target=monitor_expo, args=(expo_process,), daemon=True).start()
-        
-        return {"message": "Processo iniciado"}
 
+        expo_process = subprocess.Popen(
+            cmd, shell=True, cwd=mobile_dir,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            text=True, env=env, encoding='utf-8', errors='ignore', bufsize=1
+        )
+        threading.Thread(target=monitor_expo, args=(expo_process,), daemon=True).start()
+        return {"message": "Iniciado"}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 @router.post("/stop")
 def stop_mobile():
     global expo_process
     if expo_process:
         try:
-            # Matar arvore de processos no Windows
-            subprocess.run(f"taskkill /F /PID {expo_process.pid} /T", shell=True, creationflags=0x08000000)
-        except:
-            pass
+            subprocess.run(f"taskkill /F /PID {expo_process.pid} /T", shell=True)
+        except: pass
         expo_process = None
     return {"message": "Parado"}
+
+@router.get("/ping")
+def mobile_ping():
+    return {"status": "ok", "message": "Mobile API is reachable"}
+
+@router.post("/nearby-towers")
+@router.post("/nearby-towers/")
+async def get_nearby_towers(loc: GeoLocation, db: AsyncSession = Depends(get_db)):
+    """Busca torres próximas (usado pelo APP Mobile)"""
+    print(f"[DEBUG MOBILE] Recebido pedido de torres: {loc}")
+    try:
+        result = await db.execute(select(Tower))
+        towers = result.scalars().all()
+        response = []
+        for t in towers:
+            if t.latitude and t.longitude:
+                try:
+                    lat_t = float(t.latitude)
+                    lon_t = float(t.longitude)
+                    # Haversine
+                    R = 6371
+                    dlat = math.radians(lat_t - loc.latitude)
+                    dlon = math.radians(lon_t - loc.longitude)
+                    a = math.sin(dlat/2)**2 + math.cos(math.radians(loc.latitude)) * math.cos(math.radians(lat_t)) * math.sin(dlon/2)**2
+                    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+                    dist = R * c
+                    
+                    response.append({
+                        "id": t.id,
+                        "name": t.name,
+                        "latitude": t.latitude,
+                        "longitude": t.longitude,
+                        "distance": dist
+                    })
+                except: continue
+        response.sort(key=lambda x: x["distance"])
+        
+        # DEBUG RESPOSTA
+        print(f"[DEBUG MOBILE] Retornando {len(response)} torres.")
+        if len(response) > 0:
+            print(f"[DEBUG MOBILE] Exemplo: {response[0]['name']} -> {response[0]['distance']:.2f} km")
+            
+        return response
+    except Exception as e:
+        print(f"Erro Towers: {e}")
+        return [] # Retorna vazio em erro para não quebrar app
