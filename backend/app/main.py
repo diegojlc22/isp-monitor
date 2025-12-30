@@ -32,20 +32,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ [NETWORK DIAGNOSTICS] Failed: {e}")
 
-    # 2. Database Init & Migration
-    try:
-        async with engine.begin() as conn:
-            # Create Tables if not exist
-            await conn.run_sync(Base.metadata.create_all)
-            
-            logger.info("✅ [DATABASE] Tabelas verificadas.")
-            
-    except Exception as e:
-        logger.error(f"❌ [DATABASE] Critical Startup Error: {e}")
-        # We don't exit here to allow API to start and report health error
+    # 2. Database Init & Migration (With Retries)
+    for attempt in range(5):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("✅ [DATABASE] Tabelas verificadas/criadas.")
+            break
+        except Exception as e:
+            if attempt < 4:
+                logger.warning(f"⏳ [DATABASE] Tentativa {attempt+1}/5 falhou (banco iniciando?): {e}")
+                await asyncio.sleep(2)
+            else:
+                logger.error(f"❌ [DATABASE] Critical Startup Error after 5 attempts: {e}")
         
     # 3. Seed Data
-    await seed_initial_data()
+    try:
+        await seed_initial_data()
+    except Exception as e:
+        logger.error(f"❌ [SEED] Erro ao popular dados iniciais: {e}")
         
     logger.info("[INFO] API Ready (Collector Running in Separate Process)")
     

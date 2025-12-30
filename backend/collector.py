@@ -29,13 +29,24 @@ async def main():
     print("[COLLECTOR] Iniciando Processo de Coleta Independente...")
     print("---------------------------------------------------------")
     
-    # Garantir que o banco existe (Create Tables se não existirem)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Garantir que o banco existe (With Retries)
+    db_ok = False
+    for attempt in range(5):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("[COLLECTOR] Banco de dados conectado.")
+            db_ok = True
+            break
+        except Exception as e:
+            print(f"[COLLECTOR] ⏳ Tentativa {attempt+1}/5 de conexão falhou: {e}")
+            await asyncio.sleep(3)
     
-    print("[COLLECTOR] Banco de dados conectado.")
+    if not db_ok:
+        print("[CRITICAL] Não foi possível conectar ao banco de dados. Encerrando...")
+        return
 
-    # Aplicar otimizações avançadas (BRIN Index, Autovacuum)
+    # Aplicar otimizações avançadas
     try:
         from backend.app.services.postgres_optimizer import apply_postgres_optimizations
         await apply_postgres_optimizations()

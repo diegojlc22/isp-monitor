@@ -4,24 +4,28 @@ from sqlalchemy.pool import QueuePool
 from backend.app.config import settings, logger
 
 # Engine Creation - Pure PostgreSQL Logic
-connect_args = {"server_settings": {"application_name": "isp_monitor_backend"}}
+db_url = settings.async_database_url
+if "localhost" in db_url:
+    db_url = db_url.replace("localhost", "127.0.0.1")
 
-# Standard Production Pool Settings
+connect_args = {
+    "server_settings": {"application_name": "isp_monitor_backend"},
+    "command_timeout": 60
+}
+
 # Configuração Otimizada para PostgreSQL Async
 try:
     engine = create_async_engine(
-        settings.async_database_url,
+        db_url,
         echo=False,
-        future=True, # SQLAlchemy 2.0 style
-        pool_size=20, # Tamanho do pool
-        max_overflow=10, # Conexões extras permitidas
-        pool_timeout=30, # Timeout para pegar conexão
-        pool_pre_ping=True, # Evita conexões mortas
+        future=True,
+        pool_size=10, # Reduzi de 20 para 10 para ser mais leve
+        max_overflow=5,
+        pool_timeout=60,
+        pool_recycle=1800, # Recicla conexões a cada 30 min
         connect_args=connect_args
-        # Para Async Engine, NÃO passamos poolclass=QueuePool explicitamente,
-        # o create_async_engine já usa um pool compatível (AsyncAdaptedQueuePool) por padrão.
     )
-    logger.info("✅ PostgreSQL Async Engine Created")
+    logger.info("✅ PostgreSQL Async Engine Created (127.0.0.1)")
 except Exception as e:
     logger.critical(f"❌ Failed to create DB engine: {e}")
     raise
