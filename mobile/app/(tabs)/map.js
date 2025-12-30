@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Alert, StatusBar, Image } from 'react-native';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { RefreshCw, MapPin, Server, Signal, RadioTower } from 'lucide-react-native';
+import { RefreshCw, MapPin, Server, Signal, RadioTower, Send } from 'lucide-react-native';
 import api from '../../services/api';
 
 export default function MapScreen() {
@@ -13,13 +13,11 @@ export default function MapScreen() {
     const [mapType, setMapType] = useState('standard');
 
     const mapRef = React.useRef(null);
-    // Ref para garantir que não atualizaremos estado em componente desmontado
     const isMounted = React.useRef(true);
 
     useEffect(() => {
         isMounted.current = true;
         getCurrentLocation();
-
         return () => {
             isMounted.current = false;
         };
@@ -43,13 +41,11 @@ export default function MapScreen() {
                 setRegion({
                     latitude,
                     longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
+                    latitudeDelta: 0.1,
+                    longitudeDelta: 0.1,
                 });
-
                 fetchTowers(latitude, longitude);
             }
-
         } catch (error) {
             Alert.alert("Erro", "Não foi possível obter localização");
             if (isMounted.current) setLoading(false);
@@ -65,22 +61,28 @@ export default function MapScreen() {
             });
             console.log('Towers response:', response.data?.length);
 
-            if (isMounted.current) setTowers(response.data);
+            if (isMounted.current) {
+                setTowers(response.data);
+                console.log('✅ Torres setadas:', response.data?.length);
+            }
         } catch (error) {
             console.error('Fetch Towers Error:', error);
-
-            let msg = error.message;
-            if (error.response) {
-                msg = `Status: ${error.response.status}`;
-                if (error.response.status === 405) msg += " (Método não permitido)";
-                if (error.response.status === 404) msg += " (API não encontrada)";
-                if (error.response.status === 502) msg += " (Ngrok Bad Gateway)";
-            }
-            if (msg.includes("Network Error")) msg += "\nVerifique se o Ngrok está rodando e a janela Mobile aberta.";
-
-            Alert.alert("Erro de Conexão", msg);
+            Alert.alert("Erro de Conexão", "Não foi possível carregar as torres.");
         } finally {
             if (isMounted.current) setLoading(false);
+        }
+    };
+
+    const sendLocationUpdate = async () => {
+        if (!region) return;
+        try {
+            await api.post('/mobile/location', {
+                latitude: region.latitude,
+                longitude: region.longitude
+            });
+            Alert.alert("Sucesso", "Localização enviada para a central! 📍");
+        } catch (e) {
+            Alert.alert("Erro", "Falha ao enviar localização.");
         }
     };
 
@@ -95,13 +97,9 @@ export default function MapScreen() {
                 latitude: parseFloat(t.latitude),
                 longitude: parseFloat(t.longitude)
             }));
-
-            // Adiciona a localização do usuário (se houver)
             if (region) {
                 coords.push({ latitude: region.latitude, longitude: region.longitude });
             }
-
-            // Pequeno delay para garantir que o mapa carregou
             setTimeout(() => {
                 mapRef.current?.fitToCoordinates(coords, {
                     edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
@@ -116,130 +114,117 @@ export default function MapScreen() {
             <StatusBar barStyle={mapType === 'hybrid' ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
             {region ? (
-                <MapView
-                    ref={mapRef}
-                    style={styles.map}
-                    initialRegion={region}
-                    showsUserLocation={true}
-                    showsMyLocationButton={false}
-                    loadingEnabled={false}
-                    userInterfaceStyle="dark"
-                    mapType={mapType}
-                >
-                    {towers.map((tower) => {
-                        if (!tower.latitude || !tower.longitude) return null;
+                <View style={{ flex: 1 }}>
+                    <MapView
+                        ref={mapRef}
+                        style={styles.map}
+                        initialRegion={region}
+                        showsUserLocation={true}
+                        showsMyLocationButton={false}
+                        mapType={mapType}
+                    >
+                        {console.log('🗺️ Render:', towers.length)}
+                        {towers.map((tower) => {
+                            const lat = parseFloat(tower.latitude);
+                            const lon = parseFloat(tower.longitude);
+                            if (isNaN(lat) || !tower.latitude) return null;
 
-                        return (
-                            <Marker
-                                key={tower.id}
-                                coordinate={{ latitude: parseFloat(tower.latitude), longitude: parseFloat(tower.longitude) }}
-                                tracksViewChanges={true}
-                            >
-                                <View
-                                    collapsable={false}
-                                    style={{
-                                        width: 120,
-                                        height: 120,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        backgroundColor: 'rgba(255, 255, 255, 0.001)' // Magic hack for Android
-                                    }}
+                            return (
+                                <Marker
+                                    key={`tower-${tower.id}`}
+                                    coordinate={{ latitude: lat, longitude: lon }}
+                                    title={tower.name}
                                 >
-                                    {/* Circle */}
                                     <View style={{
-                                        backgroundColor: '#10b981',
-                                        width: 48,
-                                        height: 48,
-                                        borderRadius: 24,
-                                        borderWidth: 2,
-                                        borderColor: 'white',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        marginBottom: 4,
-                                        elevation: 5 // Try elevation on inner only
+                                        paddingBottom: 10, // Espaço para não cortar a sombra/baixo
+                                        paddingHorizontal: 10,
                                     }}>
-                                        <RadioTower size={24} color="white" />
-                                    </View>
-
-                                    <View style={{
-                                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                                        borderRadius: 6,
-                                        paddingHorizontal: 8,
-                                        paddingVertical: 5,
-                                        marginTop: 4,
-                                        borderWidth: 1,
-                                        borderColor: '#334155'
-                                    }}>
-                                        <Text style={{
-                                            color: '#fbbf24',
-                                            fontSize: 11,
-                                            fontWeight: 'bold',
-                                            textAlign: 'center'
+                                        <View style={{
+                                            backgroundColor: '#10b981',
+                                            width: 44,
+                                            height: 44,
+                                            borderRadius: 22,
+                                            borderWidth: 2,
+                                            borderColor: 'white',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            elevation: 6,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.3,
+                                            shadowRadius: 3,
                                         }}>
-                                            {tower.name}
-                                        </Text>
+                                            <RadioTower size={24} color="white" />
+                                        </View>
 
-                                        {/* Exibir Distância */}
-                                        {typeof tower.distance === 'number' && (
+                                        <View style={{
+                                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 3,
+                                            borderRadius: 6,
+                                            marginTop: 4,
+                                            borderWidth: 1,
+                                            borderColor: 'rgba(255,255,255,0.2)',
+                                            minWidth: 60,
+                                        }}>
                                             <Text style={{
-                                                color: '#fff',
-                                                fontSize: 10,
-                                                textAlign: 'center',
-                                                marginTop: 1
+                                                color: 'white',
+                                                fontSize: 11,
+                                                fontWeight: 'bold',
+                                                textAlign: 'center'
                                             }}>
-                                                📍 {tower.distance < 1
-                                                    ? Math.round(tower.distance * 1000) + ' m'
-                                                    : tower.distance.toFixed(1) + ' km'}
+                                                {tower.name}
                                             </Text>
-                                        )}
+                                        </View>
                                     </View>
-                                </View>
+                                    <Callout>
+                                        <View style={{ padding: 10, minWidth: 150 }}>
+                                            <Text style={{ fontWeight: 'bold' }}>{tower.name}</Text>
+                                            <Text>Distância: {tower.distance?.toFixed(2)} km</Text>
+                                            <Text style={{ fontSize: 10, color: 'gray' }}>Lat: {lat.toFixed(4)}, Lon: {lon.toFixed(4)}</Text>
+                                        </View>
+                                    </Callout>
+                                </Marker>
+                            );
+                        })}
+                    </MapView>
 
-                                {/* Info Window (Clicável) */}
-                                <Callout tooltip={true}>
-                                    <View style={{
-                                        backgroundColor: 'white',
-                                        padding: 10,
-                                        borderRadius: 8,
-                                        width: 160,
-                                        alignItems: 'center'
-                                    }}>
-                                        <Text style={{ fontWeight: 'bold', marginBottom: 2 }}>{tower.name}</Text>
-                                        <Text>Distância: {tower.distance?.toFixed(2)} km</Text>
-                                        <Text style={{ fontSize: 9, color: 'gray', marginTop: 4 }}>
-                                            Lat: {tower.latitude}, Lon: {tower.longitude}
-                                        </Text>
-                                    </View>
-                                </Callout>
-                            </Marker>
-                        );
-                    })}
-                </MapView>
+                    {/* Satellite Toggle Button */}
+                    <TouchableOpacity
+                        style={[styles.fab, styles.satFab]}
+                        onPress={toggleMapType}
+                        activeOpacity={0.8}
+                    >
+                        <MapPin color="#fff" size={24} />
+                    </TouchableOpacity>
+
+                    {/* Check-in Button */}
+                    <TouchableOpacity
+                        style={[styles.fab, { bottom: 168, backgroundColor: '#10b981' }]}
+                        onPress={sendLocationUpdate}
+                        activeOpacity={0.8}
+                    >
+                        <Send color="#fff" size={24} />
+                    </TouchableOpacity>
+
+                    {/* Refresh Button */}
+                    <TouchableOpacity
+                        style={styles.fab}
+                        onPress={getCurrentLocation}
+                        disabled={loading}
+                        activeOpacity={0.8}
+                    >
+                        {loading ? <ActivityIndicator color="#fff" /> : <RefreshCw color="#fff" size={24} />}
+                    </TouchableOpacity>
+                </View>
             ) : (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#60a5fa" />
                     <Text style={styles.loadingText}>Carregando Mapa...</Text>
                 </View>
             )}
-
-            {/* Satellite Toggle Button */}
-            <TouchableOpacity
-                style={[styles.fab, styles.satFab]}
-                onPress={toggleMapType}
-                activeOpacity={0.8}
-            >
-                <MapPin color="#fff" size={24} />
-            </TouchableOpacity>
-
-            {/* Refresh Button */}
-            <TouchableOpacity
-                style={styles.fab}
-                onPress={getCurrentLocation}
-                disabled={loading}
-                activeOpacity={0.8}
-            >
-                {loading ? <ActivityIndicator color="#fff" /> : <RefreshCw color="#fff" size={24} />}
-            </TouchableOpacity>
         </View>
     );
 }
@@ -253,93 +238,6 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
-
-    // Custom Marker
-    markerWrapper: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    markerContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 40,
-        height: 50,
-        zIndex: 2,
-    },
-    markerIcon: {
-        backgroundColor: '#2563eb',
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#fff',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, elevation: 5
-    },
-    markerArrow: {
-        width: 0,
-        height: 0,
-        backgroundColor: 'transparent',
-        borderStyle: 'solid',
-        borderLeftWidth: 6,
-        borderRightWidth: 6,
-        borderBottomWidth: 0,
-        borderTopWidth: 8,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderTopColor: '#2563eb', // Arrow pointing down
-        marginTop: -1,
-        shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, elevation: 1
-    },
-    shadowLabel: {
-        backgroundColor: 'rgba(15, 23, 42, 0.8)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-        marginTop: 4,
-        zIndex: 1,
-    },
-    labelText: {
-        color: '#f8fafc',
-        fontSize: 10,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
-
-    // Custom Callout
-    calloutContainer: {
-        backgroundColor: '#1e293b',
-        borderRadius: 12,
-        padding: 12,
-        width: 180,
-        borderWidth: 1,
-        borderColor: '#334155',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, elevation: 5
-    },
-    calloutTitle: {
-        color: '#f8fafc',
-        fontWeight: 'bold',
-        fontSize: 14,
-        marginBottom: 8,
-        textAlign: 'center'
-    },
-    calloutDivider: {
-        height: 1,
-        backgroundColor: '#334155',
-        marginBottom: 8
-    },
-    calloutRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginBottom: 4
-    },
-    calloutText: {
-        color: '#cbd5e1',
-        fontSize: 12
-    },
-
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -362,15 +260,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 8,
-        shadowColor: '#2563eb',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)'
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
     },
     satFab: {
-        bottom: 96, // Positioned above the refresh button
+        bottom: 96,
         backgroundColor: '#475569'
     }
 });

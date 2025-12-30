@@ -1,6 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap, Polyline } from 'react-leaflet';
 import { useEffect, useState } from 'react';
-import { getTowers, getLinks, createLink, deleteLink, getUsers } from '../services/api';
+import { getTowers, getLinks, createLink, deleteLink, getUsers, getTechLocation } from '../services/api';
 import L from 'leaflet';
 import { Search, Network, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
@@ -75,6 +75,7 @@ export function NetMap() {
     const [towers, setTowers] = useState<any[]>([]);
     const [links, setLinks] = useState<any[]>([]);
     const [techs, setTechs] = useState<any[]>([]); // New state for techs
+    const [mobileLocation, setMobileLocation] = useState<any>(null); // Real-time value from /mobile/location
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredTowers, setFilteredTowers] = useState<any[]>([]);
     const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(null);
@@ -93,6 +94,12 @@ export function NetMap() {
             const techsWithLocation = uData.filter((u: any) => u.last_latitude && u.last_longitude);
             console.log('📍 Técnicos com localização:', techsWithLocation);
             setTechs(techsWithLocation);
+
+            // Fetch Live Mobile Location
+            const mobLoc = await getTechLocation();
+            if (mobLoc && mobLoc.latitude) {
+                setMobileLocation(mobLoc);
+            }
         } catch (e) { console.error(e); }
     }
 
@@ -277,6 +284,21 @@ export function NetMap() {
                             </Popup>
                         </Marker>
                     ))}
+
+                    {/* Mobile App Marker */}
+                    {mobileLocation && (
+                        <Marker
+                            key="mobile-live"
+                            position={[mobileLocation.latitude, mobileLocation.longitude]}
+                            icon={createTechIcon("Técnico (App)")}
+                            zIndexOffset={200}
+                        >
+                            <Popup>
+                                <strong>Técnico (App)</strong><br />
+                                Última atualização: {mobileLocation.timestamp ? new Date(mobileLocation.timestamp * 1000).toLocaleTimeString() : 'Recente'}
+                            </Popup>
+                        </Marker>
+                    )}
                 </MapContainer>
             </div>
 

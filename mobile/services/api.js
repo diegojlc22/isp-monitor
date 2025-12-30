@@ -1,14 +1,11 @@
-import Constants from 'expo-constants';
+
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// 🤖 Configuração de Acesso (Forçado para Externo/4G)
-// Usamos sempre o túnel Ngrok para garantir que funcione ao sair do Wi-Fi
-const API_URL = "https://uniconoclastic-addedly-yareli.ngrok-free.dev/api";
-
-console.log(`[MOBILE] Conectando API em: ${API_URL}`);
+const REMOTE_URL = "https://uniconoclastic-addedly-yareli.ngrok-free.dev/api";
 
 const api = axios.create({
-    baseURL: API_URL,
+    baseURL: REMOTE_URL,
     timeout: 15000,
     headers: {
         'ngrok-skip-browser-warning': 'true',
@@ -17,4 +14,35 @@ const api = axios.create({
     }
 });
 
+// Função para recarregar configuração de IP Local
+export const reloadApiConfig = async () => {
+    try {
+        const localIp = await AsyncStorage.getItem('settings_local_ip');
+        if (localIp) {
+            const localUrl = `http://${localIp}:8080/api`;
+            console.log(`[MOBILE] Testando IP Local configurado: ${localUrl}`);
+
+            try {
+                // Timeout curto para não travar UX
+                await axios.get(localUrl.replace('/api', '') + '/docs', { timeout: 1500 });
+                api.defaults.baseURL = localUrl;
+                console.log("[MOBILE] ✅ Conectado na Rede Local!");
+                return { success: true, mode: 'local', url: localUrl };
+            } catch (err) {
+                console.log("[MOBILE] ⚠️ IP Local inacessível. Mantendo remoto.");
+            }
+        }
+    } catch (e) {
+        console.error("Erro config API:", e);
+    }
+
+    // Fallback garantido
+    api.defaults.baseURL = REMOTE_URL;
+    return { success: true, mode: 'remote', url: REMOTE_URL };
+};
+
+// Inicializa na carga
+reloadApiConfig();
+
 export default api;
+

@@ -1103,23 +1103,7 @@ class ModernLauncher:
         import webbrowser
         webbrowser.open("http://localhost:8080")
 
-    def read_last_lines(self, file_path, n=50):
-        """Lê as últimas n linhas de um arquivo de forma eficiente (sem ler tudo)"""
-        if not os.path.exists(file_path): return []
-        try:
-            with open(file_path, 'rb') as f:
-                try:
-                    # Estima tamanho: 200 chars por linha * n
-                    f.seek(-200 * n, 2) 
-                except IOError:
-                    # Arquivo menor que o seek, vai pro inicio
-                    f.seek(0)
-                
-                lines = f.readlines()
-                decoded_lines = [l.decode('utf-8', errors='ignore') for l in lines]
-                return decoded_lines[-n:]
-        except Exception:
-            return []
+
 
     
     def refresh_logs(self):

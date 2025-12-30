@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional, List
 from datetime import datetime
+import json
 
 class TowerBase(BaseModel):
     name: str
@@ -43,6 +44,17 @@ class EquipmentBase(BaseModel):
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
     whatsapp_groups: Optional[List[str]] = []
+
+    @validator('whatsapp_groups', pre=True)
+    def parse_whatsapp_groups(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return []
+        if v is None:
+            return []
+        return v
 
 class EquipmentCreate(EquipmentBase):
     ssh_password: Optional[str] = None

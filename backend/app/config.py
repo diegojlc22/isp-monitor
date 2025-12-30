@@ -32,9 +32,9 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = "sqlite+aiosqlite:///./isp_monitor_v2.db"
+    database_url: str = Field(default="postgresql://postgres:postgres@localhost:5432/isp_monitor", description="PostgreSQL Connection String")
     
-    # Pool Settings (Tuned for SQLite/Postgres hybrid)
+    # Pool Settings (Tuned for Postgres)
     db_pool_size: int = Field(20, ge=1)
     db_max_overflow: int = Field(10, ge=0)
     
@@ -43,8 +43,6 @@ class Settings(BaseSettings):
         url = self.database_url
         if url.startswith("postgresql://"):
             return url.replace("postgresql://", "postgresql+asyncpg://")
-        if url.startswith("sqlite://") and not "aiosqlite" in url:
-             return url.replace("sqlite://", "sqlite+aiosqlite://")
         return url
 
     # --- Security ---
@@ -80,4 +78,4 @@ PING_INTERVAL_SECONDS = settings.ping_interval_seconds
 PING_TIMEOUT_SECONDS = settings.ping_timeout_seconds
 PING_CONCURRENT_LIMIT = settings.ping_concurrent_limit
 
-logger.info(f"Config loaded: DB={settings.async_database_url.split('@')[-1] if '@' in settings.async_database_url else 'sqlite'}, PingInterval={settings.ping_interval_seconds}s")
+logger.info(f"Config loaded: DB_URL={settings.async_database_url}, PingInterval={settings.ping_interval_seconds}s")

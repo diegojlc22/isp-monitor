@@ -6,7 +6,7 @@ import os
 sys.path.append(os.getcwd())
 
 from backend.app.database import engine, Base
-from backend.app.services.pinger_fast import monitor_job_fast
+from backend.app.services.pinger_fast import PingerService
 from backend.app.services.snmp_monitor import snmp_monitor_job
 from backend.app.services.synthetic_agent import synthetic_agent_job
 from backend.app.services.maintenance import cleanup_job
@@ -51,7 +51,8 @@ async def main():
     
     # Pinger (Crítico)
     print("[COLLECTOR] Iniciando Pinger...")
-    tasks.append(asyncio.create_task(monitor_job_fast()))
+    pinger = PingerService()
+    tasks.append(asyncio.create_task(pinger.start()))
     
     # SNMP (Opcional, se existir)
     try:

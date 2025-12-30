@@ -438,48 +438,48 @@ export function Alerts() {
 
                     <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Equipamentos */}
-                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${config.notify_equipment_status ? 'bg-blue-500/5 border-blue-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all h-full ${config.notify_equipment_status ? 'bg-blue-500/5 border-blue-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
                             <input type="checkbox" checked={config.notify_equipment_status}
                                 onChange={e => setConfig({ ...config, notify_equipment_status: e.target.checked })}
                                 className="mt-1 w-5 h-5 rounded border-slate-600 text-blue-600 focus:ring-blue-500" />
-                            <div>
+                            <div className="flex flex-col h-full w-full">
                                 <div className="flex items-center gap-2 mb-1">
                                     <Radio className="text-blue-400" size={18} />
                                     <span className="font-semibold text-white">Equipamentos</span>
                                 </div>
-                                <p className="text-xs text-slate-400">Alertas de queda e retorno de torres e equipamentos.</p>
+                                <p className="text-xs text-slate-400 flex-1">Alertas de queda e retorno de torres e equipamentos.</p>
                             </div>
                         </label>
 
                         {/* Backups */}
-                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${config.notify_backups ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all h-full ${config.notify_backups ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
                             <input type="checkbox" checked={config.notify_backups}
                                 onChange={e => setConfig({ ...config, notify_backups: e.target.checked })}
                                 className="mt-1 w-5 h-5 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500" />
-                            <div>
+                            <div className="flex flex-col h-full w-full">
                                 <div className="flex items-center gap-2 mb-1">
                                     <Database className="text-emerald-400" size={18} />
                                     <span className="font-semibold text-white">Backups</span>
                                 </div>
-                                <p className="text-xs text-slate-400">Confirmação de backups automáticos do banco de dados.</p>
-                                <button type="button" onClick={handleTestBackup} className="text-xs text-emerald-400 hover:text-emerald-300 mt-2 underline">
+                                <p className="text-xs text-slate-400 flex-1">Confirmação de backups automáticos do banco de dados.</p>
+                                <button type="button" onClick={handleTestBackup} className="text-xs text-emerald-400 hover:text-emerald-300 mt-2 underline text-left">
                                     Testar Backup Agora
                                 </button>
                             </div>
                         </label>
 
                         {/* Agente IA */}
-                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all ${config.notify_agent ? 'bg-purple-500/5 border-purple-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
+                        <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all h-full ${config.notify_agent ? 'bg-purple-500/5 border-purple-500/30' : 'bg-slate-800/30 border-slate-700'}`}>
                             <input type="checkbox" checked={config.notify_agent}
                                 onChange={e => setConfig({ ...config, notify_agent: e.target.checked })}
                                 className="mt-1 w-5 h-5 rounded border-slate-600 text-purple-600 focus:ring-purple-500" />
-                            <div className="flex-1">
+                            <div className="flex flex-col h-full w-full">
                                 <div className="flex items-center gap-2 mb-1">
                                     <BrainCircuit className="text-purple-400" size={18} />
                                     <span className="font-semibold text-white">Agente IA</span>
                                 </div>
-                                <p className="text-xs text-slate-400">Relatórios e análises do sistema inteligente.</p>
-                                <button type="button" onClick={(e) => { e.preventDefault(); handleTestAgent(); }} className="text-xs text-purple-400 hover:text-purple-300 mt-2 underline">
+                                <p className="text-xs text-slate-400 flex-1">Relatórios e análises do sistema inteligente.</p>
+                                <button type="button" onClick={(e) => { e.preventDefault(); handleTestAgent(); }} className="text-xs text-purple-400 hover:text-purple-300 mt-2 underline text-left">
                                     Testar Agora
                                 </button>
                             </div>

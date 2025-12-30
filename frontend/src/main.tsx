@@ -36,38 +36,44 @@ const PageLoader = () => (
   </div>
 );
 
+import { ScannerProvider } from './contexts/ScannerContext'
+
+
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
-      <BrowserRouter>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
+      <ScannerProvider>
+        <BrowserRouter>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
 
-            <Route path="/" element={<ProtectedRoute />}>
-              <Route element={<DashboardLayout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="live" element={<LiveMonitor />} />
-                <Route path="map" element={<NetMap />} />
-                <Route path="towers" element={<Towers />} />
-                <Route path="equipments" element={<Equipments />} />
-                <Route path="alerts" element={<Alerts />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="agent" element={<Agent />} />
+              <Route path="/" element={<ProtectedRoute />}>
+                <Route element={<DashboardLayout />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="live" element={<LiveMonitor />} />
+                  <Route path="map" element={<NetMap />} />
+                  <Route path="towers" element={<Towers />} />
+                  <Route path="equipments" element={<Equipments />} />
+                  <Route path="alerts" element={<Alerts />} />
+                  <Route path="profile" element={<Profile />} />
+                  <Route path="agent" element={<Agent />} />
 
-                {/* Admin Routes */}
-                <Route element={<AdminRoute />}>
-                  <Route path="requests" element={<RequestsPage />} />
-                  <Route path="mobile" element={<MobileApp />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="users" element={<ManageUsers />} />
-                  <Route path="backup" element={<Backup />} />
+                  {/* Admin Routes */}
+                  <Route element={<AdminRoute />}>
+                    <Route path="requests" element={<RequestsPage />} />
+                    <Route path="mobile" element={<MobileApp />} />
+                    <Route path="settings" element={<Settings />} />
+                    <Route path="users" element={<ManageUsers />} />
+                    <Route path="backup" element={<Backup />} />
+                  </Route>
                 </Route>
               </Route>
-            </Route>
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ScannerProvider>
     </AuthProvider>
   </StrictMode>,
 )

@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
     
     # 1. Network Diagnostics
     try:
-        run_diagnostics()
+        # run_diagnostics()
+        pass
     except Exception as e:
         logger.warning(f"⚠️ [NETWORK DIAGNOSTICS] Failed: {e}")
 
@@ -133,10 +134,7 @@ async def health_check():
         "version": "3.2.0-enterprise"
     }
 
-@app.get("/api/setup/migrate")
-async def run_manual_migration():
-    """Migration endpoint (Legacy support)"""
-    return {"status": "deprecated", "message": "Migrations run automatically on startup now"}
+
 
 # Includes
 app.include_router(towers.router, prefix="/api")

@@ -194,7 +194,7 @@ def run_doctor():
                 log(f"🚨 Erro ao gerenciar {name}: {e}", "CRITICAL")
         
         first_run = False
-        time.sleep(5) # Ciclo mais rápido (5s) para pegar zumbis logo
+        time.sleep(10) # Ciclo mais relaxado (10s) para evitar falsos positivos em carga alta
 
 if __name__ == "__main__":
     run_doctor()

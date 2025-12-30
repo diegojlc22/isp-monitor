@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { getEquipments, createEquipment, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand } from '../services/api';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand } from '../services/api';
+import { useScanner } from '../contexts/ScannerContext';
 
-
-import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users } from 'lucide-react';
+import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
 
@@ -51,7 +51,7 @@ function usePoll(callback: () => Promise<void> | void, intervalMs: number) {
 // --- Componentes Otimizados ---
 
 const EquipmentRow = ({ index, data }: any) => {
-    const { equipments, towers, onAction, onReboot, onDelete, onHistory, onEdit, selectedIds, toggleSelection } = data;
+    const { equipments, towers, onAction, onReboot, onTest, onDelete, onHistory, onEdit, selectedIds, toggleSelection } = data;
     const eq = equipments[index];
     const tower = towers.find((t: Tower) => t.id === eq.tower_id);
     const isSelected = selectedIds?.includes(eq.id);
@@ -103,6 +103,9 @@ const EquipmentRow = ({ index, data }: any) => {
                         <Users size={16} />
                     </button>
                 )}
+                <button onClick={() => onTest && onTest(eq)} className="text-slate-400 hover:text-green-400 p-1.5 rounded hover:bg-slate-700" title="Testar Ping">
+                    <Zap size={16} />
+                </button>
                 <button onClick={() => onReboot(eq)} className="text-slate-400 hover:text-orange-500 p-1.5 rounded hover:bg-slate-700" title="Reiniciar">
                     <Power size={16} />
                 </button>
@@ -273,14 +276,23 @@ export function Equipments() {
 
 
     // Scanner State
-    const [showScanner, setShowScanner] = useState(false);
-    const [isScanning, setIsScanning] = useState(false);
-    const [scannedDevices, setScannedDevices] = useState<any[]>([]);
-    const [progress, setProgress] = useState(0);
-    const eventSourceRef = useRef<EventSource | null>(null);
+    // Scanner Context
+    const { isScanning, progress, scannedDevices, startScan: startContextScan, stopScan, showScannerModal, setShowScannerModal, scanRange: contextScanRange } = useScanner();
+
+    // Local Scanner UI
     const [selectedIps, setSelectedIps] = useState<string[]>([]);
     const [ipNames, setIpNames] = useState<{ [key: string]: string }>({});
-    const [scanRange, setScanRange] = useState('');
+    const [scanRangeInput, setScanRangeInput] = useState('');
+
+    // Sync Input with Running Scan
+    useEffect(() => { if (isScanning && contextScanRange) setScanRangeInput(contextScanRange); }, [isScanning, contextScanRange]);
+
+    const handleScanStart = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (isScanning) { stopScan(); return; }
+        if (!scanRangeInput) return;
+        startContextScan(scanRangeInput, 'public', 161);
+    };
 
     // Detection Progress
     const [detectionProgress, setDetectionProgress] = useState(0);
@@ -530,7 +542,7 @@ export function Equipments() {
         } catch (e) { console.error('Error loading data:', e); }
     }, []);
 
-    usePoll(load, 15000);
+    usePoll(load, 5000);
 
     useEffect(() => {
         const saved = localStorage.getItem('equipment_templates');
@@ -540,6 +552,20 @@ export function Equipments() {
     const handleReboot = useCallback(async (eq: Equipment) => {
         if (!confirm(`Reiniciar ${eq.name}?`)) return;
         try { await rebootEquipment(eq.id); alert("Comando enviado!"); } catch (e: any) { alert("Erro: " + (e.response?.data?.detail || e.message)); }
+    }, []);
+
+    const handleTest = useCallback(async (eq: Equipment) => {
+        try {
+            alert(`Iniciando teste de ping para ${eq.ip}... Aguarde.`);
+            const res = await testEquipment(eq.id);
+            if (res.is_online) {
+                alert(`✅ ONLINE\nLatência: ${res.latency}ms\nPerda: ${res.packet_loss}%\n${res.details}`);
+            } else {
+                alert(`❌ OFFLINE\nErro: ${res.error || "Sem resposta"}`);
+            }
+        } catch (e: any) {
+            alert("Erro no teste: " + (e.response?.data?.detail || e.message));
+        }
     }, []);
 
     const handleDelete = useCallback(async (id: number) => {
@@ -596,7 +622,9 @@ export function Equipments() {
             if (!formData.ssh_password) delete payload.ssh_password;
             editingEquipment ? await updateEquipment(editingEquipment.id, payload) : await createEquipment(payload);
             setShowModal(false); setEditingEquipment(null); setFormData(INITIAL_FORM_STATE); load();
-        } catch (error) { alert('Erro ao salvar.'); }
+        } catch (error: any) {
+            alert('Erro ao salvar: ' + (error.response?.data?.detail || error.message));
+        }
     }
 
     function saveTemplate() {
@@ -629,85 +657,67 @@ export function Equipments() {
         e.target.value = '';
     }
 
-    async function handleScanStart() {
-        if (isScanning) { eventSourceRef.current?.close(); setIsScanning(false); return; }
-        setIsScanning(true); setScannedDevices([]); setProgress(0);
-        try {
-            const community = networkDefaults.snmp_community || 'public';
-            const port = networkDefaults.snmp_port || 161;
-            const es = new EventSource(`/api/equipments/scan/stream/?ip_range=${encodeURIComponent(scanRange)}&snmp_community=${encodeURIComponent(community)}&snmp_port=${port}`);
-            eventSourceRef.current = es;
-            es.onmessage = ev => {
-                const d = JSON.parse(ev.data); setProgress(d.progress || 0);
-                if (d.is_online) {
-                    setScannedDevices(prev => {
-                        if (prev.find(p => p.ip === d.ip)) return prev;
-                        return [...prev, d]; // Save full object
-                    });
-                }
-            };
-            es.addEventListener("done", () => { es.close(); setIsScanning(false); });
-            es.onerror = () => { es.close(); setIsScanning(false); };
-        } catch (e) { setIsScanning(false); }
-    }
-
     async function saveScanned() {
         if (!selectedIps.length) return;
-        let count = 0;
-        for (const ip of selectedIps) {
-            try {
-                const device = scannedDevices.find(d => d.ip === ip);
-                await createEquipment({
-                    name: ipNames[ip] || `Dispositivo ${ip} `,
-                    ip,
-                    // Defaults Logic
-                    ssh_port: networkDefaults.ssh_port || 22,
-                    ssh_user: networkDefaults.ssh_user || 'admin',
-                    ssh_password: networkDefaults.ssh_password || '',
-                    snmp_community: networkDefaults.snmp_community || 'public',
-                    snmp_port: networkDefaults.snmp_port || 161,
 
-                    // Detected Logic
-                    brand: device?.brand || 'generic',
-                    equipment_type: device?.equipment_type || 'station',
-                    is_mikrotik: device?.brand === 'mikrotik',
-                    whatsapp_groups: device?.whatsapp_groups || [],
+        const payload = selectedIps.map(ip => {
+            const device = scannedDevices.find(d => d.ip === ip);
+            return {
+                name: ipNames[ip] || `Dispositivo ${ip}`,
+                ip,
+                ssh_port: networkDefaults.ssh_port || 22,
+                ssh_user: networkDefaults.ssh_user || 'admin',
+                ssh_password: networkDefaults.ssh_password || '',
+                snmp_community: networkDefaults.snmp_community || 'public',
+                snmp_port: networkDefaults.snmp_port || 161,
 
-                    tower_id: null
-                });
-                count++;
-            } catch (e) { }
+                brand: device?.brand || 'generic',
+                equipment_type: device?.equipment_type || 'station',
+                is_mikrotik: device?.brand === 'mikrotik',
+                whatsapp_groups: [],
+                tower_id: null
+            };
+        });
+
+        try {
+            const res = await createEquipmentsBatch(payload);
+            const msg = `Salvo: ${res.success}\nJá cadastrados/Ignorados: ${res.failed}`;
+            alert(msg);
+            setShowScannerModal(false);
+            load();
+        } catch (e: any) {
+            alert("Erro ao salvar lote: " + (e.response?.data?.detail || e.message));
         }
-        alert(`Salvo ${count} equipamentos!`); setShowScanner(false); load();
     }
 
     async function saveAllScanned() {
         if (!scannedDevices.length) return;
-        let count = 0;
-        for (const device of scannedDevices) {
-            try {
-                await createEquipment({
-                    name: ipNames[device.ip] || `Dispositivo ${device.ip}`,
-                    ip: device.ip,
-                    // Defaults Logic
-                    ssh_port: networkDefaults.ssh_port || 22,
-                    ssh_user: networkDefaults.ssh_user || 'admin',
-                    ssh_password: networkDefaults.ssh_password || '',
-                    snmp_community: networkDefaults.snmp_community || 'public',
-                    snmp_port: networkDefaults.snmp_port || 161,
 
-                    // Detected Logic
-                    brand: device.brand || 'generic',
-                    equipment_type: device.equipment_type || 'station',
-                    is_mikrotik: device.brand === 'mikrotik',
-                    whatsapp_groups: device.whatsapp_groups || [],
+        const payload = scannedDevices.map(device => ({
+            name: ipNames[device.ip] || `Dispositivo ${device.ip}`,
+            ip: device.ip,
+            ssh_port: networkDefaults.ssh_port || 22,
+            ssh_user: networkDefaults.ssh_user || 'admin',
+            ssh_password: networkDefaults.ssh_password || '',
+            snmp_community: networkDefaults.snmp_community || 'public',
+            snmp_port: networkDefaults.snmp_port || 161,
 
-                    tower_id: null
-                });
-                count++;
-            } catch (e) { }
+            brand: device.brand || 'generic',
+            equipment_type: device.equipment_type || 'station',
+            is_mikrotik: device.brand === 'mikrotik',
+            whatsapp_groups: [],
+            tower_id: null
+        }));
+
+        try {
+            const res = await createEquipmentsBatch(payload);
+            const msg = `Salvo: ${res.success}\nJá cadastrados/Ignorados: ${res.failed}`;
+            alert(msg);
+            setShowScannerModal(false);
+            load();
+        } catch (e: any) {
+            alert("Erro ao salvar lote: " + (e.response?.data?.detail || e.message));
         }
-        alert(`Salvo ${count} equipamentos!`); setShowScanner(false); load();
     }
 
     const handleNewEquipment = async () => {
@@ -735,7 +745,7 @@ export function Equipments() {
             <div className="flex justify-between items-center mb-6 shrink-0 mt-4">
                 <h2 className="text-2xl font-bold text-white">Equipamentos <span className="text-sm font-normal text-slate-500 ml-2">({filteredEquipments.length})</span></h2>
                 <div className="flex gap-2">
-                    <button onClick={() => setShowScanner(true)} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
+                    <button onClick={() => setShowScannerModal(true)} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
                         <MonitorPlay size={18} /> Scan
                     </button>
                     <button
@@ -794,6 +804,22 @@ export function Equipments() {
                     </button>
                 </div>
             </div>
+            {(isScanning || scannedDevices.length > 0) && !showScannerModal && (
+                <div className="bg-blue-900/50 border border-blue-700/50 p-3 rounded-lg mb-4 flex justify-between items-center shadow-lg backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
+                        {isScanning && <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>}
+                        <span className="text-blue-100 text-sm font-medium">
+                            {isScanning ? `Escaneando rede... ${progress > 0 ? `(${progress}%)` : ''}` : `Scan finalizado. ${scannedDevices.length} dispositivos encontrados.`}
+                        </span>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => { setShowScannerModal(false); }} className="text-slate-400 hover:text-white text-xs px-2">Esconder</button>
+                        <button onClick={() => setShowScannerModal(true)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-500 transition-colors shadow">
+                            Abrir Scanner
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-slate-900 rounded-t-xl border border-slate-800 p-4 shrink-0 flex flex-wrap gap-3">
                 <div className="relative flex-1 min-w-[200px]">
@@ -847,6 +873,7 @@ export function Equipments() {
                                         towers,
                                         onAction: handleWirelessInfo,
                                         onReboot: handleReboot,
+                                        onTest: handleTest,
                                         onDelete: handleDelete,
                                         onHistory: handleShowHistory,
                                         onEdit: handleEdit,
@@ -932,48 +959,65 @@ export function Equipments() {
                     </div>
                 </div>
             )}
-            {showScanner && (
+            {showScannerModal && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
                     <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl p-6 h-[80vh] flex flex-col">
-                        <h3 className="text-xl font-bold text-white mb-4">Scanner</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-white">Scanner de Rede</h3>
+                            <button onClick={() => setShowScannerModal(false)} className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded" title="Minimizar (scan continua)">
+                                <Minus size={20} />
+                            </button>
+                        </div>
                         <div className="flex gap-2 mb-4">
-                            <input className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP Range (ex: 192.168.1.0/24)" value={scanRange} onChange={e => setScanRange(e.target.value)} />
-                            <button onClick={handleScanStart} className="bg-emerald-600 text-white px-4 rounded">{isScanning ? 'Parar' : 'Iniciar'}</button>
+                            <input className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP Range (ex: 192.168.1.0/24)" value={scanRangeInput} onChange={e => setScanRangeInput(e.target.value)} disabled={isScanning} />
+                            <button onClick={handleScanStart} className={clsx("text-white px-4 rounded", isScanning ? "bg-red-600 hover:bg-red-500" : "bg-emerald-600 hover:bg-emerald-500")}>{isScanning ? 'Parar' : 'Iniciar'}</button>
                             {progress > 0 && <span className="text-white text-xs self-center ml-2">{progress}%</span>}
                         </div>
                         <div className="flex-1 bg-slate-950 rounded border border-slate-800 p-2 overflow-y-auto">
                             {/* Select All Header */}
-                            {scannedDevices.map((device) => (
-                                <div key={device.ip} className="flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer border-b border-slate-800/50 last:border-0" onClick={() => setSelectedIps(p => p.includes(device.ip) ? p.filter(i => i !== device.ip) : [...p, device.ip])}>
-                                    {selectedIps.includes(device.ip) ? <CheckSquare className="text-blue-500 shrink-0" size={16} /> : <Square className="text-slate-500 shrink-0" size={16} />}
+                            {scannedDevices.map((device) => {
+                                const existing = equipments.find(e => e.ip === device.ip);
+                                return (
+                                    <div key={device.ip} className={clsx("flex items-center gap-2 p-2 hover:bg-slate-900 cursor-pointer border-b border-slate-800/50 last:border-0", existing && "opacity-60")}
+                                        onClick={() => !existing && setSelectedIps(p => p.includes(device.ip) ? p.filter(i => i !== device.ip) : [...p, device.ip])}>
 
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-white font-mono text-sm">{device.ip}</span>
-                                            {device.hostname && <span className="text-xs text-slate-500 truncate">({device.hostname})</span>}
+                                        {existing ? <div title="Já cadastrado"><CheckSquare className="text-slate-600 shrink-0" size={16} /></div> :
+                                            selectedIps.includes(device.ip) ? <CheckSquare className="text-blue-500 shrink-0" size={16} /> : <Square className="text-slate-500 shrink-0" size={16} />}
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-white font-mono text-sm">{device.ip}</span>
+                                                {existing ? (
+                                                    <span className="text-xs bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">Existente: {existing.name}</span>
+                                                ) : (
+                                                    device.hostname && <span className="text-xs text-slate-500 truncate">({device.hostname})</span>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2 text-xs text-slate-500">
+                                                <span>{device.vendor}</span>
+                                                {device.mac && <span>• {device.mac}</span>}
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2 text-xs text-slate-500">
-                                            <span>{device.vendor}</span>
-                                            {device.mac && <span>• {device.mac}</span>}
+
+                                        <div className="w-32">
+                                            {!existing && (
+                                                <input
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                                                    placeholder="Nome (Opcional)"
+                                                    onClick={e => e.stopPropagation()}
+                                                    value={ipNames[device.ip] || ''}
+                                                    onChange={e => setIpNames({ ...ipNames, [device.ip]: e.target.value })}
+                                                />
+                                            )}
                                         </div>
                                     </div>
-
-                                    <div className="w-32">
-                                        <input
-                                            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                                            placeholder="Nome (Opcional)"
-                                            onClick={e => e.stopPropagation()}
-                                            value={ipNames[device.ip] || ''}
-                                            onChange={e => setIpNames({ ...ipNames, [device.ip]: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         <div className="flex justify-between items-center mt-4">
                             <span className="text-slate-400 text-sm">{selectedIps.length} selecionados</span>
                             <div className="flex gap-2">
-                                <button onClick={() => setShowScanner(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
+                                <button onClick={() => setShowScannerModal(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
                                 <button
                                     onClick={saveAllScanned}
                                     disabled={scannedDevices.length === 0}
@@ -992,7 +1036,9 @@ export function Equipments() {
                         </div>
                     </div>
                 </div>
-            )}
+
+            )
+            }
 
             {
                 showHistoryModal && selectedEqHistory && (

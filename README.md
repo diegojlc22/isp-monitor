@@ -20,7 +20,7 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 ---
 
 
-## 🚀 Novidades da Versão 4.0 (28/12/2025) - Centralized Alerts & WhatsApp 2.0
+## 🚀 Novidades da Versão 4.2 (30/12/2025) - Mobile Extreme & Agent Fix
 
 ### 🔔 1. Central de Alertas Unificada
 Toda a configuração de notificações foi centralizada em uma única aba **"Alertas"**:
@@ -161,8 +161,8 @@ O sistema tenta se corrigir sozinho. Se falhar 3x, verifique a aba **LOGS** no L
 - ✅ App Mobile: **Online**
 
 
-**Última atualização:** 28/12/2025
-**Build:** v4.0.0 (Centralized Alerts & WhatsApp 2.0 Edition)
+**Última atualização:** 30/12/2025
+**Build:** v4.2.0 (Mobile Extreme & Agent Fix Edition)
 
 
 ---

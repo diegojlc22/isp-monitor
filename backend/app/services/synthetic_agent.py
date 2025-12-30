@@ -138,6 +138,99 @@ async def train_baselines_job():
     except Exception as e:
         print(f"[IA-BRAIN] Error training: {e}")
 
+async def run_single_test_cycle():
+    """
+    🧪 Single test cycle for manual trigger (non-blocking).
+    Returns results immediately without entering infinite loop.
+    """
+    print("[IA-AGENT] Running manual test cycle...")
+    
+    try:
+        results = []
+        current_hour = datetime.now().hour
+        
+        async with AsyncSessionLocal() as session:
+            # Load Configs
+            params_res = await session.execute(select(Parameters).where(Parameters.key.in_(["agent_latency_threshold", "agent_anomaly_cycles"])))
+            params = {p.key: p.value for p in params_res.scalars().all()}
+            
+            Z_SCORE_LIMIT = 3.0
+            fixed_limit = int(params.get("agent_latency_threshold", 300))
+            
+            # Get Targets
+            targets_res = await session.execute(select(MonitorTarget).where(MonitorTarget.enabled == True))
+            db_targets = targets_res.scalars().all()
+            
+            if not db_targets:
+                return {"message": "No targets configured", "tests": []}
+            
+            # Execute Tests
+            batch_results = []
+            for t in db_targets:
+                res = {}
+                if t.type == 'dns':
+                    res = await check_dns(t.target)
+                elif t.type == 'http':
+                    url = t.target if t.target.startswith("http") else f"https://{t.target}"
+                    res = await check_http(url)
+                
+                test_result = {
+                    "type": t.type,
+                    "target": t.target,
+                    "latency": res.get("latency"),
+                    "success": res.get("success"),
+                    "is_anomaly": False
+                }
+                
+                # Save Log
+                log = SyntheticLog(
+                    test_type=t.type,
+                    target=t.target,
+                    latency_ms=res.get("latency") if res.get("latency") else 0,
+                    success=res.get("success"),
+                    timestamp=datetime.utcnow()
+                )
+                session.add(log)
+                
+                # Check for anomaly
+                if res.get("latency"):
+                    metric_key = f"synthetic_{t.target}"
+                    base_res = await session.execute(select(Baseline).where(
+                        Baseline.metric_type == metric_key,
+                        Baseline.hour_of_day == current_hour
+                    ))
+                    baseline = base_res.scalar_one_or_none()
+                    
+                    if baseline and baseline.sample_count > 10:
+                        std = baseline.std_dev if baseline.std_dev > 5 else 5
+                        z_score = (res["latency"] - baseline.avg_value) / std
+                        
+                        if z_score > Z_SCORE_LIMIT:
+                            test_result["is_anomaly"] = True
+                            test_result["z_score"] = round(z_score, 1)
+                            test_result["expected"] = int(baseline.avg_value)
+                    else:
+                        # Use fixed threshold
+                        if res["latency"] > fixed_limit:
+                            test_result["is_anomaly"] = True
+                            test_result["expected"] = f"<{fixed_limit}"
+                
+                batch_results.append(test_result)
+            
+            await session.commit()
+            
+            anomalies = [r for r in batch_results if r["is_anomaly"]]
+            
+            return {
+                "message": f"Test completed. {len(anomalies)} anomalies detected.",
+                "tests": batch_results,
+                "anomalies": anomalies
+            }
+            
+    except Exception as e:
+        print(f"[IA-AGENT] Manual test error: {e}")
+        return {"error": str(e)}
+
 async def synthetic_agent_job():
     """
     🕵️ THE EYE: Monitors and Judges using Z-Score (Statistical Anomaly Detection).
@@ -170,13 +263,18 @@ async def synthetic_agent_job():
                 targets = []
                 
                 if not db_targets:
-                     # Default fallbacks
-                    targets.append(("dns", DEFAULT_DNS))
-                    for url in DEFAULT_HTTP:
-                        targets.append(("http", url))
+                     # Remove defaults to respect user preference
+                     # if user wants to monitor google, they add it manually.
+                     pass 
                 else:
                     for t in db_targets:
                         targets.append((t.type, t.target))
+
+                # If no targets, skip
+                if not targets:
+                    print("[IA-AGENT] No targets configured. Sleeping.")
+                    await asyncio.sleep(60)
+                    continue
 
                 # 2. Execute Tests
                 batch_results = []
@@ -261,6 +359,7 @@ async def synthetic_agent_job():
                     state_status = "NORMAL"
 
                 # 5. Alert Trigger
+                print(f"[IA-AGENT-DEBUG] Checking alert: streak={anomaly_streak}, limit={ANOMALY_LIMIT}, status={state_status}")
                 if anomaly_streak >= ANOMALY_LIMIT and state_status != "ALERTED":
                     state_status = "ALERTED"
                     
@@ -268,11 +367,11 @@ async def synthetic_agent_job():
                     avg_lat = sum([r["latency"] for r in anomalies_found]) / len(anomalies_found)
                     
                     msg = (
-                        "🚨 **IA DETECTOU DEGRADAÇÃO** 🚨\n\n"
-                        "📉 **Status:** Instabilidade Confirmada\n"
-                        f"⏱️ **Latência Média:** {int(avg_lat)}ms\n"
-                        f"🕒 **Horário:** {current_hour}:00h\n\n"
-                        "🔍 **Análise Estatística:**\n"
+                        "🚨 *IA DETECTOU DEGRADAÇÃO* 🚨\n\n"
+                        "📉 *Status:* Instabilidade Confirmada\n"
+                        f"⏱️ *Latência Média:* {int(avg_lat)}ms\n"
+                        f"🕒 *Horário:* {current_hour}:00h\n\n"
+                        "🔍 *Análise Estatística:*\n"
                     )
                     
                     for a in anomalies_found:
@@ -282,14 +381,28 @@ async def synthetic_agent_job():
                         
                     msg += "\n⚠️ O sistema aprendeu que isso é incomum para agora."
 
-                    # Send Telegram
-                    token_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_token"))
-                    chat_res = await session.execute(select(Parameters).where(Parameters.key == "telegram_chat_id"))
-                    token = token_res.scalar_one_or_none()
-                    chat_id = chat_res.scalar_one_or_none()
+                    # Send Multichannel Notification
+                    # Fetch notification config from DB
+                    notif_params = await session.execute(select(Parameters).where(Parameters.key.in_([
+                        'telegram_token', 'telegram_chat_id', 'telegram_enabled',
+                        'whatsapp_enabled', 'whatsapp_target', 'whatsapp_target_group',
+                        'notify_agent'
+                    ])))
+                    notif_config = {p.key: p.value for p in notif_params.scalars().all()}
                     
-                    if token and token.value and chat_id and chat_id.value:
-                        await send_telegram_alert(token.value, chat_id.value, msg)
+                    # Only send if agent notifications are enabled
+                    if notif_config.get('notify_agent', 'true').lower() == 'true':
+                        from backend.app.services.notifier import send_notification
+                        
+                        await send_notification(
+                            message=msg,
+                            telegram_token=notif_config.get('telegram_token'),
+                            telegram_chat_id=notif_config.get('telegram_chat_id'),
+                            telegram_enabled=notif_config.get('telegram_enabled', 'true').lower() == 'true',
+                            whatsapp_enabled=notif_config.get('whatsapp_enabled', 'false').lower() == 'true',
+                            whatsapp_target=notif_config.get('whatsapp_target'),
+                            whatsapp_target_group=notif_config.get('whatsapp_target_group')
+                        )
 
         except Exception as e:
             print(f"[IA-AGENT] Job Error: {e}")

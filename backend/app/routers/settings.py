@@ -172,19 +172,13 @@ from pydantic import BaseModel
 import os
 
 class DatabaseConfig(BaseModel):
-    db_type: str = "sqlite" # sqlite, postgresql
-    postgres_url: str = "" # postgresql+asyncpg://user:pass@localhost/dbname
+    db_type: str = "postgresql" 
+    postgres_url: str = "" 
 
 @router.get("/database", response_model=DatabaseConfig)
 async def get_database_config(current_user = Depends(get_current_admin_user)):
-    # Read from env var or .env file manually if needed, but for now just check os.environ
-    # In a real app we might read specific .env file content
     current_url = os.getenv("DATABASE_URL", "")
-    
-    if "postgresql" in current_url:
-        return DatabaseConfig(db_type="postgresql", postgres_url=current_url)
-    else:
-        return DatabaseConfig(db_type="sqlite", postgres_url="")
+    return DatabaseConfig(db_type="postgresql", postgres_url=current_url)
 
 @router.post("/database")
 async def update_database_config(config: DatabaseConfig, current_user = Depends(get_current_admin_user)):
@@ -192,14 +186,12 @@ async def update_database_config(config: DatabaseConfig, current_user = Depends(
     env_path = ".env"
     
     new_url = ""
-    if config.db_type == "postgresql":
-        # Validate minimal structure
-        if "postgresql" not in config.postgres_url:
-             return {"error": "URL inválida. Deve começar com postgresql..."}
-        new_url = config.postgres_url
+    # Validate minimal structure
+    if "postgresql" not in config.postgres_url:
+         return {"error": "URL inválida. Deve começar com postgresql..."}
+    new_url = config.postgres_url
     
     # Write to .env
-    # We read existing lines to preserve other keys if any (though we don't have many yet)
     lines = []
     if os.path.exists(env_path):
         with open(env_path, "r") as f:
@@ -208,15 +200,12 @@ async def update_database_config(config: DatabaseConfig, current_user = Depends(
     # Remove existing DATABASE_URL
     lines = [line for line in lines if not line.startswith("DATABASE_URL=")]
     
-    # Add new if not sqlite (sqlite is default when missing)
     if new_url:
         lines.append(f"DATABASE_URL={new_url}\n")
         
     with open(env_path, "w") as f:
         f.writelines(lines)
         
-    # Update current os.environ so it affects current process if we were to re-init (though restart is best)
-    # The user should restart the backend for this to fully take effect usually
     if new_url:
         os.environ["DATABASE_URL"] = new_url
     else:
@@ -389,16 +378,52 @@ async def test_whatsapp_message_route(
     except Exception as e:
         return {"error": str(e)}
 
-@router.post("/telegram/test-backup")
-async def test_telegram_backup():
+async def send_whatsapp_internal(db: AsyncSession, message: str):
     try:
+        # Get Target
+        target_value = None
+        res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target_group"))
+        target_obj = res.scalar_one_or_none()
+        if target_obj and target_obj.value: target_value = target_obj.value
+        
+        if not target_value:
+            res = await db.execute(select(Parameters).where(Parameters.key == "whatsapp_target"))
+            target_obj = res.scalar_one_or_none()
+            if target_obj and target_obj.value: target_value = target_obj.value
+            
+        if not target_value: return
+        
+        url = "http://127.0.0.1:3001/send"
+        headers = {"x-api-key": settings.msg_secret}
+        payload = {"number": target_value, "message": message}
+        
+        async with aiohttp.ClientSession() as session:
+            await session.post(url, json=payload, headers=headers, timeout=10)
+    except: pass
+
+@router.post("/telegram/test-backup")
+async def test_telegram_backup(db: AsyncSession = Depends(get_db)):
+    try:
+        import asyncio
         import subprocess
-        import sys
         
-        # Run script asynchronously (fire and forget from API perspective, but script runs)
-        subprocess.Popen([sys.executable, "backup_db.py"], creationflags=0x08000000)
+        bat_path = os.path.join(os.getcwd(), "scripts", "backup_postgres.bat")
         
-        return {"message": "Backup solicitado! Verifique seu Telegram em instantes."}
+        # Run async and wait
+        process = await asyncio.create_subprocess_shell(
+            f'"{bat_path}"',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0:
+            await send_whatsapp_internal(db, "✅ *[Sistema]* Backup Manual Concluído com Sucesso!")
+            return {"message": "Backup realizado com sucesso! Notificação enviada."}
+        else:
+            err = stderr.decode(errors='ignore') if stderr else "Erro desconhecido"
+            return {"error": f"Falha no script (Code {process.returncode}): {err}"}
+
     except Exception as e:
         return {"error": f"Falha ao iniciar backup: {str(e)}"}
 @router.get("/whatsapp/groups")

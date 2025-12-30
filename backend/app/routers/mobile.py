@@ -159,3 +159,22 @@ async def get_nearby_towers(loc: GeoLocation, db: AsyncSession = Depends(get_db)
     except Exception as e:
         print(f"Erro Towers: {e}")
         return [] # Retorna vazio em erro para não quebrar app
+
+# State Global para última localização
+latest_technician_location = {}
+
+@router.get("/last-location")
+def get_last_location():
+    return latest_technician_location
+
+@router.post("/location")
+async def receive_location(loc: GeoLocation):
+    global latest_technician_location
+    """Recebe localização do técnico em tempo real"""
+    print(f"📍 [MOBILE LOCATION] Técnico em: {loc.latitude}, {loc.longitude}")
+    latest_technician_location = {
+        "latitude": loc.latitude,
+        "longitude": loc.longitude,
+        "timestamp": time.time()
+    }
+    return {"status": "received"}

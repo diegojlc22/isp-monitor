@@ -20,18 +20,27 @@ async def get_synthetic_logs(
     logs = result.scalars().all()
     return logs
 
+@router.delete("/logs")
+async def clear_agent_logs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from sqlalchemy import delete
+    await db.execute(delete(SyntheticLog))
+    await db.commit()
+    return {"message": "Logs limpos com sucesso"}
+
 @router.post("/trigger")
 async def trigger_manual_test(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Trigger manual synthetic test immediately (for debugging).
+    Trigger manual synthetic test immediately (single cycle, non-blocking).
     """
-    from backend.app.services.synthetic_agent import synthetic_agent_job
-    import asyncio
-    asyncio.create_task(synthetic_agent_job())
-    return {"status": "Test triggered in background"}
+    from backend.app.services.synthetic_agent import run_single_test_cycle
+    result = await run_single_test_cycle()
+    return {"status": "Test completed", "results": result}
 
 from pydantic import BaseModel
 

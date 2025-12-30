@@ -1,8 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp, RefreshCw, Eraser } from 'lucide-react';
 import toast from 'react-hot-toast';
+import clsx from 'clsx';
 
 interface SyntheticLog {
     id: number;
@@ -113,13 +114,30 @@ const Agent: React.FC = () => {
         }
     };
 
+    const clearLogs = async () => {
+        if (!confirm("Limpar todo o histórico de testes sintéticos?")) return;
+        try {
+            await api.delete('/agent/logs');
+            toast.success("Logs limpos!");
+            fetchData();
+        } catch (err) {
+            toast.error("Erro ao limpar log.");
+        }
+    };
+
+    const [testing, setTesting] = useState(false);
+
     const triggerTest = async () => {
+        if (testing) return;
+        setTesting(true);
         try {
             await api.post('/agent/trigger');
-            toast.success('Teste manual solicitado! Atualize em alguns segundos.');
-            setTimeout(fetchData, 5000);
+            toast.success('Teste iniciado... Acompanhe no log.');
+            // Refresh logs after delay
+            setTimeout(() => { fetchData(); setTesting(false); }, 3000);
         } catch (err) {
             toast.error('Erro ao iniciar teste.');
+            setTesting(false);
         }
     };
 
@@ -156,10 +174,11 @@ const Agent: React.FC = () => {
                     </button>
                     <button
                         onClick={triggerTest}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors font-medium"
+                        disabled={testing}
+                        className={clsx("flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium", testing ? "bg-purple-800 text-purple-300 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white")}
                     >
-                        <Play size={18} />
-                        Rodar Teste Agora
+                        {testing ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <Play size={18} />}
+                        {testing ? "Executando..." : "Rodar Teste Agora"}
                     </button>
                 </div>
             </div>
@@ -232,6 +251,14 @@ const Agent: React.FC = () => {
                 <div className="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <h2 className="font-semibold text-lg">Últimos Testes Sintéticos</h2>
+                        <div className="flex gap-2 ml-4">
+                            <button onClick={fetchData} title="Atualizar agora" className="p-1.5 hover:bg-slate-700 rounded transition text-slate-400 hover:text-white">
+                                <RefreshCw size={16} />
+                            </button>
+                            <button onClick={clearLogs} title="Limpar Logs" className="p-1.5 hover:bg-red-900/50 rounded transition text-slate-400 hover:text-red-400">
+                                <Eraser size={16} />
+                            </button>
+                        </div>
                         <button
                             onClick={() => setShowLogs(!showLogs)}
                             className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors text-slate-400 hover:text-white"

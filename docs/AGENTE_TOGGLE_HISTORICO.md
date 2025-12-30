@@ -1,5 +1,49 @@
 # 📡 AGENTE TOGGLE - Histórico de Desenvolvimento
 
+## 🚀 Sessão 30/12/2025 - Mobile Extreme & Agent Fix (V4.2)
+
+### 🎯 Objetivo Principal
+Resolver definitivamente a conectividade do App Mobile em redes externas (NAT/4G), corrigir as notificações do Agente IA (Telegram/WhatsApp) e polir a interface do mapa mobile.
+
+### ✅ Funcionalidades Implementadas
+
+#### 1. **Conectividade Mobile Extreme**
+- ✅ **Ngrok Permanent Domain**: Configuração do domínio fixo `uniconoclastic-addedly-yareli.ngrok-free.dev` apontando para a API (8080).
+- ✅ **Expo Tunnel Integration**: Ativação do modo `--tunnel` no Expo, permitindo carregar o app de qualquer rede sem depender de estar no mesmo Wi-Fi.
+- ✅ **Configuração Híbrida**: O app agora tenta conexão local primeiro e faz fallback automático para o Ngrok permanente.
+
+#### 2. **Intelligent Agent (IA) Polish**
+- ✅ **Fix de Notificações**: Correção de importação e lógica na função `send_notification`, garantindo envio multicanal (Telegram + WhatsApp).
+- ✅ **Debug de Anomalias**: Implementação de logs detalhados (`[IA-AGENT-DEBUG]`) para rastrear o streak de detecção e gatilhos de alerta.
+- ✅ **Manual Trigger Sync**: Sincronização do botão "Rodar Teste Agora" para execução imediata e feedback visual.
+
+#### 3. **Mobile Map & UX Fixes**
+- ✅ **Renderização das Torres**: Correção da lógica de filtragem (lat/long) no mapa do celular.
+- ✅ **Ícones de Torres**: Novo design com RadioTower, bordas nítidas e padding de segurança para evitar cortes no Android.
+- ✅ **Auto-Zoom Inteligente**: O mapa agora ajusta o zoom automaticamente para enquadrar o técnico e todas as torres cadastradas.
+
+#### 4. **Estabilidade de Backend**
+- ✅ **PostgreSQL Optimizations**: Verificação de índices BRIN e ajuste de autovacuum para logs de ping massivos.
+- ✅ **Zombie Process Killer**: Reforço no encerramento de processos antigos (Ngrok/Python/Node) ao reiniciar o sistema.
+
+### 📦 Arquivos Modificados
+- `backend/app/services/synthetic_agent.py`: Lógica de notificação e alertas fixa.
+- `mobile/services/api.js`: URL permanente do Ngrok configurada.
+- `mobile/app/(tabs)/map.js`: Renderização dos ícones e zoom corrigidos.
+- `backend/app/routers/mobile.py`: Melhoria no endpoint de torres próximas.
+
+### 🧪 Testes Realizados
+- ✅ **Envio Multicanal**: Teste de anomalia disparou WhatsApp e Telegram simultaneamente.
+- ✅ **Remote Boot**: Expo carregado via rede celular (4G) com sucesso usando o túnel.
+- ✅ **Visual Check**: Torres aparecem perfeitamente no mapa com nomes e distâncias reais.
+
+### 🎯 Impacto
+- **Mobilidade Total**: O técnico agora pode ir para o campo e continuar usando o app via 4G com dados em tempo real.
+- **Alertas Confiáveis**: O Agente IA agora notifica instantaneamente sobre degradações de latência.
+- **Interface Premium**: O mapa mobile agora tem visual profissional e carregamento fluido.
+
+---
+
 ## 🚀 Sessão 28/12/2025 - Centralized Alerts & WhatsApp 2.0 (V4.0)
 
 ### 🎯 Objetivo Principal

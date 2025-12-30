@@ -65,7 +65,47 @@ async def read_equipments(
     # Cache valido por 10s
     await cache.set(cache_key, equipments, ttl_seconds=10)
     
+    
+    result = await db.execute(query)
+    equipments = result.scalars().all()
+    
+    # Cache valido por 10s
+    await cache.set(cache_key, equipments, ttl_seconds=10)
+    
     return equipments
+
+@router.post("/batch")
+async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSession = Depends(get_db)):
+    """Bulk create equipments (used by Network Scanner)"""
+    results = {"success": 0, "failed": 0, "errors": []}
+    
+    unique_check_stmt = select(Equipment.ip)
+    existing_ips_res = await db.execute(unique_check_stmt)
+    existing_ips = set(existing_ips_res.scalars().all())
+
+    to_add = []
+    
+    for eq in equipments:
+        if eq.ip in existing_ips:
+            results["failed"] += 1
+            results["errors"].append(f"IP {eq.ip} already exists")
+            continue
+            
+        # Basic validation passed
+        to_add.append(Equipment(**eq.model_dump()))
+        existing_ips.add(eq.ip) # Prevent duplicates within the batch itself
+        
+    if to_add:
+        try:
+            db.add_all(to_add)
+            await db.commit()
+            results["success"] = len(to_add)
+            await cache.clear()
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"Bulk insert failed: {str(e)}")
+            
+    return results
 
 @router.post("/", response_model=EquipmentSchema)
 async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db)):
@@ -202,6 +242,26 @@ async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Falha no reboot: {msg}")
         
     return {"message": "Comando de reboot enviado com sucesso"}
+
+@router.post("/{eq_id}/test")
+async def test_equipment_connection(eq_id: int, db: AsyncSession = Depends(get_db)):
+    """Teste manual de conectividade (Ping)"""
+    db_eq = await db.get(Equipment, eq_id)
+    if not db_eq:
+        raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+    
+    from icmplib import async_ping
+    try:
+        host = await async_ping(db_eq.ip, count=4, timeout=1, privileged=False)
+        return {
+            "ip": db_eq.ip,
+            "is_online": host.is_alive,
+            "latency": host.avg_rtt,
+            "packet_loss": host.packet_loss,
+            "details": f"Min: {host.min_rtt}ms, Max: {host.max_rtt}ms"
+        }
+    except Exception as e:
+        return {"is_online": False, "error": str(e), "ip": db_eq.ip}
 
 @router.get("/scan/stream/")
 async def scan_network_stream(
