@@ -301,10 +301,6 @@ if __name__ == "__main__":
     ensure_singleton()
     service = PingerService()
     try:
-        if asyncio.get_event_loop().is_closed():
-            asyncio.run(service.start())
-        else:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(service.start())
+        asyncio.run(service.start())
     except KeyboardInterrupt:
         pass

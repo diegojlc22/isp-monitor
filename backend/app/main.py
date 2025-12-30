@@ -139,11 +139,14 @@ async def health_check():
     except Exception as e:
         db_status = f"error: {str(e)}"
         
+    if db_status != "ok":
+        logger.error(f"🏥 Health Check Failed: {db_status}")
+        
     return {
         "status": "healthy" if db_status == "ok" else "degraded",
         "database": db_status,
         "timestamp": time.time(),
-        "version": "3.2.0-enterprise"
+        "version": "4.2.0-turbo"
     }
 
 
