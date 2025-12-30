@@ -8,6 +8,7 @@ from sqlalchemy import select, text
 import os
 import time
 import logging
+import asyncio
 
 from backend.app.routers import towers, equipments, settings, auth, users, alerts, agent, mobile, metrics, expo, ngrok
 from backend.app.database import engine, Base, AsyncSessionLocal
