@@ -36,11 +36,32 @@ async def trigger_manual_test(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Trigger manual synthetic test immediately (single cycle, non-blocking).
+    Inicia o loop de monitoramento manual contínuo em background.
     """
-    from backend.app.services.synthetic_agent import run_single_test_cycle
-    result = await run_single_test_cycle()
-    return {"status": "Test completed", "results": result}
+    from backend.app.services.synthetic_agent import start_manual_test_loop
+    asyncio.create_task(start_manual_test_loop())
+    return {"status": "Continuous test loop started in background"}
+
+@router.post("/stop")
+async def stop_manual_test(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Para o loop de monitoramento manual.
+    """
+    from backend.app.services.synthetic_agent import stop_manual_test_loop
+    await stop_manual_test_loop()
+    return {"status": "Manual test loop stop signal sent"}
+
+@router.get("/status")
+async def get_agent_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna se o loop manual está rodando.
+    """
+    from backend.app.services.synthetic_agent import manual_loop_running
+    return {"manual_loop_running": manual_loop_running}
 
 from pydantic import BaseModel
 

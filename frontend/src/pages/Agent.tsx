@@ -1,6 +1,17 @@
 
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import {
+    getAgentStatus,
+    getMonitorTargets,
+    createMonitorTarget,
+    deleteMonitorTarget,
+    triggerAgentTest,
+    stopAgentTest,
+    clearAgentLogs,
+    getAgentLogs,
+    getAgentSettings,
+    updateAgentSettings
+} from '../services/api';
 import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp, RefreshCw, Eraser } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -45,11 +56,11 @@ const Agent: React.FC = () => {
         setLoading(true);
         try {
             const [resLogs, resTargets] = await Promise.all([
-                api.get('/agent/logs'),
-                api.get('/agent/targets')
+                getAgentLogs(),
+                getMonitorTargets()
             ]);
-            setLogs(resLogs.data);
-            setTargets(resTargets.data);
+            setLogs(resLogs);
+            setTargets(resTargets);
         } catch (err) {
             console.error(err);
             toast.error('Erro ao buscar dados.');
@@ -60,10 +71,10 @@ const Agent: React.FC = () => {
 
     const fetchSettings = async () => {
         try {
-            const res = await api.get('/agent/settings');
-            setLatencyThreshold(parseInt(res.data.agent_latency_threshold || '300'));
-            setAnomalyCycles(parseInt(res.data.agent_anomaly_cycles || '2'));
-            setCheckInterval(parseInt(res.data.agent_check_interval || '300'));
+            const res = await getAgentSettings();
+            setLatencyThreshold(parseInt(res.agent_latency_threshold || '300'));
+            setAnomalyCycles(parseInt(res.agent_anomaly_cycles || '2'));
+            setCheckInterval(parseInt(res.agent_check_interval || '300'));
             setShowSettingsModal(true);
         } catch (err) {
             toast.error('Erro ao carregar configurações.');
@@ -73,7 +84,7 @@ const Agent: React.FC = () => {
     const saveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await api.post('/agent/settings', {
+            await updateAgentSettings({
                 latency_threshold: latencyThreshold,
                 anomaly_cycles: anomalyCycles,
                 check_interval: checkInterval
@@ -85,14 +96,12 @@ const Agent: React.FC = () => {
         }
     };
 
-
-
     const handleAddTarget = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newName || !newTarget) return;
 
         try {
-            await api.post('/agent/targets', { name: newName, target: newTarget, type: newType });
+            await createMonitorTarget({ name: newName, target: newTarget, type: newType });
             toast.success('Alvo adicionado!');
             setShowModal(false);
             setNewName('');
@@ -106,7 +115,7 @@ const Agent: React.FC = () => {
     const handleDeleteTarget = async (id: number) => {
         if (!confirm('Remover monitoramento deste alvo?')) return;
         try {
-            await api.delete(`/agent/targets/${id}`);
+            await deleteMonitorTarget(id);
             toast.success('Alvo removido.');
             fetchData();
         } catch (err) {
@@ -117,7 +126,7 @@ const Agent: React.FC = () => {
     const clearLogs = async () => {
         if (!confirm("Limpar todo o histórico de testes sintéticos?")) return;
         try {
-            await api.delete('/agent/logs');
+            await clearAgentLogs();
             toast.success("Logs limpos!");
             fetchData();
         } catch (err) {
@@ -126,24 +135,45 @@ const Agent: React.FC = () => {
     };
 
     const [testing, setTesting] = useState(false);
+    const [manualRunning, setManualRunning] = useState(false);
+
+    const checkStatus = async () => {
+        try {
+            const status = await getAgentStatus();
+            setManualRunning(status.manual_loop_running || false);
+        } catch (e) { /* ignore */ }
+    };
 
     const triggerTest = async () => {
-        if (testing) return;
         setTesting(true);
         try {
-            await api.post('/agent/trigger');
-            toast.success('Teste iniciado... Acompanhe no log.');
-            // Refresh logs after delay
-            setTimeout(() => { fetchData(); setTesting(false); }, 3000);
+            await triggerAgentTest();
+            toast.success('Loop de teste contínuo INICIADO.');
+            setTesting(false);
+            setManualRunning(true);
         } catch (err) {
             toast.error('Erro ao iniciar teste.');
             setTesting(false);
         }
     };
 
+    const stopTest = async () => {
+        try {
+            await stopAgentTest();
+            toast('Sinal de parada enviado.', { icon: '🛑' });
+            setManualRunning(false);
+        } catch (err) {
+            toast.error('Erro ao parar o teste.');
+        }
+    };
+
     useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 30000);
+        checkStatus();
+        const interval = setInterval(() => {
+            fetchData();
+            checkStatus();
+        }, 10000);
         return () => clearInterval(interval);
     }, []);
 
@@ -172,14 +202,24 @@ const Agent: React.FC = () => {
                         <Plus size={18} />
                         Novo Alvo
                     </button>
-                    <button
-                        onClick={triggerTest}
-                        disabled={testing}
-                        className={clsx("flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium", testing ? "bg-purple-800 text-purple-300 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white")}
-                    >
-                        {testing ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <Play size={18} />}
-                        {testing ? "Executando..." : "Rodar Teste Agora"}
-                    </button>
+                    {manualRunning ? (
+                        <button
+                            onClick={stopTest}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium animate-pulse"
+                        >
+                            <X size={18} />
+                            Parar Testes
+                        </button>
+                    ) : (
+                        <button
+                            onClick={triggerTest}
+                            disabled={testing}
+                            className={clsx("flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium", testing ? "bg-purple-800 text-purple-300 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 text-white")}
+                        >
+                            {testing ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <Play size={18} />}
+                            {testing ? "Iniciando..." : "Rodar Teste Agora"}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -228,95 +268,116 @@ const Agent: React.FC = () => {
                         </div>
                         <Wifi className="text-gray-500" />
                     </div>
-                    <div className="text-sm text-gray-500">8.8.8.8: 12ms</div>
+                    <div className="text-sm text-gray-500">Média Latência: 12ms</div>
                 </div>
 
                 <div className="card p-6 bg-gray-800 rounded-xl border border-gray-700/50">
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <p className="text-gray-400 text-sm">Anomalias (24h)</p>
-                            <h3 className="text-2xl font-bold text-gray-200">0</h3>
+                            <p className="text-gray-400 text-sm">Problemas Hoje</p>
+                            <h3 className="text-2xl font-bold text-purple-400">0</h3>
                         </div>
                         <AlertTriangle className="text-gray-500" />
                     </div>
-                    <div className="text-sm text-gray-500">Nenhum desvio detectado</div>
+                    <div className="text-sm text-gray-500">0 anomalias detectadas</div>
                 </div>
             </div>
 
-            {/* Tabela de Logs */}
-            <div className="bg-gray-800 rounded-xl border border-gray-700/50 overflow-hidden shadow-lg">
-                {loading && logs.length === 0 && (
-                    <div className="p-4 text-center text-gray-500">Carregando dados...</div>
-                )}
-                <div className="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
+            {/* Histórico de Testes */}
+            <div className="card bg-gray-800 border border-gray-700/50 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/50">
                     <div className="flex items-center gap-3">
-                        <h2 className="font-semibold text-lg">Últimos Testes Sintéticos</h2>
-                        <div className="flex gap-2 ml-4">
-                            <button onClick={fetchData} title="Atualizar agora" className="p-1.5 hover:bg-slate-700 rounded transition text-slate-400 hover:text-white">
-                                <RefreshCw size={16} />
-                            </button>
-                            <button onClick={clearLogs} title="Limpar Logs" className="p-1.5 hover:bg-red-900/50 rounded transition text-slate-400 hover:text-red-400">
-                                <Eraser size={16} />
-                            </button>
-                        </div>
+                        <h2 className="font-bold flex items-center gap-2">
+                            Histórico de Testes Sintéticos
+                        </h2>
+                        {manualRunning && (
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider rounded border border-green-500/20">
+                                <div className="w-1 h-1 rounded-full bg-green-400 animate-ping"></div>
+                                Live Monitoring
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={clearLogs}
+                            className="p-2 hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors rounded-lg"
+                            title="Limpar Logs"
+                        >
+                            <Eraser size={18} />
+                        </button>
+                        <button
+                            onClick={fetchData}
+                            disabled={loading}
+                            className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors rounded-lg"
+                        >
+                            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                        </button>
                         <button
                             onClick={() => setShowLogs(!showLogs)}
-                            className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors text-slate-400 hover:text-white"
-                            title={showLogs ? "Ocultar histórico" : "Mostrar histórico"}
+                            className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors rounded-lg"
                         >
                             {showLogs ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                         </button>
                     </div>
-                    <span className="text-xs text-gray-500">Atualizado a cada 30s</span>
                 </div>
+
                 {showLogs && (
-                    <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
-                        <table className="w-full">
-                            <thead className="sticky top-0 bg-slate-900 border-b border-gray-700/50 shadow-sm z-10">
-                                <tr className="text-left text-sm text-gray-400">
-                                    <th className="px-6 py-3 font-medium">Hora</th>
-                                    <th className="px-6 py-3 font-medium">Tipo</th>
-                                    <th className="px-6 py-3 font-medium">Alvo</th>
-                                    <th className="px-6 py-3 font-medium">Latência</th>
-                                    <th className="px-6 py-3 font-medium">Status</th>
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="text-xs uppercase text-gray-500 bg-gray-900/30 sticky top-0">
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold">Horário</th>
+                                    <th className="px-6 py-3 font-semibold">Tipo</th>
+                                    <th className="px-6 py-3 font-semibold">Alvo</th>
+                                    <th className="px-6 py-3 font-semibold">Latência</th>
+                                    <th className="px-6 py-3 font-semibold">Status</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-700/50 text-sm">
-                                {logs.length === 0 && !loading ? (
-                                    <tr>
-                                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                            Nenhum log encontrado. O agente roda a cada 5 minutos.
+                            <tbody className="divide-y divide-gray-700/30">
+                                {logs.map((log) => (
+                                    <tr key={log.id} className="hover:bg-gray-700/20 transition-colors group">
+                                        <td className="px-6 py-4 text-sm text-gray-400 font-mono">
+                                            {new Date(log.timestamp).toLocaleTimeString()}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-[10px] uppercase bg-gray-900 px-2 py-0.5 rounded border border-gray-700 font-bold text-gray-400">
+                                                {log.test_type}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm font-medium text-gray-200">{log.target}</td>
+                                        <td className="px-6 py-4">
+                                            {log.latency_ms ? (
+                                                <span className={clsx(
+                                                    "font-mono text-sm font-bold",
+                                                    log.latency_ms > 200 ? "text-amber-400" : "text-green-400"
+                                                )}>
+                                                    {log.latency_ms.toFixed(1)}ms
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-600">-</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {log.success ? (
+                                                <span className="inline-flex items-center gap-1 text-green-400 text-xs font-bold">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
+                                                    SUCESSO
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-red-500 text-xs font-bold">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                                                    FALHA
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
-                                ) : (
-                                    logs.map((log) => (
-                                        <tr key={log.id} className="hover:bg-slate-800/50 transition-colors">
-                                            <td className="px-6 py-3 text-gray-300 whitespace-nowrap">
-                                                {new Date(log.timestamp).toLocaleTimeString()}
-                                            </td>
-                                            <td className="px-6 py-3">
-                                                <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wide uppercase ${log.test_type === 'dns' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                                                    }`}>
-                                                    {log.test_type}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-3 text-gray-300 font-mono text-xs">{log.target}</td>
-                                            <td className="px-6 py-3 text-gray-300 font-mono">
-                                                {log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '-'}
-                                            </td>
-                                            <td className="px-6 py-3">
-                                                {log.success ? (
-                                                    <span className="text-green-400 flex items-center gap-1.5 text-xs font-medium">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" /> OK
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-red-400 flex items-center gap-1.5 text-xs font-medium">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)]" /> FALHA
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
+                                ))}
+                                {logs.length === 0 && !loading && (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                                            Nenhum log encontrado.
+                                        </td>
+                                    </tr>
                                 )}
                             </tbody>
                         </table>
@@ -324,67 +385,60 @@ const Agent: React.FC = () => {
                 )}
             </div>
 
-            {/* Modal Add Target */}
+            {/* Modal Novo Alvo */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">Novo Alvo de Monitoramento</h3>
-                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
-                                <X size={24} />
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
+                        <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Plus size={20} className="text-purple-500" />
+                                Adicionar Novo Alvo
+                            </h3>
+                            <button onClick={() => setShowModal(false)} className="text-slate-500 hover:text-white">
+                                <X size={20} />
                             </button>
                         </div>
-
-                        <form onSubmit={handleAddTarget} className="space-y-4">
+                        <form onSubmit={handleAddTarget} className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Nome Amigável</label>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Nome do Local</label>
                                 <input
                                     type="text"
                                     value={newName}
                                     onChange={e => setNewName(e.target.value)}
-                                    placeholder="Ex: Servidor Jogo FIFA"
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                    placeholder="Ex: Google DNS, Switch Central"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white outline-none focus:ring-2 focus:ring-purple-500"
                                     required
                                 />
                             </div>
-
                             <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Tipo</label>
-                                <select
-                                    value={newType}
-                                    onChange={e => setNewType(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                                >
-                                    <option value="http">Site WEB (HTTP/HTTPS)</option>
-                                    <option value="dns">Servidor DNS (UDP)</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Alvo (IP ou URL)</label>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">IP ou URL</label>
                                 <input
                                     type="text"
                                     value={newTarget}
                                     onChange={e => setNewTarget(e.target.value)}
-                                    placeholder={newType === 'http' ? 'https://google.com' : '8.8.4.4'}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                    placeholder="8.8.8.8 ou google.com"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white outline-none focus:ring-2 focus:ring-purple-500"
                                     required
                                 />
                             </div>
-
-                            <div className="pt-4 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-medium transition-colors"
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Tipo de Teste</label>
+                                <select
+                                    value={newType}
+                                    onChange={e => setNewType(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white outline-none focus:ring-2 focus:ring-purple-500"
                                 >
-                                    Cancelar
-                                </button>
+                                    <option value="http">Web/HTTP (Porta 80/443)</option>
+                                    <option value="icmp">Ping/ICMP</option>
+                                    <option value="dns">DNS Resolution</option>
+                                </select>
+                            </div>
+                            <div className="pt-2">
                                 <button
                                     type="submit"
-                                    className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-bold transition-colors shadow-lg shadow-purple-900/20"
+                                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20"
                                 >
-                                    Salvar
+                                    Cadastrar Alvo
                                 </button>
                             </div>
                         </form>
@@ -392,29 +446,28 @@ const Agent: React.FC = () => {
                 </div>
             )}
 
-            {/* Modal Settings */}
+            {/* Modal Configurações Agente */}
             {showSettingsModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                <Settings size={22} className="text-purple-500" />
-                                Configurações da IA
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
+                        <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Settings size={20} className="text-purple-500" />
+                                Configurações do Agente AI
                             </h3>
-                            <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-white">
-                                <X size={24} />
+                            <button onClick={() => setShowSettingsModal(false)} className="text-slate-500 hover:text-white">
+                                <X size={20} />
                             </button>
                         </div>
-
-                        <form onSubmit={saveSettings} className="space-y-6">
+                        <form onSubmit={saveSettings} className="p-6 space-y-6">
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    Limiar de Latência (Spike)
-                                    <span className="block text-xs text-slate-500 font-normal">Acima deste valor, o teste é considerado "lento".</span>
+                                    Limite de Latência (Anomalia)
+                                    <span className="block text-xs text-slate-500 font-normal">Sinalizar como problema acima de:</span>
                                 </label>
                                 <div className="flex items-center gap-4">
                                     <input
-                                        type="range" min="50" max="1000" step="10"
+                                        type="range" min="50" max="2000" step="50"
                                         value={latencyThreshold}
                                         onChange={e => setLatencyThreshold(parseInt(e.target.value))}
                                         className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"

@@ -13,6 +13,34 @@ DEFAULT_INTERVAL = 300
 DEFAULT_HTTP = ["https://www.google.com", "https://www.cloudflare.com"]
 DEFAULT_DNS = "8.8.8.8"
 
+# --- MANUAL LOOP CONTROL ---
+manual_loop_running = False
+manual_loop_task = None
+
+async def start_manual_test_loop():
+    """Roda testes continuamente em background até ser parado."""
+    global manual_loop_running
+    if manual_loop_running:
+        return
+    
+    manual_loop_running = True
+    print("[IA-AGENT] Loop de teste manual INICIADO.")
+    
+    try:
+        while manual_loop_running:
+            await run_single_test_cycle()
+            # Espera 10 segundos entre ciclos manuais (mais rápido que o normal)
+            for _ in range(10):
+                if not manual_loop_running: break
+                await asyncio.sleep(1)
+    finally:
+        manual_loop_running = False
+        print("[IA-AGENT] Loop de teste manual PARADO.")
+
+async def stop_manual_test_loop():
+    global manual_loop_running
+    manual_loop_running = False
+
 # --- NETWORK TEST FUNCTIONS ---
 from icmplib import async_ping
 

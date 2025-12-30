@@ -60,6 +60,18 @@ export const updateLatencyConfig = (data: any) => api.post('/settings/latency', 
 export const getLatencyHistory = (id: number, period: string) => api.get(`/equipments/${id}/latency-history?period=${period}`).then(res => res.data);
 export const getTrafficHistory = (id: number, period: string) => api.get(`/equipments/${id}/traffic-history?period=${period}`).then(res => res.data);
 
+// Synthetic Agent
+export const getAgentLogs = () => api.get('/agent/logs').then(res => res.data);
+export const getMonitorTargets = () => api.get('/agent/targets').then(res => res.data);
+export const createMonitorTarget = (data: any) => api.post('/agent/targets', data).then(res => res.data);
+export const deleteMonitorTarget = (id: number) => api.delete(`/agent/targets/${id}`).then(res => res.data);
+export const triggerAgentTest = () => api.post('/agent/trigger').then(res => res.data);
+export const stopAgentTest = () => api.post('/agent/stop').then(res => res.data);
+export const getAgentStatus = () => api.get('/agent/status').then(res => res.data);
+export const clearAgentLogs = () => api.delete('/agent/logs').then(res => res.data);
+export const getAgentSettings = () => api.get('/agent/settings').then(res => res.data);
+export const updateAgentSettings = (data: any) => api.post('/agent/settings', data).then(res => res.data);
+
 // Network Links
 export const getLinks = () => api.get('/towers/links').then(res => res.data);
 export const createLink = (data: any) => api.post('/towers/links', data).then(res => res.data);
