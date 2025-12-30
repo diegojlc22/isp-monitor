@@ -31,19 +31,26 @@ async def main():
     
     # Garantir que o banco existe (With Retries)
     db_ok = False
-    for attempt in range(5):
+    print("[COLLECTOR] ⏳ Aguardando estabilização do PostgreSQL...")
+    for attempt in range(10): # Mais tentativas para o coletor
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("[COLLECTOR] Banco de dados conectado.")
+            print("[COLLECTOR] ✅ Conexão estabelecida e banco verificado.")
             db_ok = True
             break
         except Exception as e:
-            print(f"[COLLECTOR] ⏳ Tentativa {attempt+1}/5 de conexão falhou: {e}")
-            await asyncio.sleep(3)
+            error_str = str(e).lower()
+            if "connection was closed" in error_str or "connectiondoesnotexist" in error_str:
+                wait_time = 2 + attempt
+                print(f"[COLLECTOR] 📡 Conexão instável. Aguardando {wait_time}s ({attempt+1}/10)...")
+                await asyncio.sleep(wait_time)
+            else:
+                print(f"[COLLECTOR] ⏳ Tentativa {attempt+1}/10 falhou: {e}")
+                await asyncio.sleep(2)
     
     if not db_ok:
-        print("[CRITICAL] Não foi possível conectar ao banco de dados. Encerrando...")
+        print("[CRITICAL] Falha total na conexão com o banco após 10 tentativas.")
         return
 
     # Aplicar otimizações avançadas

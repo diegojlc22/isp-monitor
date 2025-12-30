@@ -34,18 +34,24 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ [NETWORK DIAGNOSTICS] Failed: {e}")
 
     # 2. Database Init & Migration (With Retries)
-    for attempt in range(5):
+    logger.info("⏳ [DATABASE] Aguardando estabilização do PostgreSQL...")
+    for attempt in range(7): # Aumentado para 7 tentativas
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            logger.info("✅ [DATABASE] Tabelas verificadas/criadas.")
+            logger.info("✅ [DATABASE] Conexão estável e tabelas verificadas.")
             break
         except Exception as e:
-            if attempt < 4:
-                logger.warning(f"⏳ [DATABASE] Tentativa {attempt+1}/5 falhou (banco iniciando?): {e}")
+            error_str = str(e).lower()
+            if "connection was closed" in error_str or "connectiondoesnotexist" in error_str:
+                wait_time = 3 + attempt
+                logger.warning(f"📡 [DATABASE] Conexão caiu/fechada. Aguardando {wait_time}s para tentar novamente ({attempt+1}/7)...")
+                await asyncio.sleep(wait_time)
+            elif attempt < 6:
+                logger.warning(f"⏳ [DATABASE] Tentativa {attempt+1}/7 falhou: {e}")
                 await asyncio.sleep(2)
             else:
-                logger.error(f"❌ [DATABASE] Critical Startup Error after 5 attempts: {e}")
+                logger.error(f"❌ [DATABASE] Erro Crítico após 7 tentativas: {e}")
         
     # 3. Seed Data
     try:

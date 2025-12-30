@@ -8,21 +8,23 @@ db_url = settings.async_database_url
 if "localhost" in db_url:
     db_url = db_url.replace("localhost", "127.0.0.1")
 
+# Configuração Otimizada para PostgreSQL Async
 connect_args = {
     "server_settings": {"application_name": "isp_monitor_backend"},
-    "command_timeout": 60
+    "command_timeout": 60,
+    "statement_cache_size": 0  # Desativa cache de statements para evitar erros de conexão fechada
 }
 
-# Configuração Otimizada para PostgreSQL Async
 try:
     engine = create_async_engine(
         db_url,
         echo=False,
         future=True,
-        pool_size=10, # Reduzi de 20 para 10 para ser mais leve
+        pool_size=10,
         max_overflow=5,
         pool_timeout=60,
-        pool_recycle=1800, # Recicla conexões a cada 30 min
+        pool_recycle=1800,
+        pool_pre_ping=True,  # Verifica se a conexão está viva antes de usar
         connect_args=connect_args
     )
     logger.info("✅ PostgreSQL Async Engine Created (127.0.0.1)")

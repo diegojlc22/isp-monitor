@@ -49,6 +49,8 @@ class PingerService:
                     logger.warning("⏳ Aguardando inicialização do Banco de Dados...")
                 else:
                     logger.error(f"Error loading targets: {e}")
+                    await asyncio.sleep(5)
+                    continue
             
             await asyncio.sleep(60) # Recarregar a cada 1 minuto
 
@@ -62,6 +64,8 @@ class PingerService:
                     self.config = params
             except Exception as e:
                 logger.error(f"Error loading configs: {e}")
+                await asyncio.sleep(5) # Retry faster if failed
+                continue
             await asyncio.sleep(60)
 
     async def ping_worker(self):
