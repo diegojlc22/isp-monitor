@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 # URL Definitiva do PostgreSQL (Hardcoded para garantir Migração)
 # Em produção viria de variável de ambiente, mas aqui queremos garantir que o script rode no banco certo.
-DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost/monitor"
+DATABASE_URL = "postgresql+asyncpg://postgres:110812@localhost/monitor"
 
 async def update_database():
     print(f"🔄 Conectando ao PostgreSQL em: {DATABASE_URL}")

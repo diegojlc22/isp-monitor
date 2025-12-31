@@ -142,6 +142,21 @@ def run_doctor():
             cleanup_all()
             sys.exit(0)
 
+        # Anti-Collision: Aguardar Postgres estar PRONTO na primeira execução
+        if first_run:
+            log("🩺 [DOCTOR] Verificando se o PostgreSQL está acordado...")
+            pg_ready = False
+            for i in range(15): # Espera até 30 segundos
+                if check_port(5432):
+                    log("✅ [DOCTOR] PostgreSQL detectado na porta 5432.")
+                    pg_ready = True
+                    break
+                log(f"⏳ [DOCTOR] Aguardando PostgreSQL... ({i+1}/15)")
+                time.sleep(2)
+            
+            if not pg_ready:
+                log("⚠️ [DOCTOR] PostgreSQL não responde. Tentando iniciar serviços mesmo assim...", "WARN")
+
         for name, config in SERVICES.items():
             try:
                 # Na primeira rodada, FORÇAMOS o reinício de tudo

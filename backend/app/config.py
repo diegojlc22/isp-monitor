@@ -23,16 +23,21 @@ logger.add(
     compression="zip"
 )
 
+# Find project root (where .env lives)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+env_path = os.path.join(project_root, ".env")
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", 
+        env_file=env_path if os.path.exists(env_path) else ".env", 
         env_file_encoding="utf-8", 
         extra="ignore",
         case_sensitive=False
     )
 
     # Database
-    database_url: str = Field(default="postgresql://postgres:postgres@localhost:5432/isp_monitor", description="PostgreSQL Connection String")
+    database_url: str = Field(default="postgresql://postgres:110812@localhost:5432/isp_monitor", description="PostgreSQL Connection String")
     
     # Pool Settings (Tuned for Postgres)
     db_pool_size: int = Field(20, ge=1)
