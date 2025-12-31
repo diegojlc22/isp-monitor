@@ -232,7 +232,7 @@ app.get('/groups', async (req, res) => {
 });
 
 // Inicializar Servidor
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`[GATEWAY] Servidor API WhatsApp rodando na porta ${PORT}`);
 
     // Limpar arquivo de flag antigo
@@ -241,5 +241,21 @@ app.listen(PORT, () => {
     }
 
     console.log(`[GATEWAY] Iniciando cliente WhatsApp Web... aguarde.`);
-    client.initialize();
+
+    // Auto-fix: Se houver erro de injeção/protocolo crítico (Execution context destroyed),
+    // limpamos a sessão e reiniciamos automaticamente.
+    try {
+        await client.initialize();
+    } catch (err) {
+        console.error('[WHATSAPP] 💥 Erro Fatal na Inicialização:', err.message);
+        if (err.message.includes('Protocol error') || err.message.includes('context was destroyed')) {
+            console.warn('[WHATSAPP] 🧹 Detectada sessão corrompida. Limpando para auto-reparo...');
+            const sessionPath = path.join(__dirname, 'session');
+            if (fs.existsSync(sessionPath)) {
+                fs.rmSync(sessionPath, { recursive: true, force: true });
+                console.log('[WHATSAPP] ✨ Sessão limpa. O sistema tentará gerar um novo QR Code no próximo início.');
+                process.exit(1); // Sai para o Self-Heal reiniciar o processo do zero
+            }
+        }
+    }
 });
