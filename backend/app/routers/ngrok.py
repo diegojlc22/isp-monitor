@@ -16,7 +16,7 @@ def get_status():
 @router.post("/start")
 def start_ngrok():
     """
-    Inicia o túnel Ngrok na porta 8000.
+    Inicia o túnel Ngrok na porta 8080.
     """
     return manager.start()
 

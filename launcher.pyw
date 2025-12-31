@@ -293,7 +293,7 @@ class ModernLauncher:
         """Inicia Ngrok e mostra QR Code"""
         # Usa domínio fixo para bater com a configuração do App Mobile
         domain = "uniconoclastic-addedly-yareli.ngrok-free.dev"
-        cmd = f"npx ngrok http --domain={domain} 8081 --log=stdout"
+        cmd = f"npx ngrok http --domain={domain} 8080 --log=stdout"
         self.open_console_window("🌍 Acesso Externo (Ngrok)", cmd, ".", qr_mode=True)
 
     def start_expo(self):

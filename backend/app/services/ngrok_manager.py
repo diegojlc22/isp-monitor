@@ -36,7 +36,7 @@ class NgrokManager:
                 return p
         return None
 
-    def start(self, port=8000):
+    def start(self, port=8080):
         with self._lock:
             if self._process:
                 # Check if still running
