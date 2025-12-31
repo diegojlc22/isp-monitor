@@ -160,7 +160,25 @@ def run_doctor():
                 time.sleep(2)
             
             if not pg_ready:
-                log("⚠️ [DOCTOR] PostgreSQL não responde. Tentando iniciar serviços mesmo assim...", "WARN")
+                log("⚠️ [DOCTOR] PostgreSQL não responde. Tentando localizar e reiniciar serviço...", "WARN")
+                try:
+                    # Detecta o nome do serviço dinamicamente (para suportar versão 14, 15, 16, 17...)
+                    try:
+                        svc_cmd = 'wmic service get name | findstr /i "postgresql-x64-"'
+                        result = subprocess.check_output(svc_cmd, shell=True).decode().strip()
+                        service_name = result.split('\n')[0].strip() # Pega apenas o primeiro encontrado
+                    except:
+                        service_name = "postgresql-x64-17" # Fallback se falhar detecção
+
+                    if service_name:
+                        log(f"🔧 Tentando reiniciar serviço detectado: {service_name}")
+                        subprocess.run(f"net stop {service_name}", shell=True)
+                        subprocess.run(f"net start {service_name}", shell=True)
+                        time.sleep(5)
+                    else:
+                        log("❌ Serviço PostgreSQL não encontrado no Windows.", "ERROR")
+                except Exception as e:
+                    log(f"❌ Falha ao tentar reiniciar serviço do Postgres: {e}", "ERROR")
 
         for name, config in SERVICES.items():
             try:
