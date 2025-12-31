@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.app.database import get_db
 from backend.app.models import Tower, TowerRequest
+import logging
+import socket
+
+logger = logging.getLogger("api")
 
 router = APIRouter(prefix="/mobile", tags=["mobile"])
 
@@ -23,11 +27,14 @@ class GeoLocation(BaseModel):
     longitude: float
 
 class TowerRequestCreate(BaseModel):
-    name: str
+    name: str | None = "Nova Solicitação"
     ip: str | None = None
     latitude: float
     longitude: float
     requested_by: str | None = "Técnico"
+
+class TowerApproval(BaseModel):
+    name: str
 
 # --- State ---
 expo_process = None
@@ -172,13 +179,36 @@ latest_technician_location = {}
 
 @router.get("/last-location")
 def get_last_location():
+    """Retorna a última posição conhecida do técnico para o painel Web"""
     return latest_technician_location
+
+@router.get("/config")
+def get_mobile_config():
+    """Retorna configurações para o App, incluindo IPs locais do servidor"""
+    local_ips = []
+    try:
+        # Pega todos os IPs locais da máquina
+        hostname = socket.gethostname()
+        addr_info = socket.getaddrinfo(hostname, None)
+        for info in addr_info:
+            ip = info[4][0]
+            if "." in ip and not ip.startswith("127."): # Apenas IPv4 local
+                if ip not in local_ips:
+                    local_ips.append(ip)
+    except Exception as e:
+        logger.error(f"Erro ao obter IPs locais: {e}")
+    
+    logger.info(f"📡 [MOBILE CONFIG] IPs locais enviados ao App: {local_ips}")
+    return {
+        "local_ips": local_ips,
+        "server_time": time.time()
+    }
 
 @router.post("/location")
 async def receive_location(loc: GeoLocation):
     global latest_technician_location
     """Recebe localização do técnico em tempo real"""
-    print(f"📍 [MOBILE LOCATION] Técnico em: {loc.latitude}, {loc.longitude}")
+    logger.info(f"📍 [MOBILE LOCATION] Técnico em: {loc.latitude}, {loc.longitude}")
     latest_technician_location = {
         "latitude": loc.latitude,
         "longitude": loc.longitude,
@@ -189,9 +219,13 @@ async def receive_location(loc: GeoLocation):
 @router.post("/tower-request")
 async def create_tower_request(req: TowerRequestCreate, db: AsyncSession = Depends(get_db)):
     """Recebe pedido de nova torre vindo do APK"""
-    print(f"📡 [TOWER REQUEST] Nova solicitação: {req.name} em {req.latitude}, {req.longitude}")
+    final_name = req.name
+    if not final_name or final_name == "Nova Solicitação":
+        final_name = f"Torre {time.strftime('%H:%M:%S')}"
+        
+    logger.info(f"📡 [TOWER REQUEST] Nova solicitação: {final_name} em {req.latitude}, {req.longitude}")
     new_req = TowerRequest(
-        name=req.name,
+        name=final_name,
         ip=req.ip,
         latitude=req.latitude,
         longitude=req.longitude,
@@ -217,16 +251,16 @@ async def list_tower_requests(db: AsyncSession = Depends(get_db)):
     } for r in rows]
 
 @router.post("/requests/{id}/approve")
-async def approve_tower_request(id: int, db: AsyncSession = Depends(get_db)):
+async def approve_tower_request(id: int, data: TowerApproval, db: AsyncSession = Depends(get_db)):
     """Aprova e cria a torre real"""
     result = await db.execute(select(TowerRequest).where(TowerRequest.id == id))
     req = result.scalar_one_or_none()
     if not req:
         raise HTTPException(404, "Solicitação não encontrada")
     
-    # Criar a torre
+    # Criar a torre com o nome fornecido pelo Admin
     new_tower = Tower(
-        name=req.name,
+        name=data.name,
         ip=req.ip,
         latitude=req.latitude,
         longitude=req.longitude

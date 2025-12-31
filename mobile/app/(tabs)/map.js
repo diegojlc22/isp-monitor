@@ -200,13 +200,41 @@ export default function MapScreen() {
                         <MapPin color="#fff" size={24} />
                     </TouchableOpacity>
 
-                    {/* Check-in Button */}
+                    {/* Mark Tower Button (Quick Request) */}
                     <TouchableOpacity
-                        style={[styles.fab, { bottom: 168, backgroundColor: '#10b981' }]}
-                        onPress={sendLocationUpdate}
+                        style={[styles.fab, { bottom: 168, backgroundColor: '#f59e0b' }]}
+                        onPress={async () => {
+                            if (!region) return;
+                            setLoading(true);
+                            try {
+                                await api.post('/mobile/tower-request', {
+                                    latitude: region.latitude,
+                                    longitude: region.longitude,
+                                    name: "Nova Solicitação"
+                                });
+                                Alert.alert("Sucesso", "Torre marcada! O Admin irá nomear e aprovar. 📡");
+                            } catch (e) {
+                                Alert.alert("Erro", "Falha ao marcar torre.");
+                            } finally {
+                                setLoading(false);
+                            }
+                        }}
                         activeOpacity={0.8}
                     >
-                        <Send color="#fff" size={24} />
+                        <RadioTower color="#fff" size={24} />
+                        <View style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            backgroundColor: 'white',
+                            borderRadius: 10,
+                            width: 16,
+                            height: 16,
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <Text style={{ color: '#f59e0b', fontSize: 12, fontWeight: 'bold' }}>+</Text>
+                        </View>
                     </TouchableOpacity>
 
                     {/* Refresh Button */}

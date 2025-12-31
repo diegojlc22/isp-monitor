@@ -9,6 +9,7 @@ interface Request {
     by: string;
     lat: number;
     lon: number;
+    editingName?: string; // Campo local para edição
 }
 
 const API_Base = "/api";
@@ -26,7 +27,8 @@ export default function RequestsPage() {
             const res = await fetch(`${API_Base}/mobile/requests`);
             if (res.ok) {
                 const data = await res.json();
-                setRequests(data);
+                // Inicializa o valor de edição com o nome original
+                setRequests(data.map((r: Request) => ({ ...r, editingName: r.name })));
             }
         } catch (error) {
             console.error("Erro ao buscar solicitações", error);
@@ -35,12 +37,14 @@ export default function RequestsPage() {
         }
     };
 
-    const handleApprove = async (id: number, name: string) => {
-        if (!confirm(`Deseja aprovar a torre ${name}?`)) return;
+    const handleApprove = async (id: number, finalName: string) => {
+        if (!confirm(`Deseja aprovar a torre como "${finalName}"?`)) return;
 
         try {
             const res = await fetch(`${API_Base}/mobile/requests/${id}/approve`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: finalName })
             });
 
             if (res.ok) {
@@ -94,8 +98,19 @@ export default function RequestsPage() {
                             <div className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
 
                                 <div className="flex-1">
-                                    <h3 className="text-xl font-bold text-blue-100">{req.name}</h3>
-                                    <div className="flex flex-col gap-1 mt-2 text-slate-400 text-sm">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wider">Nome da Torre</label>
+                                        <input
+                                            type="text"
+                                            className="bg-slate-900 border border-slate-700 text-blue-100 text-lg font-bold p-2 rounded focus:border-blue-500 outline-none"
+                                            value={req.editingName}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setRequests(prev => prev.map(r => r.id === req.id ? { ...r, editingName: val } : r));
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1 mt-3 text-slate-400 text-sm">
                                         <div className="flex items-center gap-2">
                                             <User size={14} />
                                             <span>Solicitado por: <span className="text-white">{req.by || "Técnico Desconhecido"}</span></span>
@@ -114,18 +129,18 @@ export default function RequestsPage() {
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 items-end">
                                     <button
-                                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-3 py-2 rounded-md flex items-center text-sm font-medium transition-colors"
+                                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-3 py-2 h-11 rounded-md flex items-center text-sm font-medium transition-colors"
                                         onClick={() => handleReject(req.id, req.name)}
                                     >
                                         <X className="h-4 w-4 mr-1" /> Rejeitar
                                     </button>
                                     <button
-                                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md flex items-center text-sm font-medium transition-colors shadow-lg shadow-green-900/20"
-                                        onClick={() => handleApprove(req.id, req.name)}
+                                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 h-11 rounded-md flex items-center text-sm font-medium transition-colors shadow-lg shadow-green-900/20"
+                                        onClick={() => handleApprove(req.id, req.editingName || req.name)}
                                     >
-                                        <Check className="h-4 w-4 mr-1" /> Aprovar
+                                        <Check className="h-4 w-4 mr-1" /> Aprovar e Salvar
                                     </button>
                                 </div>
 
