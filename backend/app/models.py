@@ -71,8 +71,9 @@ class Equipment(Base):
     snmp_community = Column(String, default="public")
     snmp_version = Column(Integer, default=1)  # v1 for Ubiquiti compatibility
     snmp_port = Column(Integer, default=161)
-    snmp_interface_index = Column(Integer, default=1) # OID index
-    
+    snmp_interface_index = Column(Integer, default=1) 
+    snmp_traffic_interface_index = Column(Integer, nullable=True) 
+
     # Mikrotik API (The Dude style)
     is_mikrotik = Column(Boolean, default=False)
     mikrotik_interface = Column(String, nullable=True) # e.g. "ether1"
@@ -115,6 +116,7 @@ class TrafficLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     equipment_id = Column(Integer, ForeignKey("equipments.id"), index=True)
+    interface_index = Column(Integer, default=1, index=True)
     in_mbps = Column(Float)
     out_mbps = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)

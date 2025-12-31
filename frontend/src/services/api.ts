@@ -111,6 +111,9 @@ export const importEquipmentsCSV = (file: File) => {
 export const detectEquipmentBrand = (ip: string, snmp_community: string = 'public', snmp_port: number = 161) =>
     api.post('/equipments/detect-brand', { ip, snmp_community, snmp_port }, { timeout: 60000 }).then(res => res.data);
 
+export const scanInterfaces = (ip: string, community: string = 'public', port: number = 161) =>
+    api.get(`/equipments/scan-interfaces`, { params: { ip, community, port } }).then(res => res.data);
+
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
 
 // Expo / Mobile

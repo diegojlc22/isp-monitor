@@ -1,11 +1,13 @@
 from pysnmp.hlapi.asyncio import *
+from backend.app.services.snmp import get_shared_engine
 
 async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
     """Internal helper to try SNMP get with v2c then v1"""
     # Try SNMPv2c first
     try:
+        engine = get_shared_engine()
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
-            SnmpEngine(),
+            engine,
             CommunityData(community, mpModel=1), # v2c
             UdpTransportTarget((ip, port), timeout=timeout, retries=1),
             ContextData(),
@@ -18,8 +20,9 @@ async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
 
     # Try SNMPv1 fallback
     try:
+        engine = get_shared_engine()
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
-            SnmpEngine(),
+            engine,
             CommunityData(community, mpModel=0), # v1
             UdpTransportTarget((ip, port), timeout=timeout, retries=1),
             ContextData(),
@@ -36,8 +39,9 @@ async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
     """Internal helper to try SNMP walk/next with v2c then v1"""
     # Try SNMPv2c
     try:
+        engine = get_shared_engine()
         errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
+            engine,
             CommunityData(community, mpModel=1),
             UdpTransportTarget((ip, port), timeout=timeout, retries=1),
             ContextData(),
@@ -51,8 +55,9 @@ async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
 
     # Try SNMPv1
     try:
+        engine = get_shared_engine()
         errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
+            engine,
             CommunityData(community, mpModel=0),
             UdpTransportTarget((ip, port), timeout=timeout, retries=1),
             ContextData(),
@@ -232,14 +237,38 @@ async def get_snmp_walk_first(ip, community, root_oid, port=161):
         except: pass
     return None
 
-async def get_wireless_stats(ip, brand, community, port=161):
+async def get_wireless_stats(ip, brand, community, port=161, interface_index=None, equipment_type=None):
     """
     Fetches Signal and CCQ based on brand.
+    Supports Wireless and Fiber (SFP).
     Returns dict: {'signal_dbm': int, 'ccq': int}
     """
     stats = {'signal_dbm': None, 'ccq': None}
-    
     brand_key = brand.lower()
+
+    # --- FIBER / SFP CASE ---
+    if brand_key == 'mikrotik' and equipment_type == 'fiber' and interface_index:
+        try:
+            # 1. Try New SFP Monitor Table (OID .1.3.6.1.4.1.14988.1.1.19.1.1)
+            # Field 10 is RX Power in dBm * 1000
+            val_dbm = await get_snmp_value(ip, community, f'1.3.6.1.4.1.14988.1.1.19.1.1.10.{interface_index}', port)
+            if val_dbm is not None:
+                try:
+                    stats['signal_dbm'] = int(round(float(val_dbm) / 1000.0))
+                    return stats
+                except: pass
+
+            # 2. Fallback to Linear uW Table (.14)
+            val_uw = await get_snmp_value(ip, community, f'1.3.6.1.4.1.14988.1.1.14.1.1.15.{interface_index}', port)
+            if val_uw is not None and isinstance(val_uw, (int, float)) and val_uw > 0:
+                import math
+                dbm = 10 * math.log10(float(val_uw) / 1000.0)
+                stats['signal_dbm'] = int(round(dbm))
+            
+            return stats
+        except:
+            pass
+
     if brand_key not in OIDS:
         return stats
         

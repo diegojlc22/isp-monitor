@@ -137,13 +137,22 @@ class PingerService:
                 try:
                     item = await asyncio.wait_for(self.results_queue.get(), timeout=0.5)
                     buffer.append(item)
+                    
+                    # 🛡️ PROTEÇÃO: Limite de segurança para evitar 10GB de RAM se o banco travar
+                    if len(buffer) > 5000:
+                        logger.warning("⚠️ Buffer do Pinger saturado! Descartando logs antigos para preservar memória.")
+                        buffer = buffer[-2000:] # Mantém apenas os 2000 mais recentes
                 except asyncio.TimeoutError:
                     pass 
+
                 current_time = time.time()
                 if buffer and (len(buffer) >= WRITE_BUFFER_SIZE or (current_time - last_flush) >= WRITE_INTERVAL):
-                    await self.flush_buffer(buffer)
-                    buffer = []
-                    last_flush = current_time
+                    try:
+                        await self.flush_buffer(buffer)
+                    finally:
+                        # ✅ CORREÇÃO CRÍTICA: Limpar buffer mesmo em caso de erro no flush
+                        buffer = []
+                        last_flush = current_time
             except Exception as e:
                 logger.error(f"Writer loop error: {e}")
                 await asyncio.sleep(1)

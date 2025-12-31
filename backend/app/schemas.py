@@ -33,6 +33,7 @@ class EquipmentBase(BaseModel):
     snmp_version: int = 1  # Default to v1 for Ubiquiti compatibility
     snmp_port: int = 161
     snmp_interface_index: int = 1
+    snmp_traffic_interface_index: Optional[int] = None
     # Mikrotik
     is_mikrotik: bool = False
     mikrotik_interface: Optional[str] = None
@@ -71,6 +72,7 @@ class EquipmentUpdate(BaseModel):
     snmp_version: Optional[int] = None
     snmp_port: Optional[int] = None
     snmp_interface_index: Optional[int] = None
+    snmp_traffic_interface_index: Optional[int] = None
     is_mikrotik: Optional[bool] = None
     mikrotik_interface: Optional[str] = None
     api_port: Optional[int] = None

@@ -13,6 +13,7 @@ interface WidgetItem {
     type: 'latency' | 'traffic' | 'signal' | 'clients';
     equipmentId: number;
     title: string;
+    interfaceIndex?: number;
 }
 
 // --- Componente de Gráfico Individual ---
@@ -181,10 +182,43 @@ export function LiveMonitor() {
     // Form state
     const [selectedEq, setSelectedEq] = useState('');
     const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal' | 'clients'>('traffic');
+    const [selectedInterface, setSelectedInterface] = useState<number>(1);
+    const [interfaceList, setInterfaceList] = useState<{ index: number; name: string }[]>([]);
+    const [isLoadingInterfaces, setIsLoadingInterfaces] = useState(false);
 
     useEffect(() => {
         getEquipments().then(setEquipments);
     }, []);
+
+    // Load interfaces when equipment and type=traffic change
+    useEffect(() => {
+        if (selectedEq && selectedType === 'traffic') {
+            const eq = equipments.find(e => e.id.toString() === selectedEq);
+            if (eq && ['mikrotik', 'ubiquiti', 'mimosa', 'intelbras'].includes(eq.brand)) {
+                setIsLoadingInterfaces(true);
+                import('../services/api').then(api => {
+                    api.scanInterfaces(eq.ip, eq.snmp_community, eq.snmp_port)
+                        .then(list => {
+                            setInterfaceList(list);
+                            if (list.length > 0) {
+                                // Default to current or first
+                                const current = list.find((l: any) => l.index === eq.snmp_interface_index);
+                                setSelectedInterface(current ? current.index : list[0].index);
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Erro ao carregar interfaces", err);
+                            setInterfaceList([]);
+                        })
+                        .finally(() => setIsLoadingInterfaces(false));
+                });
+            } else {
+                setInterfaceList([]);
+            }
+        } else {
+            setInterfaceList([]);
+        }
+    }, [selectedEq, selectedType, equipments]);
 
 
 
@@ -205,7 +239,8 @@ export function LiveMonitor() {
             h: 3,
             type: selectedType,
             equipmentId: eq.id,
-            title: `${eq.name} (${selectedType === 'traffic' ? 'Tráfego' : selectedType === 'signal' ? 'Sinal' : selectedType === 'clients' ? 'Clientes' : 'Latência'})`
+            interfaceIndex: selectedType === 'traffic' ? selectedInterface : undefined,
+            title: `${eq.name} - ${selectedType === 'traffic' ? (interfaceList.find(i => i.index === selectedInterface)?.name || 'Tráfego') : selectedType === 'signal' ? 'Sinal' : selectedType === 'clients' ? 'Clientes' : 'Latência'}`
         };
 
         const newLayout = [...layout, newItem];
@@ -315,6 +350,27 @@ export function LiveMonitor() {
                                     )}
                                 </div>
                             </div>
+
+                            {selectedType === 'traffic' && interfaceList.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Porta/Interface</label>
+                                    <select
+                                        value={selectedInterface}
+                                        onChange={e => setSelectedInterface(parseInt(e.target.value))}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                                    >
+                                        {interfaceList.map(iface => (
+                                            <option key={iface.index} value={iface.index}>{iface.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {selectedType === 'traffic' && isLoadingInterfaces && (
+                                <div className="text-xs text-blue-400 animate-pulse">
+                                    Buscando interfaces disponíveis...
+                                </div>
+                            )}
 
                             <button
                                 onClick={addWidget}

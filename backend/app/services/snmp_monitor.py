@@ -43,11 +43,14 @@ async def snmp_monitor_job():
                 community = eq_data.get("snmp_community")
                 port = eq_data.get("snmp_port") or 161
                 
-                # --- WIRELESS STATS ---
-                # Agora suporta todas as marcas definidas no wireless_snmp.py (UBNT, MK, Mimosa, Intelbras)
+                # --- WIRELESS / FIBER STATS ---
                 if brand in ['ubiquiti', 'intelbras', 'mikrotik', 'mimosa']:
                     try:
-                        w_stats = await get_wireless_stats(ip, brand, community, port)
+                        w_stats = await get_wireless_stats(
+                            ip, brand, community, port, 
+                            interface_index=eq_data.get("snmp_interface_index"),
+                            equipment_type=eq_data.get("equipment_type")
+                        )
                         if w_stats['signal_dbm'] is not None:
                             result["updates"]["signal_dbm"] = w_stats['signal_dbm']
                             result["updates"]["ccq"] = w_stats['ccq']
@@ -79,15 +82,20 @@ async def snmp_monitor_job():
                         return result # Done for this device
                 
                 # B) SNMP
-                interface_idx = eq_data.get("snmp_interface_index") or 1
+                interface_idx = eq_data.get("snmp_traffic_interface_index") or eq_data.get("snmp_interface_index") or 1
                 traffic = await get_snmp_interface_traffic(ip, community, port, interface_idx)
                 
                 if traffic:
                     in_bytes, out_bytes = traffic
                     current_time_ts = time.time()
                     
-                    if eq_data["id"] in previous_counters:
-                        last_time, last_in, last_out = previous_counters[eq_data["id"]]
+                    # Cache Key: (Equipment ID, Interface Index)
+                    # This allows monitoring multiple interfaces for the same equipment if needed in future,
+                    # and prevents conflicts if user changes the interface index.
+                    cache_key = (eq_data["id"], interface_idx)
+
+                    if cache_key in previous_counters:
+                        last_time, last_in, last_out = previous_counters[cache_key]
                         dt = current_time_ts - last_time
                         
                         if dt > 0:
@@ -100,10 +108,10 @@ async def snmp_monitor_job():
                             
                             result["updates"]["last_traffic_in"] = mbps_in
                             result["updates"]["last_traffic_out"] = mbps_out
-                            result["log"] = (mbps_in, mbps_out)
+                            result["log"] = (mbps_in, mbps_out, interface_idx)
                     
                     # Store for next run (in memory side-effect, safe here as single threaded event loop)
-                    previous_counters[eq_data["id"]] = (current_time_ts, in_bytes, out_bytes)
+                    previous_counters[cache_key] = (current_time_ts, in_bytes, out_bytes)
 
                 return result
 
@@ -126,7 +134,9 @@ async def snmp_monitor_job():
                         "snmp_community": eq.snmp_community, "snmp_port": eq.snmp_port,
                         "ssh_user": eq.ssh_user, "ssh_password": eq.ssh_password,
                         "is_mikrotik": eq.is_mikrotik, "mikrotik_interface": eq.mikrotik_interface,
-                        "api_port": eq.api_port, "snmp_interface_index": eq.snmp_interface_index,
+                        "api_port": eq.api_port, 
+                        "snmp_interface_index": eq.snmp_interface_index,
+                        "snmp_traffic_interface_index": eq.snmp_traffic_interface_index,
                         "equipment_type": eq.equipment_type
                     })
             
@@ -157,7 +167,13 @@ async def snmp_monitor_job():
                     
                     # ✅ SPRINT 3: Smart Logging para Traffic (Memory based, no DB read needed)
                     if res["log"]:
-                        in_mbps, out_mbps = res["log"]
+                        # Unpack log tuple (was 2, now 3 items)
+                        if len(res["log"]) == 3:
+                            in_mbps, out_mbps, if_idx = res["log"]
+                        else:
+                            in_mbps, out_mbps = res["log"]
+                            if_idx = 1 # Fallback for Mikrotik API or old format
+
                         eq_id = res["id"]
                         current_time = time.time()
                         
@@ -179,12 +195,13 @@ async def snmp_monitor_job():
                                 out_variation = abs(out_mbps - last_log["out"]) / max(last_log["out"], 0.1)
                                 if in_variation > 0.1 or out_variation > 0.1:
                                     should_log_traffic = True
-                        
+                         
                         if should_log_traffic:
                             traffic_logs_buffer.append({
                                 "equipment_id": eq_id,
                                 "in_mbps": in_mbps,
                                 "out_mbps": out_mbps,
+                                "interface_index": if_idx,
                                 "timestamp": datetime.now(timezone.utc)
                             })
                             # Atualizar tracking

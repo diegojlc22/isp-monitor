@@ -289,6 +289,18 @@ async def detect_equipment_brand(request: DetectBrandRequest):
         logger.error(f"Erro fatal na detecção para {request.ip}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro na detecção: {str(e)}")
 
+@router.get("/scan-interfaces")
+async def scan_interfaces(
+    ip: str = Query(...),
+    community: str = Query("public"),
+    port: int = Query(161)
+):
+    from backend.app.services.snmp import get_snmp_interfaces
+    interfaces = await get_snmp_interfaces(ip, community, port)
+    if not interfaces:
+        raise HTTPException(status_code=404, detail="Não foi possível listar as interfaces via SNMP. Verifique o IP e a Community.")
+    return interfaces
+
 
 @router.put("/{eq_id}", response_model=EquipmentSchema)
 async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
@@ -550,10 +562,22 @@ async def get_traffic_history(
     
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     start_time = now - timedelta(hours=hours)
+
+    # Buscar configuração atual da interface do equipamento
+    eq_result = await db.execute(select(Equipment).where(Equipment.id == eq_id))
+    eq = eq_result.scalar_one_or_none()
     
+    interface_idx = 1
+    if eq:
+        # Prioritize dedicated traffic interface, then shared/sfp interface, then default 1
+        interface_idx = eq.snmp_traffic_interface_index or eq.snmp_interface_index or 1
+
     query = select(TrafficLog).where(
         TrafficLog.equipment_id == eq_id,
-        TrafficLog.timestamp >= start_time
+        TrafficLog.timestamp >= start_time,
+        # Filter by current interface index to avoid mixing data from different ports
+        # We accept NULL for retro-compatibility if the column wasn't populated before
+        (TrafficLog.interface_index == interface_idx) | (TrafficLog.interface_index == None)
     ).order_by(TrafficLog.timestamp.desc()).limit(limit)
     
     result = await db.execute(query)
@@ -564,7 +588,8 @@ async def get_traffic_history(
         data.append({
             "timestamp": log.timestamp.isoformat(),
             "in": log.in_mbps,
-            "out": log.out_mbps
+            "out": log.out_mbps,
+            "if_idx": log.interface_index
         })
     
     return {
@@ -572,6 +597,7 @@ async def get_traffic_history(
         "count": len(data),
         "hours": hours,
         "limit": limit,
+        "current_interface": interface_idx,
         "truncated": len(data) == limit
     }
 

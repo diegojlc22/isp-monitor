@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus } from '../services/api';
+import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus, scanInterfaces } from '../services/api';
 import { useScanner } from '../contexts/ScannerContext';
 
 import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus } from 'lucide-react';
@@ -16,17 +16,19 @@ interface Equipment {
     is_online: boolean; brand: string; equipment_type: string; signal_dbm?: number;
     ccq?: number; connected_clients?: number; ssh_user?: string; ssh_port?: number;
     snmp_community?: string; snmp_version?: number; snmp_port?: number; snmp_interface_index?: number;
+    snmp_traffic_interface_index?: number;
     is_mikrotik?: boolean; mikrotik_interface?: string; api_port?: number;
 }
 interface FormData {
     name: string; ip: string; tower_id: string; parent_id: string; ssh_user: string; ssh_password: string;
     ssh_port: number; snmp_community: string; snmp_version: number; snmp_port: number; snmp_interface_index: number;
+    snmp_traffic_interface_index: number | null;
     brand: string; equipment_type: string; is_mikrotik: boolean; mikrotik_interface: string; api_port: number;
 }
 
 const INITIAL_FORM_STATE: FormData = {
     name: '', ip: '', tower_id: '', parent_id: '', ssh_user: 'admin', ssh_password: '', ssh_port: 22,
-    snmp_community: 'public', snmp_version: 1, snmp_port: 161, snmp_interface_index: 1, brand: 'generic',
+    snmp_community: 'public', snmp_version: 1, snmp_port: 161, snmp_interface_index: 1, snmp_traffic_interface_index: null, brand: 'generic',
     equipment_type: 'station', is_mikrotik: false, mikrotik_interface: '', api_port: 8728
 };
 
@@ -442,6 +444,8 @@ export function Equipments() {
     const [templates, setTemplates] = useState<Record<string, Partial<FormData>>>({});
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [isDetectingForm, setIsDetectingForm] = useState(false);
+    const [interfaceList, setInterfaceList] = useState<{ index: number; name: string }[]>([]);
+    const [isLoadingInterfaces, setIsLoadingInterfaces] = useState(false);
 
     // Global Tasks from Context
     const { isDetecting, detectionProgress, startDetection, stopDetection } = useScanner();
@@ -474,6 +478,26 @@ export function Equipments() {
             alert(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
         } finally {
             setIsDetectingForm(false);
+        }
+    };
+
+    const handleLoadInterfaces = async () => {
+        if (!formData.ip) {
+            alert('Por favor, insira um IP primeiro');
+            return;
+        }
+        setIsLoadingInterfaces(true);
+        try {
+            const list = await scanInterfaces(
+                formData.ip,
+                formData.snmp_community || networkDefaults.snmp_community || 'public',
+                formData.snmp_port || networkDefaults.snmp_port || 161
+            );
+            setInterfaceList(list);
+        } catch (error: any) {
+            alert(`Erro ao listar interfaces: ${error.response?.data?.detail || error.message}`);
+        } finally {
+            setIsLoadingInterfaces(false);
         }
     };
 
@@ -539,11 +563,13 @@ export function Equipments() {
 
     const handleEdit = useCallback((eq: Equipment) => {
         setEditingEquipment(eq);
+        setInterfaceList([]); // Reset list on open
         setFormData({
             name: eq.name, ip: eq.ip, tower_id: eq.tower_id ? String(eq.tower_id) : '',
             parent_id: eq.parent_id ? String(eq.parent_id) : '', ssh_user: eq.ssh_user || 'admin',
             ssh_password: '', ssh_port: eq.ssh_port || 22, snmp_community: eq.snmp_community || 'public',
             snmp_version: eq.snmp_version || 1, snmp_port: eq.snmp_port || 161, snmp_interface_index: eq.snmp_interface_index || 1,
+            snmp_traffic_interface_index: eq.snmp_traffic_interface_index || null,
             brand: eq.brand || 'generic', equipment_type: eq.equipment_type || 'station', is_mikrotik: eq.is_mikrotik || false,
             mikrotik_interface: eq.mikrotik_interface || '', api_port: eq.api_port || 8728
         });
@@ -687,6 +713,7 @@ export function Equipments() {
 
     const handleNewEquipment = async () => {
         setEditingEquipment(null);
+        setInterfaceList([]); // Reset list on open
         // Defaults are now already in 'networkDefaults' state, but loading freshly just in case
         try {
             const defaults = await getNetworkDefaults(); // Refresh defaults
@@ -922,6 +949,53 @@ export function Equipments() {
                                     </label>
                                 </div>
                             </div>
+
+                            {['mikrotik', 'ubiquiti', 'mimosa', 'intelbras'].includes(formData.brand) && (
+                                <div className="space-y-3">
+                                    <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-xs text-slate-400 uppercase font-bold">Interface SFP / Wireless (Sinal)</label>
+                                            <button
+                                                type="button"
+                                                onClick={handleLoadInterfaces}
+                                                disabled={isLoadingInterfaces}
+                                                className="bg-blue-600 hover:bg-blue-500 text-[10px] uppercase font-bold text-white px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                                            >
+                                                {isLoadingInterfaces ? '...' : 'Escanear Interfaces'}
+                                            </button>
+                                        </div>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
+                                            value={formData.snmp_interface_index}
+                                            onChange={e => setFormData({ ...formData, snmp_interface_index: parseInt(e.target.value) })}
+                                        >
+                                            <option value={1}>Padrão (1)</option>
+                                            {interfaceList.map(iface => (
+                                                <option key={iface.index} value={iface.index}>{iface.index}: {iface.name}</option>
+                                            ))}
+                                            {interfaceList.length === 0 && <option value={formData.snmp_interface_index}>Atual (ID: {formData.snmp_interface_index})</option>}
+                                        </select>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
+                                        <label className="block text-xs text-slate-400 uppercase font-bold">Interface de Tráfego (Uplink/LAN)</label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
+                                            value={formData.snmp_traffic_interface_index || ''}
+                                            onChange={e => setFormData({ ...formData, snmp_traffic_interface_index: e.target.value ? parseInt(e.target.value) : null })}
+                                        >
+                                            <option value="">Mesma da Interface de Sinal</option>
+                                            {interfaceList.map(iface => (
+                                                <option key={`traffic-${iface.index}`} value={iface.index}>{iface.index}: {iface.name}</option>
+                                            ))}
+                                            {interfaceList.length === 0 && formData.snmp_traffic_interface_index && (
+                                                <option value={formData.snmp_traffic_interface_index}>Atual (ID: {formData.snmp_traffic_interface_index})</option>
+                                            )}
+                                        </select>
+                                        <p className="text-[10px] text-slate-500 italic">Se vazio, usará a mesma interface configurada acima.</p>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-2">
                                 <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="SSH User (admin)" value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
