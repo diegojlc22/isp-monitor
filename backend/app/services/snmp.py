@@ -48,7 +48,7 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
     1. Tries 64-bit counters (ifHCInOctets/ifHCOutOctets) via SNMP v2c (Preferred for Gibabit+).
     2. Fallback to 32-bit counters (ifInOctets/ifOutOctets) via SNMP v1.
     """
-    from pysnmp.hlapi.asyncio import SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, getCmd
+    from pysnmp.hlapi.asyncio import CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, getCmd
     
     # OIDs
     # 32-bit
