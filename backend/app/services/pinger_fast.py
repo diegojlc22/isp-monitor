@@ -69,7 +69,25 @@ class PingerService:
             await asyncio.sleep(60)
 
     async def ping_worker(self):
-        logger.info("Ping Worker Started (Turbo Mode)")
+        logger.info("Ping Worker Started (Hyper-Turbo Mode)")
+        sem = asyncio.Semaphore(5) # Limita a 5 processos multiping paralelos (1500 IPs simultâneos)
+        
+        async def process_chunk(chunk):
+            async with sem:
+                try:
+                    # count=1 para monitoramento rápido de status
+                    results = await async_multiping(chunk, count=1, interval=0.1, timeout=PING_TIMEOUT, privileged=False)
+                    for host in results:
+                        await self.results_queue.put({
+                            "ip": host.address,
+                            "is_online": host.is_alive,
+                            "latency": host.avg_rtt,
+                            "packet_loss": host.packet_loss,
+                            "timestamp": time.time()
+                        })
+                except Exception as e:
+                    logger.error(f"Error in pinger chunk: {e}")
+
         while self.running:
             start_time = time.time()
             all_targets = list(self.targets.keys())
@@ -81,27 +99,18 @@ class PingerService:
                 await asyncio.sleep(5)
                 continue
             
-            chunk_size = settings.ping_concurrent_limit
+            chunk_size = settings.ping_concurrent_limit # Padrão 300
+            tasks = []
             for i in range(0, len(ips), chunk_size):
                 chunk = ips[i : i + chunk_size]
-                try:
-                    # icmplib async_multiping crashes if hostname cannot be resolved.
-                    # We double check validation here or rely on the filter above.
-                    results = await async_multiping(chunk, count=2, interval=0.1, timeout=PING_TIMEOUT, privileged=False)
-                    for host in results:
-                        await self.results_queue.put({
-                            "ip": host.address,
-                            "is_online": host.is_alive,
-                            "latency": host.avg_rtt,
-                            "packet_loss": host.packet_loss,
-                            "timestamp": time.time()
-                        })
-                except Exception as e:
-                    logger.error(f"Ping execution error for chunk {chunk[:3]}...: {e}")
+                tasks.append(asyncio.create_task(process_chunk(chunk)))
+            
+            if tasks:
+                await asyncio.gather(*tasks)
             
             elapsed = time.time() - start_time
             sleep_time = max(1.0, PING_INTERVAL - elapsed)
-            logger.debug(f"Cycle finished in {elapsed:.2f}s. Sleeping {sleep_time:.2f}s")
+            logger.debug(f"Cycle finished in {elapsed:.2f}s. Total IPs: {len(ips)}. Sleeping {sleep_time:.2f}s")
             await asyncio.sleep(sleep_time)
 
     def is_valid_target(self, target: str) -> bool:
@@ -251,12 +260,12 @@ async def scan_network(ips: List[str]):
     """
     Realiza ping em uma lista de IPs e gera resultados assincronamente.
     """
-    chunk_size = 50
+    chunk_size = 100
     for i in range(0, len(ips), chunk_size):
         chunk = ips[i : i + chunk_size]
         try:
-            # Ping rapido para scanner
-            results = await async_multiping(chunk, count=1, interval=0.05, timeout=1.5, privileged=False)
+            # Ping agressivo para scanner de rede local
+            results = await async_multiping(chunk, count=1, interval=0.05, timeout=1.0, privileged=False)
             for host in results:
                 yield {
                     "ip": host.address,

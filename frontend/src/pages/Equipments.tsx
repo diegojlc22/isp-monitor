@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand } from '../services/api';
+import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus } from '../services/api';
 import { useScanner } from '../contexts/ScannerContext';
 
 import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus } from 'lucide-react';
@@ -137,23 +137,29 @@ const WirelessMonitorModal = ({ equipment, onClose }: { equipment: any, onClose:
 
         const fetch = async () => {
             try {
-                const updatedList = await getEquipments();
-                const latest = updatedList.find((e: any) => e.id === equipment.id);
+                // Fetch real-time status via SNMP
+                const status = await getWirelessStatus(equipment.id);
 
-                if (latest && isMounted) {
-                    setCurrentEq(latest);
+                if (status && isMounted) {
+                    // Actualiza o estado do equipamento actual com os dados em tempo real
+                    setCurrentEq((prev: any) => ({
+                        ...prev,
+                        signal_dbm: status.signal_dbm,
+                        ccq: status.ccq,
+                        connected_clients: status.connected_clients
+                    }));
 
                     const now = new Date();
                     const newPoint = {
                         time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                        signal: latest.signal_dbm,
-                        clients: latest.connected_clients || 0
+                        signal: status.signal_dbm,
+                        ccq: status.ccq,
+                        clients: status.connected_clients || 0
                     };
 
-                    // Only add if we have valid data relevant to the type
-                    if ((latest.equipment_type === 'station' && latest.signal_dbm != null) ||
-                        (latest.equipment_type === 'transmitter')) {
-                        setData(prev => [...prev, newPoint].slice(-60)); // Keep 60 points
+                    // Adiciona ao gráfico se tiver dados válidos
+                    if (status.signal_dbm !== null || status.connected_clients !== null) {
+                        setData(prev => [...prev, newPoint].slice(-60));
                     }
                 }
             } catch (err) {
@@ -277,7 +283,7 @@ export function Equipments() {
 
     // Scanner State
     // Scanner Context
-    const { isScanning, progress, scannedDevices, startScan: startContextScan, stopScan, showScannerModal, setShowScannerModal, scanRange: contextScanRange } = useScanner();
+    const { isScanning, progress, scannedDevices, startScan: startContextScan, stopScan, showScannerModal, setShowScannerModal, scanRange: contextScanRange, clearResults } = useScanner();
 
     // Local Scanner UI
     const [selectedIps, setSelectedIps] = useState<string[]>([]);
@@ -784,7 +790,7 @@ export function Equipments() {
                         </span>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={() => { setShowScannerModal(false); }} className="text-slate-400 hover:text-white text-xs px-2">Esconder</button>
+                        <button onClick={() => { clearResults(); }} className="text-slate-400 hover:text-white text-xs px-2">Esconder</button>
                         <button onClick={() => setShowScannerModal(true)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-500 transition-colors shadow">
                             Abrir Scanner
                         </button>

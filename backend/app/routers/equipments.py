@@ -172,9 +172,10 @@ async def read_equipments(
 
 @router.post("/batch")
 async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSession = Depends(get_db)):
-    """Bulk create equipments (used by Network Scanner)"""
+    """Bulk create equipments (used by Network Scanner) - Safely ignores existing IPs"""
     results = {"success": 0, "failed": 0, "errors": []}
     
+    # 1. Load all existing IPs at once for fast lookup
     unique_check_stmt = select(Equipment.ip)
     existing_ips_res = await db.execute(unique_check_stmt)
     existing_ips = set(existing_ips_res.scalars().all())
@@ -182,14 +183,19 @@ async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSe
     to_add = []
     
     for eq in equipments:
+        if not eq.ip:
+            results["failed"] += 1
+            results["errors"].append("Missing IP")
+            continue
+            
         if eq.ip in existing_ips:
             results["failed"] += 1
-            results["errors"].append(f"IP {eq.ip} already exists")
+            # We don't consider this an error anymore, just skip it "successfully"
             continue
             
         # Basic validation passed
         to_add.append(Equipment(**eq.model_dump()))
-        existing_ips.add(eq.ip) # Prevent duplicates within the batch itself
+        existing_ips.add(eq.ip) # Prevent duplicates WITHIN this batch
         
     if to_add:
         try:
@@ -199,7 +205,8 @@ async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSe
             await cache.clear()
         except Exception as e:
             await db.rollback()
-            raise HTTPException(status_code=500, detail=f"Bulk insert failed: {str(e)}")
+            # If still fails due to race conditions, try to be specific
+            raise HTTPException(status_code=500, detail=f"Erro ao salvar lote: {str(e)}")
             
     return results
 
@@ -359,6 +366,43 @@ async def test_equipment_connection(eq_id: int, db: AsyncSession = Depends(get_d
     except Exception as e:
         return {"is_online": False, "error": str(e), "ip": db_eq.ip}
 
+@router.get("/{eq_id}/wireless-status")
+async def get_equipment_wireless_status(eq_id: int, db: AsyncSession = Depends(get_db)):
+    """Busca sinal e CCQ em tempo real via SNMP (para o modal)"""
+    db_eq = await db.get(Equipment, eq_id)
+    if not db_eq:
+        raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+    
+    if not db_eq.ip or not db_eq.brand:
+        return {"signal_dbm": None, "ccq": None, "connected_clients": None}
+    
+    from backend.app.services.wireless_snmp import get_wireless_stats, get_connected_clients_count
+    
+    try:
+        # Busca estatísticas básicas
+        stats = await get_wireless_stats(
+            db_eq.ip, 
+            db_eq.brand, 
+            db_eq.snmp_community or 'public', 
+            db_eq.snmp_port or 161
+        )
+        
+        # Se for rádio transmissor, busca contagem de clientes também
+        if db_eq.equipment_type == 'transmitter':
+            clients = await get_connected_clients_count(
+                db_eq.ip, 
+                db_eq.brand, 
+                db_eq.snmp_community or 'public', 
+                db_eq.snmp_port or 161
+            )
+            stats['connected_clients'] = clients
+        else:
+            stats['connected_clients'] = None
+            
+        return stats
+    except Exception as e:
+        return {"error": str(e), "signal_dbm": None, "ccq": None}
+
 @router.get("/scan/stream/")
 async def scan_network_stream(
     ip_range: str,
@@ -399,22 +443,49 @@ async def scan_network_stream(
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"IP inválido: {str(e)}")
 
+        async def process_result(result):
+            if result.get("is_online"):
+                try:
+                    # Parallelize brand and type detection
+                    brand = await detect_brand(result['ip'], snmp_community, snmp_port)
+                    eq_type = await detect_equipment_type(result['ip'], brand, snmp_community, snmp_port)
+                    result['brand'] = brand
+                    result['equipment_type'] = eq_type
+                except Exception as e:
+                    print(f"Scan detection error for {result['ip']}: {e}")
+            return result
+
         async def event_generator():
+            # Process in small worker chunks to maintain speed and concurrency
+            sem = asyncio.Semaphore(20) # Limit concurrent SNMP checks
+
+            async def wrapped_process(res):
+                async with sem:
+                    return await process_result(res)
+
+            # We iterate over scan_network results
+            tasks = []
             async for result in scan_network(ips_to_scan):
-                # Auto-Detect Brand & Type if Online
-                if result.get("is_online"):
-                    try:
-                        # Use a shorter timeout for scan detection if possible, or just standard
-                        brand = await detect_brand(result['ip'], snmp_community, snmp_port)
-                        eq_type = await detect_equipment_type(result['ip'], brand, snmp_community, snmp_port)
-                        
-                        result['brand'] = brand
-                        result['equipment_type'] = eq_type
-                    except Exception as e:
-                        # Non-critical, just log
-                        print(f"Scan detection error for {result['ip']}: {e}")
+                # We want to yield something immediately for the ping result?
+                # Actually, to be FAST, we can yield the ping result first, 
+                # then yield the SNMP update later? 
+                # But the current frontend might expect one object per IP.
+                # Let's run SNMP in parallel and yield when done.
+                tasks.append(asyncio.create_task(wrapped_process(result)))
                 
-                yield f"data: {json.dumps(result)}\n\n"
+                # If we have a decent amount of tasks, wait for them
+                if len(tasks) >= 10:
+                    done_results = await asyncio.gather(*tasks)
+                    for r in done_results:
+                        yield f"data: {json.dumps(r)}\n\n"
+                    tasks = []
+            
+            # Final tasks
+            if tasks:
+                done_results = await asyncio.gather(*tasks)
+                for r in done_results:
+                    yield f"data: {json.dumps(r)}\n\n"
+
             yield "event: done\ndata: {}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -44,18 +44,22 @@ async def snmp_monitor_job():
                 port = eq_data.get("snmp_port") or 161
                 
                 # --- WIRELESS STATS ---
-                if brand in ['ubiquiti', 'intelbras']:
-                    w_stats = await get_wireless_stats(ip, brand, community, port)
-                    if w_stats['signal_dbm'] is not None:
-                        result["updates"]["signal_dbm"] = w_stats['signal_dbm']
-                        result["updates"]["ccq"] = w_stats['ccq']
-                    
-                    if eq_data.get("equipment_type") == 'transmitter': 
-                        # This import needs to be inside or top-level. Top level is better but here is fine.
-                        from backend.app.services.wireless_snmp import get_connected_clients_count
-                        clients = await get_connected_clients_count(ip, brand, community, port)
-                        if clients is not None:
-                             result["updates"]["connected_clients"] = clients
+                # Agora suporta todas as marcas definidas no wireless_snmp.py (UBNT, MK, Mimosa, Intelbras)
+                if brand in ['ubiquiti', 'intelbras', 'mikrotik', 'mimosa']:
+                    try:
+                        w_stats = await get_wireless_stats(ip, brand, community, port)
+                        if w_stats['signal_dbm'] is not None:
+                            result["updates"]["signal_dbm"] = w_stats['signal_dbm']
+                            result["updates"]["ccq"] = w_stats['ccq']
+                        
+                        if eq_data.get("equipment_type") == 'transmitter': 
+                            from backend.app.services.wireless_snmp import get_connected_clients_count
+                            clients = await get_connected_clients_count(ip, brand, community, port)
+                            if clients is not None:
+                                 result["updates"]["connected_clients"] = clients
+                    except Exception as e:
+                        # Falha silenciosa para wireless não travar tráfego
+                        pass
 
                 # --- TRAFFIC ---
                 # A) Mikrotik API

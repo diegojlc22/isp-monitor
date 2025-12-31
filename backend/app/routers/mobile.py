@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.app.database import get_db
-from backend.app.models import Tower
+from backend.app.models import Tower, TowerRequest
 
 router = APIRouter(prefix="/mobile", tags=["mobile"])
 
@@ -21,6 +21,13 @@ class MobileStatus(BaseModel):
 class GeoLocation(BaseModel):
     latitude: float
     longitude: float
+
+class TowerRequestCreate(BaseModel):
+    name: str
+    ip: str | None = None
+    latitude: float
+    longitude: float
+    requested_by: str | None = "Técnico"
 
 # --- State ---
 expo_process = None
@@ -178,3 +185,67 @@ async def receive_location(loc: GeoLocation):
         "timestamp": time.time()
     }
     return {"status": "received"}
+
+@router.post("/tower-request")
+async def create_tower_request(req: TowerRequestCreate, db: AsyncSession = Depends(get_db)):
+    """Recebe pedido de nova torre vindo do APK"""
+    print(f"📡 [TOWER REQUEST] Nova solicitação: {req.name} em {req.latitude}, {req.longitude}")
+    new_req = TowerRequest(
+        name=req.name,
+        ip=req.ip,
+        latitude=req.latitude,
+        longitude=req.longitude,
+        requested_by=req.requested_by,
+        status="pending"
+    )
+    db.add(new_req)
+    await db.commit()
+    return {"status": "ok", "message": "Solicitação enviada"}
+
+@router.get("/requests")
+async def list_tower_requests(db: AsyncSession = Depends(get_db)):
+    """Lista pedidos pendentes para o painel admin"""
+    result = await db.execute(select(TowerRequest).where(TowerRequest.status == "pending"))
+    rows = result.scalars().all()
+    # Mapear para o formato que o frontend (RequestsPage.tsx) espera: {id, name, by, lat, lon}
+    return [{
+        "id": r.id,
+        "name": r.name,
+        "by": r.requested_by,
+        "lat": r.latitude,
+        "lon": r.longitude
+    } for r in rows]
+
+@router.post("/requests/{id}/approve")
+async def approve_tower_request(id: int, db: AsyncSession = Depends(get_db)):
+    """Aprova e cria a torre real"""
+    result = await db.execute(select(TowerRequest).where(TowerRequest.id == id))
+    req = result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(404, "Solicitação não encontrada")
+    
+    # Criar a torre
+    new_tower = Tower(
+        name=req.name,
+        ip=req.ip,
+        latitude=req.latitude,
+        longitude=req.longitude
+    )
+    db.add(new_tower)
+    
+    # Marcar como aprovado
+    req.status = "approved"
+    await db.commit()
+    return {"status": "ok"}
+
+@router.post("/requests/{id}/reject")
+async def reject_tower_request(id: int, db: AsyncSession = Depends(get_db)):
+    """Rejeita a solicitação"""
+    result = await db.execute(select(TowerRequest).where(TowerRequest.id == id))
+    req = result.scalar_one_or_none()
+    if not req:
+        raise HTTPException(404, "Solicitação não encontrada")
+    
+    await db.delete(req)
+    await db.commit()
+    return {"status": "ok"}

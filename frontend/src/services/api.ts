@@ -32,6 +32,7 @@ export const createEquipmentsBatch = (data: any[]) => api.post('/equipments/batc
 export const deleteEquipment = (id: number) => api.delete(`/equipments/${id}`).then(res => res.data);
 export const rebootEquipment = (id: number) => api.post(`/equipments/${id}/reboot`).then(res => res.data);
 export const testEquipment = (id: number) => api.post(`/equipments/${id}/test`).then(res => res.data);
+export const getWirelessStatus = (id: number) => api.get(`/equipments/${id}/wireless-status`).then(res => res.data);
 export const getTechLocation = () => api.get('/mobile/last-location').then(res => res.data);
 // Note: scanNetwork uses EventSource in component, so simple POST here might be legacy or unused, but keeping just in case
 export const startBatchDetect = (ids: number[], community?: string) => api.post('/equipments/batch-detect', { equipment_ids: ids, community }).then(res => res.data);
