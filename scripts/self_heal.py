@@ -44,6 +44,11 @@ SERVICES = {
         "check": ["vite"],
         "log": "logs/frontend.log",
         "cwd": "frontend"
+    },
+    "ia-agent": {
+        "cmd": f'"{PYTHON_EXE}" -m backend.app.services.synthetic_agent',
+        "check": ["synthetic_agent"],
+        "log": "logs/agent.log"
     }
 }
 

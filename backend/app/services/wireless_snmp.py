@@ -1,33 +1,94 @@
 from pysnmp.hlapi.asyncio import *
 
+async def _snmp_get(ip, community, oids, port=161, timeout=2.0):
+    """Internal helper to try SNMP get with v2c then v1"""
+    # Try SNMPv2c first
+    try:
+        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
+            SnmpEngine(),
+            CommunityData(community, mpModel=1), # v2c
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            *[ObjectType(ObjectIdentity(oid)) for oid in oids]
+        )
+        if not errorIndication and not errorStatus:
+            return varBinds
+    except:
+        pass
+
+    # Try SNMPv1 fallback
+    try:
+        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
+            SnmpEngine(),
+            CommunityData(community, mpModel=0), # v1
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            *[ObjectType(ObjectIdentity(oid)) for oid in oids]
+        )
+        if not errorIndication and not errorStatus:
+            return varBinds
+    except:
+        pass
+    
+    return None
+
+async def _snmp_next(ip, community, root_oid, port=161, timeout=2.0):
+    """Internal helper to try SNMP walk/next with v2c then v1"""
+    # Try SNMPv2c
+    try:
+        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
+            SnmpEngine(),
+            CommunityData(community, mpModel=1),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            ObjectType(ObjectIdentity(root_oid)),
+            lexicographicMode=False
+        )
+        if not errorIndication and not errorStatus and varBinds:
+            return varBinds
+    except:
+        pass
+
+    # Try SNMPv1
+    try:
+        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
+            SnmpEngine(),
+            CommunityData(community, mpModel=0),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            ObjectType(ObjectIdentity(root_oid)),
+            lexicographicMode=False
+        )
+        if not errorIndication and not errorStatus and varBinds:
+            return varBinds
+    except:
+        pass
+
+    return None
+
 async def detect_equipment_name(ip, community='public', port=161):
     """
     Detects equipment name via SNMP sysName.
     Returns the equipment name or None if detection fails.
     OID: 1.3.6.1.2.1.1.5.0 (sysName)
     """
-    try:
-        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),  # SNMPv1
-            UdpTransportTarget((ip, port), timeout=2.0, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.2.1.1.5.0'))  # sysName
-        )
-        
-        if errorIndication or errorStatus:
-            return None
-            
-        name = str(varBinds[0][1]).strip()
-        
-        # Return None if name is empty or default values
-        if not name or name.lower() in ['', 'unknown', 'localhost', 'default']:
-            return None
-            
-        return name
-        
-    except Exception:
+    # Try with provided community
+    varBinds = await _snmp_get(ip, community, ['1.3.6.1.2.1.1.5.0'], port)
+    
+    # Fallback to 'public' if different
+    if not varBinds and community != 'public':
+        varBinds = await _snmp_get(ip, 'public', ['1.3.6.1.2.1.1.5.0'], port)
+
+    if not varBinds:
         return None
+            
+    name = str(varBinds[0][1]).strip()
+    
+    # Return None if name is empty or default values
+    if not name or name.lower() in ['', 'unknown', 'localhost', 'default']:
+        return None
+        
+    return name
 
 
 async def detect_brand(ip, community, port=161):
@@ -35,100 +96,35 @@ async def detect_brand(ip, community, port=161):
     Auto-detects equipment brand via SNMP.
     Returns: 'ubiquiti', 'mikrotik', 'mimosa', 'intelbras', or 'generic'
     """
-    try:
-        # Get sysDescr and sysObjectID
-        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=2.0, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.2.1.1.1.0')),  # sysDescr
-            ObjectType(ObjectIdentity('1.3.6.1.2.1.1.2.0'))   # sysObjectID
-        )
-        
-        if errorIndication or errorStatus:
-            return 'generic'
-            
+    # 1. Try with provided community
+    varBinds = await _snmp_get(ip, community, ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.2.0'], port)
+    
+    # 2. Fallback to 'public' if different
+    if not varBinds and community != 'public':
+        varBinds = await _snmp_get(ip, 'public', ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.2.0'], port)
+
+    if varBinds:
         sys_descr = str(varBinds[0][1]).lower()
         sys_object_id = str(varBinds[1][1])
         
-        # PRIORITY 1: Check for Intelbras FIRST (before checking Ubiquiti)
-        # Intelbras WOM series uses Ubiquiti OIDs but should be identified as Intelbras
+        # Identification Logic
         if '26138' in sys_object_id or 'intelbras' in sys_descr or 'wom' in sys_descr:
             return 'intelbras'
-        
-        # PRIORITY 2: Check sysDescr for other brand keywords
-        if 'mikrotik' in sys_descr or 'routeros' in sys_descr:
+        if 'mikrotik' in sys_descr or 'routeros' in sys_descr or '14988' in sys_object_id:
             return 'mikrotik'
-        elif 'mimosa' in sys_descr:
+        if 'mimosa' in sys_descr or '43356' in sys_object_id:
             return 'mimosa'
-        elif 'ubiquiti' in sys_descr or 'airmax' in sys_descr or 'airfiber' in sys_descr:
+        if 'ubiquiti' in sys_descr or 'airmax' in sys_descr or 'airfiber' in sys_descr or '41112' in sys_object_id:
             return 'ubiquiti'
-            
-        # PRIORITY 3: Check sysObjectID (Enterprise ID)
-        if '14988' in sys_object_id:  # Mikrotik
-            return 'mikrotik'
-        elif '43356' in sys_object_id:  # Mimosa
-            return 'mimosa'
-        elif '41112' in sys_object_id:  # Ubiquiti
-            return 'ubiquiti'
-            
-        # Fallback: Try to detect by testing OIDs
-        # Test Intelbras OID first
-        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=1.5, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.4.1.26138')),
-            lexicographicMode=False
-        )
-        
-        if not errorIndication and not errorStatus and varBinds:
-            return 'intelbras'
-            
-        # Test Ubiquiti OID
-        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=1.5, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.4.1.41112')),
-            lexicographicMode=False
-        )
-        
-        if not errorIndication and not errorStatus and varBinds:
-            return 'ubiquiti'
-            
-        # Test Mikrotik OID
-        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=1.5, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.4.1.14988')),
-            lexicographicMode=False
-        )
-        
-        if not errorIndication and not errorStatus and varBinds:
-            return 'mikrotik'
-            
-        # Test Mimosa OID
-        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=1.5, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.4.1.43356')),
-            lexicographicMode=False
-        )
-        
-        if not errorIndication and not errorStatus and varBinds:
-            return 'mimosa'
-            
-    except:
-        pass
-        
+
+    # Fallback to Walk detection for stubborn devices
+    # Test Intelbras
+    if await _snmp_next(ip, community, '1.3.6.1.4.1.26138', port): return 'intelbras'
+    # Test Ubiquiti
+    if await _snmp_next(ip, community, '1.3.6.1.4.1.41112', port): return 'ubiquiti'
+    # Test Mikrotik
+    if await _snmp_next(ip, community, '1.3.6.1.4.1.14988', port): return 'mikrotik'
+    
     return 'generic'
 
 
@@ -160,15 +156,9 @@ async def detect_equipment_type(ip, brand, community, port=161):
         # For Ubiquiti: Check opmode
         if brand.lower() == 'ubiquiti':
             # Try to get wireless mode
-            errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
-                SnmpEngine(),
-                CommunityData(community, mpModel=0),
-                UdpTransportTarget((ip, port), timeout=2.0, retries=1),
-                ContextData(),
-                ObjectType(ObjectIdentity('1.3.6.1.4.1.41112.1.4.5.1.14.1'))  # ubntWlStatOpmode
-            )
+            varBinds = await _snmp_get(ip, community, ['1.3.6.1.4.1.41112.1.4.1.1.4.1'], port)
             
-            if not errorIndication and not errorStatus:
+            if varBinds:
                 mode = str(varBinds[0][1]).lower()
                 if 'ap' in mode or 'master' in mode:
                     return 'transmitter'
@@ -221,58 +211,25 @@ OIDS = {
 }
 
 async def get_snmp_value(ip, community, oid, port=161):
-    try:
-        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),  # v1 for Ubiquiti compatibility
-            UdpTransportTarget((ip, port), timeout=2.0, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity(oid))
-        )
-
-        if not errorIndication and not errorStatus:
-            for varBind in varBinds:
-                if isinstance(varBind, list) and len(varBind) > 0: val = varBind[1]
-                else: val = varBind[1]
-                try: return int(val)
-                except: return str(val)
-    except:
+    varBinds = await _snmp_get(ip, community, [oid], port)
+    if not varBinds:
         return None
-    return None
+    val = varBinds[0][1]
+    try: return int(val)
+    except: return str(val)
 
 async def get_snmp_walk_first(ip, community, root_oid, port=161):
-    """
-    Performs a Walk (nextCmd) on the root_oid and returns the FIRST valid integer value found.
-    Useful for tables where the index is dynamic (e.g. Ubiquiti AC Signal Strength).
-    """
-    try:
-        # We only want the first valid value in this subtree
-        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=2.0, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity(root_oid)),
-            lexicographicMode=False
-        )
-        
-        if not errorIndication and not errorStatus and varBinds:
-            # varBinds is a list of rows, usually we get one row with nextCmd unless we loop
-            # But nextCmd is an iterator in recent pysnmp, but here we await it (single step)
-            # The async iterator logic is tricky across versions, but `await nextCmd` usually fetches one batch (default 1).
-            
-            # Note: With the fix from debug script, nextCmd might return the result tuple directly in this environment
-            for varBind in varBinds: # Iterate the Row
-                if isinstance(varBind, list) and len(varBind) > 0: 
-                    item = varBind[0]  # Extract ObjectType from list
-                    val = item[1]      # Extract value from ObjectType
-                else: 
-                    val = varBind[1]
-                
-                try: return int(val)
-                except: pass
-    except:
-        pass
+    varBinds = await _snmp_next(ip, community, root_oid, port)
+    if not varBinds:
+        return None
+    # varBinds usually contains the first row of the walk
+    for varBind in varBinds:
+        if isinstance(varBind, list) and len(varBind) > 0:
+            val = varBind[0][1]
+        else:
+            val = varBind[1]
+        try: return int(val)
+        except: pass
     return None
 
 async def get_wireless_stats(ip, brand, community, port=161):

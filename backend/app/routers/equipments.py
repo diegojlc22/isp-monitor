@@ -19,12 +19,108 @@ from backend.app.services.ssh_commander import reboot_device
 from backend.app.services.pinger_fast import scan_network
 from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
 from pydantic import BaseModel
+from fastapi import BackgroundTasks
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
 
 # --- Models Helpers ---
-class ScanRequest(BaseModel):
-    ip_range: str
+class BatchDetectRequest(BaseModel):
+    equipment_ids: List[int]
+    community: Optional[str] = None
+
+# --- Security/Task State ---
+batch_detection_state = {
+    "is_running": False,
+    "total": 0,
+    "processed": 0,
+    "success": 0,
+    "errors": 0,
+    "start_time": None
+}
+
+async def run_batch_detection_task(ids: List[int], db_session_factory, override_community: Optional[str] = None):
+    global batch_detection_state
+    batch_detection_state["is_running"] = True
+    batch_detection_state["total"] = len(ids)
+    batch_detection_state["processed"] = 0
+    batch_detection_state["success"] = 0
+    batch_detection_state["errors"] = 0
+    batch_detection_state["start_time"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        for eq_id in ids:
+            if not batch_detection_state["is_running"]:
+                break
+            
+            async with db_session_factory() as db:
+                try:
+                    stmt = select(Equipment).where(Equipment.id == eq_id)
+                    res = await db.execute(stmt)
+                    eq = res.scalar_one_or_none()
+                    
+                    if not eq:
+                        batch_detection_state["processed"] += 1
+                        continue
+
+                    # Auto-detect using SNMP
+                    comm = override_community or eq.snmp_community or 'public'
+                    brand = await detect_brand(eq.ip, comm, eq.snmp_port)
+                    eq_type = await detect_equipment_type(eq.ip, brand, comm, eq.snmp_port)
+                    eq_name = await detect_equipment_name(eq.ip, comm, eq.snmp_port)
+
+                    # Update model
+                    eq.brand = brand
+                    eq.equipment_type = eq_type
+                    if eq_name:
+                        eq.name = eq_name
+                    
+                    # Store detected community if it was an override
+                    if override_community:
+                        eq.snmp_community = override_community
+                    
+                    # Special for Mikrotik
+                    if brand == 'mikrotik':
+                        eq.is_mikrotik = True
+                    
+                    await db.commit()
+                    batch_detection_state["success"] += 1
+                except Exception as e:
+                    print(f"Error detecting {eq_id}: {e}")
+                    batch_detection_state["errors"] += 1
+                finally:
+                    batch_detection_state["processed"] += 1
+                    # Small delay to prevent SNMP spam
+                    await asyncio.sleep(0.5)
+    finally:
+        batch_detection_state["is_running"] = False
+        await cache.clear() # Invalidate cache after batch update
+
+@router.post("/batch-detect")
+async def start_batch_detect(
+    request: BatchDetectRequest, 
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    """Starts background SNMP detection for a list of equipment IDs"""
+    global batch_detection_state
+    if batch_detection_state["is_running"]:
+        raise HTTPException(status_code=400, detail="Já existe uma detecção em andamento.")
+    
+    from backend.app.database import AsyncSessionLocal
+    background_tasks.add_task(run_batch_detection_task, request.equipment_ids, AsyncSessionLocal, request.community)
+    return {"message": "Detecção em lote iniciada em background."}
+
+@router.get("/batch-detect/status")
+async def get_batch_detect_status():
+    """Returns the current status of the background detection task"""
+    return batch_detection_state
+
+@router.post("/batch-detect/stop")
+async def stop_batch_detect():
+    """Stops the current background detection task"""
+    global batch_detection_state
+    batch_detection_state["is_running"] = False
+    return {"message": "Sinal de parada enviado para a detecção."}
 
 # --- Endpoints ---
 

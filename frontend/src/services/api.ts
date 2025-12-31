@@ -34,6 +34,9 @@ export const rebootEquipment = (id: number) => api.post(`/equipments/${id}/reboo
 export const testEquipment = (id: number) => api.post(`/equipments/${id}/test`).then(res => res.data);
 export const getTechLocation = () => api.get('/mobile/last-location').then(res => res.data);
 // Note: scanNetwork uses EventSource in component, so simple POST here might be legacy or unused, but keeping just in case
+export const startBatchDetect = (ids: number[], community?: string) => api.post('/equipments/batch-detect', { equipment_ids: ids, community }).then(res => res.data);
+export const getBatchDetectStatus = () => api.get('/equipments/batch-detect/status').then(res => res.data);
+export const stopBatchDetect = () => api.post('/equipments/batch-detect/stop').then(res => res.data);
 export const scanNetwork = (range: string) => api.post('/equipments/scan/', { ip_range: range }).then(res => res.data);
 
 export const getTelegramConfig = () => api.get('/settings/telegram').then(res => res.data);

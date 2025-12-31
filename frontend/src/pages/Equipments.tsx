@@ -284,18 +284,23 @@ export function Equipments() {
     const [ipNames, setIpNames] = useState<{ [key: string]: string }>({});
     const [scanRangeInput, setScanRangeInput] = useState('');
 
-    // Sync Input with Running Scan
-    useEffect(() => { if (isScanning && contextScanRange) setScanRangeInput(contextScanRange); }, [isScanning, contextScanRange]);
+    // Sync Input with Running Scan and Global Defaults
+    useEffect(() => {
+        if (isScanning && contextScanRange) setScanRangeInput(contextScanRange);
+    }, [isScanning, contextScanRange]);
+
 
     const handleScanStart = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (isScanning) { stopScan(); return; }
         if (!scanRangeInput) return;
-        startContextScan(scanRangeInput, 'public', 161);
+
+        const community = networkDefaults.snmp_community || 'public';
+        const port = networkDefaults.snmp_port || 161;
+        startContextScan(scanRangeInput, community, port);
     };
 
     // Detection Progress
-    const [detectionProgress, setDetectionProgress] = useState(0);
 
     // Configurações do scanner
 
@@ -430,7 +435,10 @@ export function Equipments() {
     const [selectedWirelessEq, setSelectedWirelessEq] = useState<Equipment | null>(null);
     const [templates, setTemplates] = useState<Record<string, Partial<FormData>>>({});
     const [showTemplateModal, setShowTemplateModal] = useState(false);
-    const [isDetecting, setIsDetecting] = useState(false);
+    const [isDetectingForm, setIsDetectingForm] = useState(false);
+
+    // Global Tasks from Context
+    const { isDetecting, detectionProgress, startDetection, stopDetection } = useScanner();
 
     // Auto-detect equipment brand and type
     const handleAutoDetect = async () => {
@@ -439,12 +447,12 @@ export function Equipments() {
             return;
         }
 
-        setIsDetecting(true);
+        setIsDetectingForm(true);
         try {
             const result = await detectEquipmentBrand(
                 formData.ip,
-                formData.snmp_community || 'public',
-                formData.snmp_port || 161
+                formData.snmp_community || networkDefaults.snmp_community || 'public',
+                formData.snmp_port || networkDefaults.snmp_port || 161
             );
 
             setFormData({
@@ -459,11 +467,11 @@ export function Equipments() {
         } catch (error: any) {
             alert(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
         } finally {
-            setIsDetecting(false);
+            setIsDetectingForm(false);
         }
     };
 
-    // Batch auto-detect for selected equipments
+    // Batch auto-detect for selected equipments (delegated to background)
     const handleBatchAutoDetect = async () => {
         if (selectedIds.length === 0) {
             alert('Selecione pelo menos um equipamento');
@@ -474,61 +482,12 @@ export function Equipments() {
             return;
         }
 
-        setIsDetecting(true);
-        setDetectionProgress(0);
-        let successCount = 0;
-        let errorCount = 0;
-
-        // Process in small batches to avoid saturating the backend (Concurrency: 3)
-        const CONCURRENCY = 3;
-        const taskQueue = [...selectedIds];
-        let processed = 0;
-
-        const runWorker = async () => {
-            while (taskQueue.length > 0) {
-                const id = taskQueue.shift();
-                if (!id) break;
-
-                const equipment = equipments.find(eq => eq.id === id);
-                if (!equipment) continue;
-
-                try {
-                    const result = await detectEquipmentBrand(
-                        equipment.ip,
-                        equipment.snmp_community || networkDefaults.snmp_community || 'public',
-                        equipment.snmp_port || networkDefaults.snmp_port || 161
-                    );
-
-                    // Update equipment with detected info
-                    await updateEquipment(id, {
-                        ...equipment,
-                        brand: result.brand,
-                        equipment_type: result.equipment_type,
-                        name: result.name || equipment.name,
-                        is_mikrotik: result.brand === 'mikrotik'
-                    });
-
-                    successCount++;
-                } catch (error) {
-                    console.error(`Erro ao detectar ${equipment.ip}:`, error);
-                    errorCount++;
-                } finally {
-                    processed++;
-                    setDetectionProgress(Math.round((processed / selectedIds.length) * 100));
-                }
-            }
-        };
-
-        // Start workers
-        const workers = Array(Math.min(CONCURRENCY, selectedIds.length)).fill(null).map(() => runWorker());
-        await Promise.all(workers);
-
-        setIsDetecting(false);
-        setDetectionProgress(0);
-        setSelectedIds([]);
-        load(); // Reload data after all done
-
-        alert(`✅ Detecção concluída!\n\nSucesso: ${successCount}\nErros: ${errorCount}`);
+        try {
+            await startDetection(selectedIds);
+            setSelectedIds([]);
+        } catch (e: any) {
+            alert(e.response?.data?.detail || "Erro ao iniciar detecção.");
+        }
     };
 
     const [templateName, setTemplateName] = useState('');
@@ -792,8 +751,20 @@ export function Equipments() {
                     >
                         <Trash2 size={18} /> Excluir {selectedIds.length > 0 && `(${selectedIds.length})`}
                     </button>
-                    <button onClick={handleExportCSV} className="flex gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
-                        <Download size={18} /> CSV
+                    <button onClick={handleExportCSV} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
+                        <Download size={18} /> Exportar
+                    </button>
+                    <button
+                        onClick={handleBatchAutoDetect}
+                        disabled={isDetecting}
+                        className={clsx(
+                            "flex gap-2 px-3 py-2 rounded-lg text-sm transition-all shadow-lg",
+                            isDetecting ? "bg-slate-800 text-blue-400" : "bg-purple-600 hover:bg-purple-700 text-white"
+                        )}
+                        title="Auto-detectar marca e tipo dos selecionados"
+                    >
+                        {isDetecting ? <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" /> : <Wifi size={18} />}
+                        {isDetecting ? `Detectando...` : `Detectar Selecionados`}
                     </button>
                     <label className="flex gap-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg cursor-pointer">
                         <Upload size={18} /> Importar
@@ -898,10 +869,10 @@ export function Equipments() {
                                 <button
                                     type="button"
                                     onClick={handleAutoDetect}
-                                    disabled={isDetecting || !formData.ip}
+                                    disabled={isDetectingForm || !formData.ip}
                                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-2 rounded font-semibold transition-all flex items-center justify-center gap-2"
                                 >
-                                    {isDetecting ? (
+                                    {isDetectingForm ? (
                                         <>
                                             <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
                                             Detectando...
@@ -968,10 +939,22 @@ export function Equipments() {
                                 <Minus size={20} />
                             </button>
                         </div>
-                        <div className="flex gap-2 mb-4">
-                            <input className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP Range (ex: 192.168.1.0/24)" value={scanRangeInput} onChange={e => setScanRangeInput(e.target.value)} disabled={isScanning} />
-                            <button onClick={handleScanStart} className={clsx("text-white px-4 rounded", isScanning ? "bg-red-600 hover:bg-red-500" : "bg-emerald-600 hover:bg-emerald-500")}>{isScanning ? 'Parar' : 'Iniciar'}</button>
-                            {progress > 0 && <span className="text-white text-xs self-center ml-2">{progress}%</span>}
+                        <div className="flex flex-col gap-2 mb-4">
+                            <div className="flex gap-2">
+                                <input className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP Range (ex: 192.168.103.1/24)" value={scanRangeInput} onChange={e => setScanRangeInput(e.target.value)} disabled={isScanning} />
+                                <button onClick={handleScanStart} className={clsx("text-white px-6 rounded font-bold shadow-lg transition-all", isScanning ? "bg-red-600 hover:bg-red-500" : "bg-blue-600 hover:bg-blue-500")}>
+                                    {isScanning ? 'Parar' : 'Escanear'}
+                                </button>
+                            </div>
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-[10px] text-slate-500 uppercase font-bold">Usando credenciais de rede padrão</span>
+                                {progress > 0 && <span className="text-blue-400 text-[10px] font-mono">{progress}%</span>}
+                            </div>
+                            {progress > 0 && (
+                                <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                    <div className="bg-blue-500 h-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                                </div>
+                            )}
                         </div>
                         <div className="flex-1 bg-slate-950 rounded border border-slate-800 p-2 overflow-y-auto">
                             {/* Select All Header */}
@@ -1067,6 +1050,30 @@ export function Equipments() {
                 )
             }
             {showTemplateModal && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-slate-900 border border-slate-700 rounded p-6"><input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Nome do Template" className="bg-slate-950 border border-slate-700 rounded p-2 text-white block mb-4 w-full" /><div className="flex gap-2 justify-end"><button onClick={() => setShowTemplateModal(false)} className="text-slate-400">Cancelar</button><button onClick={saveTemplate} className="bg-purple-600 text-white px-4 py-2 rounded">Salvar</button></div></div></div>)}
+
+            {/* Detecção Progress Table Overlay */}
+            {isDetecting && (
+                <div className="fixed bottom-6 right-6 z-[60] bg-slate-900 border border-blue-500/30 p-4 rounded-xl shadow-2xl w-80 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-blue-400 font-bold flex items-center gap-2 text-sm">
+                            <Zap size={18} className="animate-pulse" /> Detecção em Lote
+                        </h3>
+                        <button onClick={stopDetection} className="text-slate-500 hover:text-red-400">
+                            <Minus size={16} />
+                        </button>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden mb-2">
+                        <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${detectionProgress}%` }}></div>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                        <span>PROGRESSO {detectionProgress}%</span>
+                        <span className="text-blue-400 animate-pulse uppercase">Processando...</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 text-center">
+                        Você pode navegar livremente. A detecção continuará no servidor.
+                    </p>
+                </div>
+            )}
         </div >
     );
 }

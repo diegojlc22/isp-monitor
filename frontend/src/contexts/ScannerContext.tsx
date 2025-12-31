@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { getBatchDetectStatus, startBatchDetect, stopBatchDetect } from '../services/api';
 
 interface ScannerContextType {
     isScanning: boolean;
@@ -11,6 +12,11 @@ interface ScannerContextType {
     showScannerModal: boolean;
     setShowScannerModal: (show: boolean) => void;
     scanRange: string;
+    // Batch Detection
+    isDetecting: boolean;
+    detectionProgress: number;
+    startDetection: (ids: number[], community?: string) => Promise<void>;
+    stopDetection: () => Promise<void>;
 }
 
 const ScannerContext = createContext<ScannerContextType>({} as any);
@@ -23,6 +29,10 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [scannedDevices, setScannedDevices] = useState<any[]>([]);
     const [showScannerModal, setShowScannerModal] = useState(false);
     const [scanRange, setScanRange] = useState('');
+
+    // Batch Detection State
+    const [isDetecting, setIsDetecting] = useState(false);
+    const [detectionProgress, setDetectionProgress] = useState(0);
 
     const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -101,6 +111,56 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setProgress(0);
     }, []);
 
+    const startDetection = async (ids: number[], community?: string) => {
+        try {
+            await startBatchDetect(ids, community);
+            setIsDetecting(true);
+            setDetectionProgress(0);
+            toast.success("Detecção em lote iniciada!");
+        } catch (e: any) {
+            toast.error(e.response?.data?.detail || "Erro ao iniciar detecção.");
+        }
+    };
+
+    const stopDetection = async () => {
+        try {
+            await stopBatchDetect();
+            setIsDetecting(false);
+            toast("Detecção parada pelo usuário.");
+        } catch (e) {
+            setIsDetecting(false);
+        }
+    };
+
+    // Polling for Batch Detection Status
+    useEffect(() => {
+        let interval: any;
+
+        const checkStatus = async () => {
+            try {
+                const status = await getBatchDetectStatus();
+                setIsDetecting(status.is_running);
+                if (status.total > 0) {
+                    setDetectionProgress(Math.round((status.processed / status.total) * 100));
+                }
+
+                // If it was running and now it's not and processed all
+                if (!status.is_running && status.processed >= status.total && status.total > 0) {
+                    // One final toast if we were detecting
+                    // We can't easily know if we *just* finished without ref, but this is fine
+                }
+            } catch (e) { }
+        };
+
+        // Check immediately on mount
+        checkStatus();
+
+        // Interval for continuous checking
+        interval = setInterval(checkStatus, 3000);
+
+        return () => clearInterval(interval);
+    }, []);
+
     // Cleanup on Global Unmount
     useEffect(() => {
         return () => {
@@ -111,7 +171,8 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return (
         <ScannerContext.Provider value={{
             isScanning, progress, scannedDevices, startScan, stopScan, clearResults,
-            showScannerModal, setShowScannerModal, scanRange
+            showScannerModal, setShowScannerModal, scanRange,
+            isDetecting, detectionProgress, startDetection, stopDetection
         }}>
             {children}
         </ScannerContext.Provider>

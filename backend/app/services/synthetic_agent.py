@@ -445,3 +445,6 @@ async def synthetic_agent_job():
             sleep_sec = DEFAULT_INTERVAL
             
         await asyncio.sleep(sleep_sec)
+
+if __name__ == "__main__":
+    asyncio.run(synthetic_agent_job())
