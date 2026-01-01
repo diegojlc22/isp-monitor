@@ -225,7 +225,7 @@ async def snmp_monitor_job():
                                 "out_mbps": out_mbps,
                                 "interface_index": if_idx,
                                 "signal_dbm": res["updates"].get("signal_dbm"),
-                                "timestamp": datetime.now(timezone.utc)
+                                "timestamp": datetime.now()  # Sem timezone para compatibilidade
                             })
                             # Atualizar tracking
                             snmp_last_logged[eq_id] = {
