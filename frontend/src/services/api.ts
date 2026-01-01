@@ -117,6 +117,10 @@ export const scanInterfaces = (ip: string, community: string = 'public', port: n
 export const detectBestInterface = (ip: string, community?: string, port: number = 161) =>
     api.get(`/equipments/scan-best-interface`, { params: { ip, community, port } }).then(res => res.data);
 
+// Auto-detectar interface com tráfego (testa todas as interfaces)
+export const detectTrafficInterface = (ip: string, community?: string, port: number = 161) =>
+    api.post(`/equipments/detect-traffic-interface`, { ip, community, port }, { timeout: 120000 }).then(res => res.data);
+
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
 
 // Expo / Mobile
