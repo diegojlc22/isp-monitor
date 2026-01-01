@@ -41,7 +41,7 @@ class EquipmentBase(BaseModel):
     # Wireless
     brand: str = "generic"
     equipment_type: str = "station"  # "transmitter" or "station"
-    signal_dbm: Optional[int] = None
+    signal_dbm: Optional[float] = None
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
     whatsapp_groups: Optional[List[str]] = []
@@ -78,7 +78,7 @@ class EquipmentUpdate(BaseModel):
     api_port: Optional[int] = None
     brand: Optional[str] = None
     equipment_type: Optional[str] = None
-    signal_dbm: Optional[int] = None
+    signal_dbm: Optional[float] = None
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
     whatsapp_groups: Optional[List[str]] = None
