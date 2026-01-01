@@ -121,6 +121,10 @@ export const detectBestInterface = (ip: string, community?: string, port: number
 export const detectTrafficInterface = (ip: string, community?: string, port: number = 161) =>
     api.post(`/equipments/detect-traffic-interface`, { ip, community, port }, { timeout: 120000 }).then(res => res.data);
 
+// Auto-configurar interface de tráfego (detecta + atualiza automaticamente)
+export const autoConfigureTrafficInterface = (equipmentId: number) =>
+    api.post(`/equipments/${equipmentId}/auto-configure-traffic`, {}, { timeout: 120000 }).then(res => res.data);
+
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
 
 // Expo / Mobile

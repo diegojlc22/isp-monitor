@@ -450,6 +450,128 @@ async def scan_best_interface(
     return best
 
 
+@router.post("/{eq_id}/auto-configure-traffic")
+async def auto_configure_traffic_interface(
+    eq_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Auto-detecta e configura a interface de tráfego em um único passo.
+    """
+    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic
+    from backend.app.models import Parameters
+    import time
+    
+    result = await db.execute(select(Equipment).where(Equipment.id == eq_id))
+    equipment = result.scalar_one_or_none()
+    
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+    
+    if not equipment.ip:
+        raise HTTPException(status_code=400, detail="Equipamento sem IP configurado")
+    
+    community = equipment.snmp_community
+    if not community:
+        res = await db.execute(select(Parameters).where(Parameters.key == "default_snmp_community"))
+        param = res.scalar_one_or_none()
+        community = param.value if param else "public"
+    
+    port = equipment.snmp_port or 161
+    
+    try:
+        interfaces = await get_snmp_interfaces(equipment.ip, community, port)
+        if not interfaces:
+            raise HTTPException(status_code=404, detail="Nenhuma interface encontrada via SNMP")
+        
+        async def test_interface(iface):
+            idx = iface['index']
+            name = iface['name']
+            
+            try:
+                traffic1 = await get_snmp_interface_traffic(equipment.ip, community, port, idx)
+                if not traffic1:
+                    return None
+                
+                in_bytes1, out_bytes1 = traffic1
+                time1 = time.time()
+                
+                await asyncio.sleep(3)
+                
+                traffic2 = await get_snmp_interface_traffic(equipment.ip, community, port, idx)
+                if not traffic2:
+                    return None
+                
+                in_bytes2, out_bytes2 = traffic2
+                time2 = time.time()
+                
+                dt = time2 - time1
+                delta_in = max(0, in_bytes2 - in_bytes1)
+                delta_out = max(0, out_bytes2 - out_bytes1)
+                
+                mbps_in = round((delta_in * 8) / (dt * 1_000_000), 2)
+                mbps_out = round((delta_out * 8) / (dt * 1_000_000), 2)
+                total_mbps = mbps_in + mbps_out
+                
+                if total_mbps > 0:
+                    return {
+                        'index': idx,
+                        'name': name,
+                        'in_mbps': mbps_in,
+                        'out_mbps': mbps_out,
+                        'total_mbps': total_mbps
+                    }
+                return None
+                
+            except Exception:
+                return None
+        
+        sem = asyncio.Semaphore(10)
+        
+        async def test_with_semaphore(iface):
+            async with sem:
+                return await test_interface(iface)
+        
+        tasks = [test_with_semaphore(iface) for iface in interfaces]
+        results = await asyncio.gather(*tasks)
+        
+        valid_results = [r for r in results if r is not None]
+        
+        if not valid_results:
+            return {
+                "success": False,
+                "message": "Nenhuma interface com tráfego detectada",
+                "equipment_id": eq_id,
+                "equipment_name": equipment.name,
+                "total_interfaces": len(interfaces)
+            }
+        
+        valid_results.sort(key=lambda x: x['total_mbps'], reverse=True)
+        best = valid_results[0]
+        
+        equipment.snmp_traffic_interface_index = best['index']
+        await db.commit()
+        await db.refresh(equipment)
+        
+        return {
+            "success": True,
+            "message": f"Interface {best['index']} configurada automaticamente",
+            "equipment_id": eq_id,
+            "equipment_name": equipment.name,
+            "equipment_ip": equipment.ip,
+            "configured_interface": best['index'],
+            "interface_name": best['name'],
+            "traffic_in": best['in_mbps'],
+            "traffic_out": best['out_mbps'],
+            "total_traffic": best['total_mbps'],
+            "all_interfaces_with_traffic": valid_results
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na auto-configuração: {str(e)}")
+
 @router.put("/{eq_id}", response_model=EquipmentSchema)
 async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
