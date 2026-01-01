@@ -5,6 +5,8 @@ export const api = axios.create({
     timeout: 30000, // Aumentei o timeout também
 });
 
+export default api;
+
 api.interceptors.request.use(config => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -143,6 +145,7 @@ export const getNgrokStatus = () => api.get('/ngrok/status').then(res => res.dat
 export const getSystemHealth = () => api.get('/system/health').then(res => res.data);
 export const startNgrok = () => api.post('/ngrok/start').then(res => res.data);
 export const stopNgrok = () => api.post('/ngrok/stop').then(res => res.data);
+export const triggerTopologyDiscovery = () => api.post('/system/topology/discover').then(res => res.data);
 // Mobile
 export const startMobile = () => api.post('/mobile/start').then(res => res.data);
 export const stopMobile = () => api.post('/mobile/stop').then(res => res.data);

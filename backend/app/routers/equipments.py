@@ -18,6 +18,7 @@ from backend.app.services.cache import cache
 from backend.app.services.ssh_commander import reboot_device
 from backend.app.services.pinger_fast import scan_network
 from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
+from backend.app.dependencies import get_current_user
 from pydantic import BaseModel
 from fastapi import BackgroundTasks
 
@@ -99,6 +100,7 @@ async def run_batch_detection_task(ids: List[int], db_session_factory, override_
 async def start_batch_detect(
     request: BatchDetectRequest, 
     background_tasks: BackgroundTasks,
+    current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Starts background SNMP detection for a list of equipment IDs"""
@@ -116,7 +118,7 @@ async def get_batch_detect_status():
     return batch_detection_state
 
 @router.post("/batch-detect/stop")
-async def stop_batch_detect():
+async def stop_batch_detect(current_user=Depends(get_current_user)):
     """Stops the current background detection task"""
     global batch_detection_state
     batch_detection_state["is_running"] = False
@@ -164,7 +166,7 @@ async def read_equipments(
     return equipments
 
 @router.post("/batch")
-async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSession = Depends(get_db)):
+async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """Bulk create equipments (used by Network Scanner) - Safely ignores existing IPs"""
     results = {"success": 0, "failed": 0, "errors": []}
     
@@ -204,7 +206,7 @@ async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSe
     return results
 
 @router.post("/", response_model=EquipmentSchema)
-async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db)):
+async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     try:
         existing = await db.execute(select(Equipment).where(Equipment.ip == equipment.ip))
         if existing.scalar_one_or_none():
@@ -454,7 +456,8 @@ async def scan_best_interface(
 @router.post("/{eq_id}/auto-configure-traffic")
 async def auto_configure_traffic_interface(
     eq_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
     """
     Auto-detecta e configura a interface de tráfego em um único passo.
@@ -578,7 +581,8 @@ async def auto_detect_all(
     ip: str = Body(...),
     community: str = Body("publicRadionet"),
     port: int = Body(161),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
     """
     Auto-detecta TUDO de um equipamento em um único endpoint:
@@ -710,7 +714,7 @@ async def auto_detect_all(
 
 
 @router.put("/{eq_id}", response_model=EquipmentSchema)
-async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
+async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     result = await db.execute(
         select(Equipment)
         .options(selectinload(Equipment.tower), selectinload(Equipment.parent))
@@ -732,7 +736,7 @@ async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSess
     return db_eq
 
 @router.delete("/{eq_id}")
-async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     db_eq = await db.get(Equipment, eq_id)
     if not db_eq:
         raise HTTPException(status_code=404, detail="Equipment not found")
@@ -743,7 +747,7 @@ async def delete_equipment(eq_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "Equipment deleted"}
 
 @router.post("/{eq_id}/reboot")
-async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_db)):
+async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     db_eq = await db.get(Equipment, eq_id)
     if not db_eq:
         raise HTTPException(status_code=404, detail="Equipment not found")
@@ -766,7 +770,7 @@ async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_d
     return {"message": "Comando de reboot enviado com sucesso"}
 
 @router.post("/{eq_id}/test")
-async def test_equipment_connection(eq_id: int, db: AsyncSession = Depends(get_db)):
+async def test_equipment_connection(eq_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """Teste manual de conectividade (Ping)"""
     db_eq = await db.get(Equipment, eq_id)
     if not db_eq:
@@ -1043,7 +1047,7 @@ async def export_equipments_csv(db: AsyncSession = Depends(get_db)):
     )
 
 @router.post("/import/csv")
-async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Arquivo deve ser CSV")
     

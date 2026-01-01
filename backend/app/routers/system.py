@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from backend.app.database import get_db
@@ -6,8 +6,19 @@ from backend.app.models import Equipment, Parameters, Alert
 from datetime import datetime, timezone, timedelta
 import psutil
 import time
+from backend.app.services.topology import run_topology_discovery
+from backend.app.dependencies import get_current_user
 
 router = APIRouter(prefix="/system", tags=["system"])
+
+@router.post("/topology/discover")
+async def trigger_topology_discovery(item: BackgroundTasks, current_user = Depends(get_current_user)):
+    """
+    Dispara manualmente a descoberta de topologia da rede.
+    Rodará em background.
+    """
+    item.add_task(run_topology_discovery)
+    return {"message": "Descoberta de topologia iniciada em background."}
 
 @router.get("/health")
 async def get_system_health(db: AsyncSession = Depends(get_db)):

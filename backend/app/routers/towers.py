@@ -8,7 +8,9 @@ from backend.app.database import get_db
 from backend.app.models import Tower, NetworkLink
 from backend.app.schemas import Tower as TowerSchema, TowerCreate
 from backend.app.schemas import NetworkLink as NetworkLinkSchema, NetworkLinkCreate
+from backend.app.schemas import NetworkLink as NetworkLinkSchema, NetworkLinkCreate
 from backend.app.services.cache import cache  # Cache para performance
+from backend.app.dependencies import get_current_user
 
 router = APIRouter(prefix="/towers", tags=["towers"])
 
@@ -30,7 +32,7 @@ async def read_towers(skip: int = 0, limit: int = 100, db: AsyncSession = Depend
     return towers
 
 @router.post("/", response_model=TowerSchema)
-async def create_tower(tower: TowerCreate, db: AsyncSession = Depends(get_db)):
+async def create_tower(tower: TowerCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     db_tower = Tower(**tower.model_dump())
     db.add(db_tower)
     await db.commit()
@@ -42,7 +44,7 @@ async def create_tower(tower: TowerCreate, db: AsyncSession = Depends(get_db)):
     return db_tower
 
 @router.post("/import_csv")
-async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     """Importa torres via arquivo CSV ou Excel (.xlsx)"""
     try:
         content = await file.read()
@@ -200,7 +202,7 @@ async def read_links(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 @router.post("/links", response_model=NetworkLinkSchema)
-async def create_link(link: NetworkLinkCreate, db: AsyncSession = Depends(get_db)):
+async def create_link(link: NetworkLinkCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     db_link = NetworkLink(**link.model_dump())
     db.add(db_link)
     await db.commit()
@@ -208,7 +210,7 @@ async def create_link(link: NetworkLinkCreate, db: AsyncSession = Depends(get_db
     return db_link
 
 @router.delete("/links/{link_id}")
-async def delete_link(link_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_link(link_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     db_link = await db.get(NetworkLink, link_id)
     if not db_link:
         raise HTTPException(status_code=404, detail="Link not found")
@@ -226,7 +228,7 @@ async def read_tower(tower_id: int, db: AsyncSession = Depends(get_db)):
     return db_tower
 
 @router.delete("/{tower_id}")
-async def delete_tower(tower_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_tower(tower_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     db_tower = await db.get(Tower, tower_id)
     if not db_tower:
         raise HTTPException(status_code=404, detail="Tower not found")

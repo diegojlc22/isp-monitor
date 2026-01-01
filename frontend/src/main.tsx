@@ -27,6 +27,7 @@ const Health = lazy(() => import('./pages/Health').then(m => ({ default: m.Healt
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage'));
 const MobileApp = lazy(() => import('./pages/MobileApp').then(m => ({ default: m.MobileApp })));
+const Reports = lazy(() => import('./pages/Reports'));
 
 // Loading Component
 const PageLoader = () => (
@@ -71,6 +72,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="alerts" element={<Alerts />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="agent" element={<Agent />} />
+                  <Route path="reports" element={<Reports />} />
                   <Route path="health" element={<Health />} />
 
                   {/* Admin Routes */}

@@ -11,6 +11,20 @@ from backend.app.services.snmp_monitor import snmp_monitor_job
 from backend.app.services.synthetic_agent import synthetic_agent_job
 from backend.app.services.maintenance import cleanup_job
 
+from backend.app.services.topology import run_topology_discovery
+
+async def topology_loop():
+    """Roda descoberta de topologia a cada 30 minutos"""
+    print("[COLLECTOR] Discovery de Topologia agendado (30min)")
+    while True:
+        try:
+            await asyncio.sleep(60) # Espera sistema inicializar
+            await run_topology_discovery()
+        except Exception as e:
+            print(f"[ERROR] Falha na descoberta de topologia: {e}")
+            
+        await asyncio.sleep(1800) # 30 min
+
 async def heartbeat_loop():
     """Atualiza o timestamp de 'last seen' no banco a cada 10 segundos"""
     from backend.app.models import Parameters
@@ -110,6 +124,9 @@ async def main():
 
     # Manutenção Diária (Limpeza de Logs)
     tasks.append(asyncio.create_task(maintenance_loop()))
+
+    # Topologia Automática
+    tasks.append(asyncio.create_task(topology_loop()))
 
     # Heartbeat (Status de Saúde)
     tasks.append(asyncio.create_task(heartbeat_loop()))

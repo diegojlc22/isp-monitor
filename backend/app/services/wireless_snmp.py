@@ -237,6 +237,78 @@ async def get_snmp_walk_first(ip, community, root_oid, port=161):
         except: pass
     return None
 
+async def snmp_walk_list(ip, community, root_oid, port=161):
+    """
+    Executes a Walk and returns ALL values found as a list.
+    """
+    varBinds = await _snmp_next(ip, community, root_oid, port)
+    results = []
+    if not varBinds: return results
+    
+    # Simple recursion or loop needed for full walk with pysnmp high-level nextCmd usually iterates 
+    # but our helper _snmp_next only returns ONE batch.
+    # We need to loop. Since _snmp_next helper uses nextCmd which is a generator/iterator wrapper...
+    # Actually, the pysnmp `nextCmd` is an async generator. 
+    # Let's implement a specific walk loop here.
+    
+    try:
+        from pysnmp.hlapi.asyncio import nextCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+        engine = get_shared_engine()
+        
+        # Determine version (try v2c first)
+        auth = CommunityData(community, mpModel=1)
+        
+        # Iterate
+        # Note: pysnmp-lextudio async API
+        op = nextCmd(engine, auth, UdpTransportTarget((ip, port), timeout=1.0, retries=1), ContextData(), ObjectType(ObjectIdentity(root_oid)), lexicographicMode=False)
+        
+        # Async generator consumption
+        async for (errorIndication, errorStatus, errorIndex, varBinds) in op:
+            if errorIndication or errorStatus:
+                break
+            for varBind in varBinds:
+                val = varBind[1]
+                # Convert to python native
+                if hasattr(val, 'prettyPrint'):
+                    results.append(str(val.prettyPrint()))
+                else:
+                    results.append(str(val))
+                    
+    except Exception as e:
+        pass # Fallback or timeout
+        
+    return results
+
+
+async def get_neighbors_data(ip, brand, community, port=161):
+    """
+    Tries to get neighbor IPs/MACs via MNDP or LLDP.
+    Returns list of {'ip': ..., 'mac': ...}
+    """
+    neighbors = []
+    
+    try:
+        if brand == 'mikrotik':
+            # MNDP IP Address (.1.3.6.1.4.1.14988.1.1.11.1.1.3)
+            ips = await snmp_walk_list(ip, community, '1.3.6.1.4.1.14988.1.1.11.1.1.3', port)
+            # MNDP Identity (.1.3.6.1.4.1.14988.1.1.11.1.1.6)
+            names = await snmp_walk_list(ip, community, '1.3.6.1.4.1.14988.1.1.11.1.1.6', port)
+            
+            for i, remote_ip in enumerate(ips):
+                 # Basic filtering
+                 if remote_ip and remote_ip != '0.0.0.0':
+                     name = names[i] if i < len(names) else None
+                     neighbors.append({'ip': remote_ip, 'name': name})
+                     
+        # Generic LLDP (Management Address)
+        # 1.0.8802.1.1.2.1.4.2.1.3
+        # This is complex because index includes specific subtypes.
+        
+    except Exception as e:
+        print(f"Error getting neighbors for {ip}: {e}")
+        
+    return neighbors
+
 async def get_wireless_stats(ip, brand, community, port=161, interface_index=None, equipment_type=None):
     """
     Fetches Signal and CCQ based on brand.

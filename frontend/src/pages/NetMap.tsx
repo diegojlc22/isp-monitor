@@ -1,9 +1,9 @@
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap, Polyline } from 'react-leaflet';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { getTowers, getLinks, createLink, deleteLink, getUsers, getTechLocation } from '../services/api';
+import { getTowers, getLinks, createLink, deleteLink, getUsers, getTechLocation, triggerTopologyDiscovery } from '../services/api';
 import L from 'leaflet';
-import { Search, Network, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
+import { Search, Network, Eye, EyeOff, Trash2, Plus, RefreshCcw } from 'lucide-react';
 import clsx from 'clsx';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
@@ -154,11 +154,33 @@ export function NetMap() {
         }
     };
 
+    const handleDiscovery = async () => {
+        if (!confirm("Isso iniciará uma varredura na rede para detectar links entre torres. Continuar?")) return;
+        try {
+            toast.loading("Iniciando descoberta...");
+            await triggerTopologyDiscovery();
+            toast.dismiss();
+            toast.success("Varredura iniciada! Aguarde alguns minutos e atualize.");
+        } catch (e) {
+            toast.dismiss();
+            toast.error("Erro ao iniciar descoberta.");
+        }
+    };
+
     return (
         <div className="h-full flex flex-col relative">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold text-white">Mapa em Tempo Real</h2>
                 <div className="flex gap-2">
+                    <button
+                        onClick={handleDiscovery}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-lg flex items-center gap-2 text-sm"
+                        title="Auto Descobrir Topologia"
+                    >
+                        <RefreshCcw size={18} />
+                        <span className="hidden md:inline">Auto Topologia</span>
+                    </button>
+
                     <button
                         onClick={() => setShowLinks(!showLinks)}
                         className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg flex items-center gap-2 text-sm"

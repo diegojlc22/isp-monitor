@@ -44,6 +44,7 @@ class Equipment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     ip = Column(String, unique=True, index=True)
+    mac_address = Column(String, unique=True, index=True, nullable=True) # Para topologia auto
     tower_id = Column(Integer, ForeignKey("towers.id"), nullable=True)
     
     # Contexto para APK

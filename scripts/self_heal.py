@@ -29,26 +29,16 @@ SERVICES = {
         "check": ["uvicorn", "backend.app.main:app"],
         "log": "logs/api.log"
     },
-    "pinger": {
-        "cmd": f'"{PYTHON_EXE}" -m backend.app.services.pinger_fast',
-        "check": ["pinger_fast"],
+    "collector": {
+        "cmd": f'"{PYTHON_EXE}" backend/collector.py',
+        "check": ["backend/collector.py"],
         "log": "logs/collector.log"
-    },
-    "snmp": {
-        "cmd": f'"{PYTHON_EXE}" -m backend.app.services.snmp_monitor',
-        "check": ["snmp_monitor"],
-        "log": "logs/snmp.log"
     },
     "frontend": {
         "cmd": "npm run dev",
         "check": ["vite"],
         "log": "logs/frontend.log",
         "cwd": "frontend"
-    },
-    "ia-agent": {
-        "cmd": f'"{PYTHON_EXE}" -m backend.app.services.synthetic_agent',
-        "check": ["synthetic_agent"],
-        "log": "logs/agent.log"
     }
 }
 
@@ -133,7 +123,45 @@ def cleanup_all():
 import atexit
 atexit.register(cleanup_all)
 
+import tempfile
+import atexit
+
+def ensure_singleton():
+    """Garante apenas uma instância do Doctor rodando via Lock File"""
+    lock_file = os.path.join(tempfile.gettempdir(), "isp_monitor_doctor.lock")
+    
+    # 1. Check se arquivo existe e processo está vivo
+    if os.path.exists(lock_file):
+        try:
+            with open(lock_file, 'r') as f:
+                pid = int(f.read().strip())
+            
+            if psutil.pid_exists(pid):
+                log(f"⚡ Outra instância do Doctor já está rodando (PID {pid}). Encerrando esta.", "WARN")
+                sys.exit(0)
+            else:
+                log("♻️ Lock file encontrado, mas processo morreu. Assumindo controle.", "WARN")
+                try: os.remove(lock_file)
+                except: pass
+        except:
+            pass # Arquivo corrompido ou erro de leitura
+            
+    # 2. Criar Lock
+    try:
+        with open(lock_file, 'w') as f:
+            f.write(str(os.getpid()))
+            
+        def remove_lock():
+            try: os.remove(lock_file)
+            except: pass
+            
+        atexit.register(remove_lock)
+    except Exception as e:
+        log(f"❌ Erro ao criar lock file: {e}", "ERROR")
+
 def run_doctor():
+    ensure_singleton()
+    
     log("🚑 ========================================")
     log("🚑 DOCTOR V3.7 ONLINE - ZOMBIE HUNTER")
     log("🚑 ========================================")
