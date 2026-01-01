@@ -161,13 +161,6 @@ async def read_equipments(
     # Cache valido por 10s
     await cache.set(cache_key, equipments, ttl_seconds=10)
     
-    
-    result = await db.execute(query)
-    equipments = result.scalars().all()
-    
-    # Cache valido por 10s
-    await cache.set(cache_key, equipments, ttl_seconds=10)
-    
     return equipments
 
 @router.post("/batch")
@@ -292,14 +285,54 @@ async def detect_equipment_brand(request: DetectBrandRequest):
 @router.get("/scan-interfaces")
 async def scan_interfaces(
     ip: str = Query(...),
-    community: str = Query("public"),
-    port: int = Query(161)
+    community: Optional[str] = Query(None),
+    port: int = Query(161),
+    db: AsyncSession = Depends(get_db)
 ):
     from backend.app.services.snmp import get_snmp_interfaces
-    interfaces = await get_snmp_interfaces(ip, community, port)
+    from backend.app.models import Parameters
+    
+    final_community = community
+    if not final_community:
+        res = await db.execute(select(Parameters).where(Parameters.key == "default_snmp_community"))
+        param = res.scalar_one_or_none()
+        final_community = param.value if param else "public"
+
+    interfaces = await get_snmp_interfaces(ip, final_community, port)
     if not interfaces:
-        raise HTTPException(status_code=404, detail="Não foi possível listar as interfaces via SNMP. Verifique o IP e a Community.")
+        # Tenta fallback se falhou com a default
+        if final_community != "public":
+             interfaces = await get_snmp_interfaces(ip, "public", port)
+             
+        if not interfaces:
+            raise HTTPException(status_code=404, detail=f"Não foi possível listar as interfaces via SNMP ({final_community}). Verifique o IP e a Community.")
+            
     return interfaces
+
+@router.get("/scan-best-interface")
+async def scan_best_interface(
+    ip: str = Query(...),
+    community: Optional[str] = Query(None),
+    port: int = Query(161),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Detects the interface with the highest traffic usage (Mbps) over a 3s sample.
+    """
+    from backend.app.services.snmp import detect_best_interface
+    from backend.app.models import Parameters
+    
+    final_community = community
+    if not final_community:
+        res = await db.execute(select(Parameters).where(Parameters.key == "default_snmp_community"))
+        param = res.scalar_one_or_none()
+        final_community = param.value if param else "public"
+    
+    best = await detect_best_interface(ip, final_community, port)
+    if not best:
+        # Avoid 404/500 to keep UI smooth, just return null or message
+        return {"index": None, "name": "Não detectado", "current_mbps": 0}
+    return best
 
 
 @router.put("/{eq_id}", response_model=EquipmentSchema)
@@ -589,6 +622,7 @@ async def get_traffic_history(
             "timestamp": log.timestamp.isoformat(),
             "in": log.in_mbps,
             "out": log.out_mbps,
+            "signal": log.signal_dbm,
             "if_idx": log.interface_index
         })
     
@@ -695,3 +729,27 @@ async def import_equipments_csv(file: UploadFile = File(...), db: AsyncSession =
         'failed': len(results['failed']),
         'details': results
     }
+
+class LiveStatusRequest(BaseModel):
+    ids: List[int]
+
+@router.post("/live-status")
+async def get_live_status_batch(req: LiveStatusRequest, db: AsyncSession = Depends(get_db)):
+    """Busca status em tempo real (cacheado no DB) para lista de IDs. Extremamente rápido."""
+    if not req.ids:
+        return {}
+    
+    query = select(Equipment).where(Equipment.id.in_(req.ids))
+    result = await db.execute(query)
+    eqs = result.scalars().all()
+    
+    resp = {}
+    for eq in eqs:
+        resp[eq.id] = {
+            "traffic": {"in": eq.last_traffic_in, "out": eq.last_traffic_out},
+            "signal": {"dbm": eq.signal_dbm, "ccq": eq.ccq},
+            "clients": eq.connected_clients,
+            "latency": eq.last_latency,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    return resp

@@ -247,14 +247,14 @@ async def get_wireless_stats(ip, brand, community, port=161, interface_index=Non
     brand_key = brand.lower()
 
     # --- FIBER / SFP CASE ---
-    if brand_key == 'mikrotik' and equipment_type == 'fiber' and interface_index:
+    if brand_key == 'mikrotik' and interface_index:
         try:
             # 1. Try New SFP Monitor Table (OID .1.3.6.1.4.1.14988.1.1.19.1.1)
             # Field 10 is RX Power in dBm * 1000
             val_dbm = await get_snmp_value(ip, community, f'1.3.6.1.4.1.14988.1.1.19.1.1.10.{interface_index}', port)
             if val_dbm is not None:
                 try:
-                    stats['signal_dbm'] = int(round(float(val_dbm) / 1000.0))
+                    stats['signal_dbm'] = round(float(val_dbm) / 1000.0, 2)
                     return stats
                 except: pass
 
@@ -263,7 +263,7 @@ async def get_wireless_stats(ip, brand, community, port=161, interface_index=Non
             if val_uw is not None and isinstance(val_uw, (int, float)) and val_uw > 0:
                 import math
                 dbm = 10 * math.log10(float(val_uw) / 1000.0)
-                stats['signal_dbm'] = int(round(dbm))
+                stats['signal_dbm'] = round(dbm, 2)
             
             return stats
         except:

@@ -138,3 +138,54 @@ async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 16
         print(f"Error scanning interfaces for {ip}: {e}")
         
     return interfaces
+
+async def detect_best_interface(ip: str, community: str = "public", port: int = 161):
+    """
+    Measures traffic on all interfaces for 3 seconds and returns the one with highest throughput.
+    """
+    import time
+    
+    # 1. List Interfaces
+    interfaces = await get_snmp_interfaces(ip, community, port)
+    if not interfaces:
+        return None
+
+    # 2. First Measurement
+    counters_1 = {}
+    for iface in interfaces:
+        res = await get_snmp_interface_traffic(ip, community, port, iface['index'])
+        if res:
+            counters_1[iface['index']] = {'t': time.time(), 'in': res[0], 'out': res[1]}
+    
+    # Wait
+    await asyncio.sleep(3)
+    
+    # 3. Second Measurement & Delta
+    best_rate = -1.0
+    best_iface = None
+    
+    for iface in interfaces:
+        idx = iface['index']
+        if idx not in counters_1: continue
+        
+        c1 = counters_1[idx]
+        res = await get_snmp_interface_traffic(ip, community, port, idx)
+        
+        if res:
+            dt = time.time() - c1['t']
+            if dt <= 0: dt = 0.001
+            
+            delta_in =  max(0, res[0] - c1['in'])
+            delta_out = max(0, res[1] - c1['out'])
+            
+            # Total Mbps
+            mbps = ((delta_in + delta_out) * 8) / (dt * 1_000_000)
+            
+            if mbps > best_rate:
+                best_rate = mbps
+                best_iface = copy_iface(iface, mbps)
+                
+    return best_iface
+
+def copy_iface(iface, mbps):
+    return {"index": iface['index'], "name": iface['name'], "current_mbps": round(mbps, 2)}

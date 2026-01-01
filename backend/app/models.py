@@ -82,7 +82,7 @@ class Equipment(Base):
     # Wireless Stats (Ubiquiti/Intelbras)
     brand = Column(String, default="generic") # mikrotik, ubiquiti, intelbras, generic
     equipment_type = Column(String, default="station")  # "transmitter" or "station"
-    signal_dbm = Column(Integer, nullable=True)
+    signal_dbm = Column(Float, nullable=True)
     ccq = Column(Integer, nullable=True)
     connected_clients = Column(Integer, nullable=True, default=0)  # For APs/Transmitters
     whatsapp_groups = Column(JSON, nullable=True, default=[]) # List of Group IDs
@@ -119,6 +119,7 @@ class TrafficLog(Base):
     interface_index = Column(Integer, default=1, index=True)
     in_mbps = Column(Float)
     out_mbps = Column(Float)
+    signal_dbm = Column(Float, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 class LatencyHistory(Base):

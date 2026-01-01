@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     ping_concurrent_limit: int = Field(300, ge=10, le=2000)
     log_retention_days: int = Field(30, ge=1)
     
+    # --- SNMP ---
+    default_snmp_community: str = Field("publicRadionet", description="Default Global Community")
+    
     # --- Integration ---
     telegram_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None

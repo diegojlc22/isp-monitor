@@ -8,7 +8,7 @@ from backend.app.services.snmp import get_snmp_interface_traffic
 from backend.app.services.wireless_snmp import get_wireless_stats
 
 # Config
-SNMP_INTERVAL = 60 # Check SNMP every 60s
+SNMP_INTERVAL = 5 # Check SNMP every 5s (Real-time mode)
 
 # ✅ SPRINT 3: Smart Logging - Tracking de estado
 # Armazena último valor salvo para evitar logs duplicados
@@ -162,6 +162,28 @@ async def snmp_monitor_job():
                     
                     # Prepare Equipment Update
                     upd_data = res["updates"]
+                    
+                    # Sanitize Signal fields to prevent DataError ('' instead of None/Float)
+                    if "signal_dbm" in upd_data:
+                        val = upd_data["signal_dbm"]
+                        if val == '' or val is None:
+                            upd_data["signal_dbm"] = None
+                        else:
+                            try:
+                                upd_data["signal_dbm"] = float(val)
+                            except:
+                                upd_data["signal_dbm"] = None
+
+                    if "ccq" in upd_data:
+                        val = upd_data["ccq"]
+                        if val == '' or val is None:
+                            upd_data["ccq"] = None
+                        else:
+                            try:
+                                upd_data["ccq"] = int(val)
+                            except:
+                                upd_data["ccq"] = None
+
                     upd_data["id"] = res["id"] # PK for bind
                     updates_buffer.append(upd_data)
                     
@@ -202,13 +224,15 @@ async def snmp_monitor_job():
                                 "in_mbps": in_mbps,
                                 "out_mbps": out_mbps,
                                 "interface_index": if_idx,
+                                "signal_dbm": res["updates"].get("signal_dbm"),
                                 "timestamp": datetime.now(timezone.utc)
                             })
                             # Atualizar tracking
                             snmp_last_logged[eq_id] = {
                                 "in": in_mbps,
                                 "out": out_mbps,
-                                "time": current_time
+                                "time": current_time,
+                                "signal": res["updates"].get("signal_dbm")
                             }
                 
                 # Execute Batch Operations

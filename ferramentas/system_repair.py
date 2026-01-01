@@ -45,9 +45,15 @@ async def run_repair():
         # 2. Correções na Tabela TRAFFIC_LOGS
         # Esta é crítica para o gráfico funcionar
         await check_and_fix_column(conn, 'traffic_logs', 'interface_index', 'INTEGER')
+        await check_and_fix_column(conn, 'traffic_logs', 'signal_dbm', 'FLOAT')
 
-        # 3. Correções na Tabela ALERTS (Exemplo futuro)
-        # await check_and_fix_column(conn, 'alerts', 'is_active', 'BOOLEAN DEFAULT TRUE')
+        # 3. Fix Column Types (Migrate Integer to Float for Signal)
+        try:
+            await conn.execute(text("ALTER TABLE equipments ALTER COLUMN signal_dbm TYPE FLOAT USING signal_dbm::double precision"))
+            print("✅ equipments.signal_dbm convertido para FLOAT.")
+        except Exception as e:
+            # Ignore if already float or error
+            pass
 
     print("\n✅ Reparo concluído com sucesso!")
     print("Reinicie o sistema se necessário.")

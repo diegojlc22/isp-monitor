@@ -483,3 +483,31 @@ async def get_whatsapp_status():
 
     except Exception as e:
         return {"error": str(e)}
+@router.get("/dashboard-layout")
+async def get_dashboard_layout(db: AsyncSession = Depends(get_db)):
+    res = await db.execute(select(Parameters).where(Parameters.key == "dashboard_layout"))
+    param = res.scalar_one_or_none()
+    if param and param.value:
+        import json
+        try:
+            return json.loads(param.value)
+        except:
+            return []
+    return []
+
+@router.post("/dashboard-layout")
+async def update_dashboard_layout(layout: list, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_admin_user)):
+    import json
+    val = json.dumps(layout)
+    
+    res = await db.execute(select(Parameters).where(Parameters.key == "dashboard_layout"))
+    param = res.scalar_one_or_none()
+    
+    if not param:
+        param = Parameters(key="dashboard_layout", value=val)
+        db.add(param)
+    else:
+        param.value = val
+        
+    await db.commit()
+    return {"message": "Layout salvo no servidor"}

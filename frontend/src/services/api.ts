@@ -114,6 +114,9 @@ export const detectEquipmentBrand = (ip: string, snmp_community: string = 'publi
 export const scanInterfaces = (ip: string, community: string = 'public', port: number = 161) =>
     api.get(`/equipments/scan-interfaces`, { params: { ip, community, port } }).then(res => res.data);
 
+export const detectBestInterface = (ip: string, community?: string, port: number = 161) =>
+    api.get(`/equipments/scan-best-interface`, { params: { ip, community, port } }).then(res => res.data);
+
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
 
 // Expo / Mobile
@@ -129,3 +132,6 @@ export const stopNgrok = () => api.post('/ngrok/stop').then(res => res.data);
 export const startMobile = () => api.post('/mobile/start').then(res => res.data);
 export const stopMobile = () => api.post('/mobile/stop').then(res => res.data);
 export const getMobileStatus = () => api.get('/mobile/status').then(res => res.data);
+export const getLiveStatus = (ids: number[]) => api.post('/equipments/live-status', { ids }).then(res => res.data);
+export const getDashboardLayout = () => api.get('/settings/dashboard-layout').then(res => res.data);
+export const saveDashboardLayout = (layout: any[]) => api.post('/settings/dashboard-layout', layout).then(res => res.data);

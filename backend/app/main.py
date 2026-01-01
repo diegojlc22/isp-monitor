@@ -48,10 +48,21 @@ async def lifespan(app: FastAPI):
                 logger.warning(f"📡 [DATABASE] Conexão caiu/fechada. Aguardando {wait_time}s para tentar novamente ({attempt+1}/7)...")
                 await asyncio.sleep(wait_time)
             elif attempt < 6:
-                logger.warning(f"⏳ [DATABASE] Tentativa {attempt+1}/7 falhou: {e}")
+                logger.warning(f"⚠️ [DATABASE] Tentativa {attempt+1}/7 falhou: {e}")
                 await asyncio.sleep(2)
             else:
-                logger.error(f"❌ [DATABASE] Erro Crítico após 7 tentativas: {e}")
+                logger.error(f"❌ [DATABASE] FALHA CRÍTICA após 7 tentativas: {e}")
+                raise
+    
+    # 2.5. VALIDAÇÃO E AUTO-REPARO DO BANCO DE DADOS
+    logger.info("🔍 [DATABASE] Executando validação automática...")
+    try:
+        from backend.app.database_validator import full_database_check
+        validation_ok = await full_database_check()
+        if not validation_ok:
+            logger.error("⚠️ [DATABASE] Validação encontrou problemas - verifique os logs")
+    except Exception as e:
+        logger.error(f"❌ [DATABASE] Erro na validação automática: {e}")
         
     # 3. Seed Data
     try:

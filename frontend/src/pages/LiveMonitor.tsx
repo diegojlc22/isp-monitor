@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Activity, ArrowDownUp, Wifi, Users } from 'lucide-react';
-import { getEquipments, getLatencyHistory, getTrafficHistory } from '../services/api';
+import { getEquipments, getLatencyHistory, getTrafficHistory, getLiveStatus } from '../services/api'; // NEW import
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // --- Tipos ---
@@ -16,54 +16,28 @@ interface WidgetItem {
     interfaceIndex?: number;
 }
 
-// --- Componente de Gráfico Individual ---
-// --- Widget Otimizado (Recebe dados prontos ou usa cache) ---
 interface WidgetProps {
     item: WidgetItem;
     onRemove: (id: string) => void;
-    // Opcional: Se quisermos passar dados diretamente, ou manter o fetch interno mas controlado
-    // Para simplificar e manter a independência dos widgets (ex: cada um precisa de um history diferente),
-    // vamos manter o fetch mas otimizar o React.memo para evitar re-renders desnecessários.
-    // Mas a verdadeira otimização seria Context. Como não temos Context aqui, 
-    // vamos apenas garantir que o componente não quebre.
-    // O pedido do usuário é focar em performance. Vamos manter o polling local mas aumentar o intervalo
-    // ou usar um cache simples de memória `swr` like se fosse possível.
-
-    // MELHOR ESTRATÉGIA AGORA: Manter fetch local mas com AbortController para cancelar reqs antigas
+    liveData?: any; // NEW Prop from Parent
 }
 
-// Widget com AbortController e Proteção de Memória
-const ChartWidget = React.memo(({ item, onRemove }: WidgetProps) => {
+// --- Componente de Gráfico Individual ---
+// Refatorado para usar cache history + atualizações live do pai
+const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // 1. Initial Load of History (Once on mount)
     useEffect(() => {
         let isMounted = true;
-        let controller = new AbortController();
-
-        const fetchData = async () => {
-            // Cancel previous request if any
-            controller.abort();
-            controller = new AbortController();
-
+        const fetchHistory = async () => {
             try {
                 if (item.type === 'signal' || item.type === 'clients') {
-                    // Otimização: Pegar apenas o equipamento específico, não ALL
-                    // Mas a API `getEquipments` pega todos. Em um app maior isso seria ruim,
-                    // mas aqui é cacheado pelo browser se tiver cache-control.
-                    const eqs = await getEquipments();
-                    if (!isMounted) return;
-
-                    const eq = eqs.find((e: any) => e.id === item.equipmentId);
-                    if (eq) {
-                        const now = new Date();
-                        const newPoint = {
-                            time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                            signal: eq.signal_dbm,
-                            clients: eq.connected_clients || 0
-                        };
-                        setData(prev => [...prev, newPoint].slice(-30));
-                    }
+                    // Sinal e Client histórico não tem API específica, usa Equipamento status
+                    // Vamos simular histórico ou iniciar com vazio
+                    // Para simplificar, iniciamos o array apenas com o liveData atual se disponível
+                    setLoading(false);
                 } else {
                     let res;
                     if (item.type === 'latency') {
@@ -71,29 +45,64 @@ const ChartWidget = React.memo(({ item, onRemove }: WidgetProps) => {
                     } else {
                         res = await getTrafficHistory(item.equipmentId, '1h');
                     }
-                    if (!isMounted) return;
 
-                    const formatted = (res.data || []).map((d: any) => ({
-                        ...d,
-                        time: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    }));
-                    setData(formatted);
+                    if (isMounted && res.data) {
+                        const formatted = res.data.map((d: any) => ({
+                            ...d,
+                            time: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        }));
+                        // Sort by time just in case
+                        setData(formatted);
+                    }
+                    setLoading(false);
                 }
-                setLoading(false);
-            } catch (error) {
-                if (isMounted) console.error("Widget fetch err", error);
+            } catch (err) {
+                if (isMounted) setLoading(false);
             }
         };
+        fetchHistory();
+        return () => { isMounted = false; };
+    }, [item.equipmentId, item.type]); // Only on Mount or Type Change
 
-        fetchData(); // Initial
-        const interval = setInterval(fetchData, 5000);
+    // 2. Watch for Live Updates from Parent
+    useEffect(() => {
+        if (!liveData) return;
 
-        return () => {
-            isMounted = false;
-            controller.abort();
-            clearInterval(interval);
-        };
-    }, [item.equipmentId, item.type]);
+        // liveData contains { traffic: {in, out}, signal: {dbm, ccq}, clients, latency, timestamp }
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        let newPoint: any = { time: timeStr };
+        let hasData = false;
+
+        if (item.type === 'traffic') {
+            newPoint.in_mbps = liveData.traffic.in;
+            newPoint.out_mbps = liveData.traffic.out;
+            hasData = true;
+        } else if (item.type === 'latency') {
+            newPoint.latency = liveData.latency;
+            hasData = true;
+        } else if (item.type === 'signal') {
+            newPoint.signal = liveData.signal.dbm;
+            hasData = true;
+        } else if (item.type === 'clients') {
+            newPoint.clients = liveData.clients || 0;
+            hasData = true;
+        }
+
+        if (hasData) {
+            setData(prev => {
+                // Prevent duplicate timestamps if polling is fast
+                const last = prev[prev.length - 1];
+                if (last && last.time === timeStr) return prev;
+
+                // Append and slice to keep e.g. 50 points
+                return [...prev, newPoint].slice(-50);
+            });
+        }
+
+    }, [liveData, item.type]);
+
 
     const getIcon = () => {
         if (item.type === 'latency') return <Activity size={14} className="text-emerald-400" />;
@@ -123,7 +132,7 @@ const ChartWidget = React.memo(({ item, onRemove }: WidgetProps) => {
                             <AreaChart data={data}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
                                 <XAxis dataKey="time" hide />
-                                <YAxis stroke="#64748b" fontSize={10} width={25} domain={[-90, -30]} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#64748b" fontSize={10} width={25} domain={['auto', 'auto']} tickLine={false} axisLine={false} />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9', fontSize: '12px' }}
                                     itemStyle={{ padding: 0 }}
@@ -171,13 +180,13 @@ const ChartWidget = React.memo(({ item, onRemove }: WidgetProps) => {
 
 // --- Página Principal ---
 export function LiveMonitor() {
-    // Carregar layout salvo ou padrão
-    const savedLayout = localStorage.getItem('dashboard_layout');
-    const initialLayout = savedLayout ? JSON.parse(savedLayout) : [];
+    // 1. Start with empty layout
+    const [layout, setLayout] = useState<WidgetItem[]>([]);
 
-    const [layout, setLayout] = useState<WidgetItem[]>(initialLayout);
+    // ... states ...
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [equipments, setEquipments] = useState<any[]>([]);
+    const [liveData, setLiveData] = useState<Record<number, any>>({});
 
     // Form state
     const [selectedEq, setSelectedEq] = useState('');
@@ -186,9 +195,57 @@ export function LiveMonitor() {
     const [interfaceList, setInterfaceList] = useState<{ index: number; name: string }[]>([]);
     const [isLoadingInterfaces, setIsLoadingInterfaces] = useState(false);
 
+    // Initial Data Load
     useEffect(() => {
         getEquipments().then(setEquipments);
+
+        // Load Layout from Server
+        import('../services/api').then(api => {
+            api.getDashboardLayout()
+                .then(serverLayout => {
+                    if (serverLayout && Array.isArray(serverLayout) && serverLayout.length > 0) {
+                        setLayout(serverLayout);
+                    } else {
+                        // Fallback to LocalStorage if Server is empty (Migration)
+                        const local = localStorage.getItem('dashboard_layout');
+                        if (local) {
+                            try {
+                                const parsed = JSON.parse(local);
+                                if (parsed.length > 0) {
+                                    setLayout(parsed);
+                                    // Sync to server immediately
+                                    api.saveDashboardLayout(parsed);
+                                }
+                            } catch (e) { }
+                        }
+                    }
+                })
+                .catch(err => console.error("Error loading layout", err));
+        });
     }, []);
+
+    // NEW: Centralized Poller
+    useEffect(() => {
+        if (layout.length === 0) return;
+
+        const ids = layout.map(w => w.equipmentId);
+        const uniqueIds = Array.from(new Set(ids));
+
+        if (uniqueIds.length === 0) return;
+
+        const fetchLive = async () => {
+            try {
+                const data = await getLiveStatus(uniqueIds);
+                setLiveData(data);
+            } catch (err) {
+                console.error("Live poll error", err);
+            }
+        };
+
+        fetchLive(); // Immediate
+        const interval = setInterval(fetchLive, 3000); // 3 seconds poll
+        return () => clearInterval(interval);
+    }, [layout]); // Restart poll when layout (devices) changes
 
     // Load interfaces when equipment and type=traffic change
     useEffect(() => {
@@ -220,10 +277,13 @@ export function LiveMonitor() {
         }
     }, [selectedEq, selectedType, equipments]);
 
-
-
-    const saveToLocal = (data: WidgetItem[]) => {
-        localStorage.setItem('dashboard_layout', JSON.stringify(data));
+    // Persistent Save
+    const saveLayout = (newLayout: WidgetItem[]) => {
+        setLayout(newLayout);
+        // Save to Local (Backup)
+        localStorage.setItem('dashboard_layout', JSON.stringify(newLayout));
+        // Save to Server (Primary)
+        import('../services/api').then(api => api.saveDashboardLayout(newLayout));
     };
 
     const addWidget = () => {
@@ -233,8 +293,8 @@ export function LiveMonitor() {
 
         const newItem: WidgetItem = {
             i: `widget-${Date.now()}`,
-            x: (layout.length * 4) % 12, // Tenta distribuir
-            y: Infinity, // Coloca no final
+            x: 0,
+            y: Infinity,
             w: 4,
             h: 3,
             type: selectedType,
@@ -244,16 +304,14 @@ export function LiveMonitor() {
         };
 
         const newLayout = [...layout, newItem];
-        setLayout(newLayout);
-        saveToLocal(newLayout);
+        saveLayout(newLayout);
         setIsModalOpen(false);
         setSelectedEq('');
     };
 
     const removeWidget = (i: string) => {
         const newLayout = layout.filter(item => item.i !== i);
-        setLayout(newLayout);
-        saveToLocal(newLayout);
+        saveLayout(newLayout);
     };
 
     return (
@@ -283,7 +341,7 @@ export function LiveMonitor() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {layout.map(item => (
                         <div key={item.i} className="h-64 relative group">
-                            <ChartWidget item={item} onRemove={removeWidget} />
+                            <ChartWidget item={item} onRemove={removeWidget} liveData={liveData[item.equipmentId]} />
                         </div>
                     ))}
                 </div>
@@ -331,7 +389,7 @@ export function LiveMonitor() {
                                         <Activity size={16} /> Latência
                                     </button>
 
-                                    {equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'station' && (
+                                    {(equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'station' || equipments.find(e => e.id.toString() === selectedEq)?.brand === 'mikrotik') && (
                                         <button
                                             onClick={() => setSelectedType('signal')}
                                             className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'signal' ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
@@ -354,15 +412,48 @@ export function LiveMonitor() {
                             {selectedType === 'traffic' && interfaceList.length > 0 && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-400 mb-1">Porta/Interface</label>
-                                    <select
-                                        value={selectedInterface}
-                                        onChange={e => setSelectedInterface(parseInt(e.target.value))}
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
-                                    >
-                                        {interfaceList.map(iface => (
-                                            <option key={iface.index} value={iface.index}>{iface.name}</option>
-                                        ))}
-                                    </select>
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={selectedInterface}
+                                            onChange={e => setSelectedInterface(parseInt(e.target.value))}
+                                            className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
+                                        >
+                                            {interfaceList.map(iface => (
+                                                <option key={iface.index} value={iface.index}>{iface.name}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            onClick={async () => {
+                                                const eq = equipments.find(e => e.id.toString() === selectedEq);
+                                                if (eq) {
+                                                    const btn = document.getElementById('btn-detect-traffic');
+                                                    if (btn) btn.innerText = '...';
+                                                    try {
+                                                        const { detectBestInterface } = await import('../services/api');
+                                                        // Se tiver community específica usa, senão manda undefined pro backend usar a Global
+                                                        const comm = eq.snmp_community || undefined;
+                                                        const best = await detectBestInterface(eq.ip, comm, eq.snmp_port);
+                                                        if (best && best.index) {
+                                                            setSelectedInterface(best.index);
+                                                            alert(`Detectado: ${best.name} com ${best.current_mbps} Mbps`);
+                                                        } else {
+                                                            alert("Nenhum tráfego relevante detectado no momento.");
+                                                        }
+                                                    } catch (e) {
+                                                        console.error(e);
+                                                        alert("Erro ao detectar tráfego.");
+                                                    } finally {
+                                                        if (btn) btn.innerText = 'Auto';
+                                                    }
+                                                }
+                                            }}
+                                            id="btn-detect-traffic"
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                                            title="Detectar porta com maior consumo agora"
+                                        >
+                                            Auto
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
