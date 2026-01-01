@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, delete
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import PingLog, Alert
+from backend.app.models import PingLog, Alert, TrafficLog, LatencyHistory
 
 async def cleanup_job():
     """
@@ -37,6 +37,19 @@ async def cleanup_job():
             
             if deleted_rows > 0:
                 print(f"[OK] Limpeza: {deleted_rows} logs de ping antigos removidos.")
+            
+            # Delete old TrafficLogs
+            stmt_traffic = delete(TrafficLog).where(TrafficLog.timestamp < cutoff)
+            res_traffic = await session.execute(stmt_traffic)
+            if res_traffic.rowcount > 0:
+                print(f"[OK] Limpeza: {res_traffic.rowcount} logs de tráfego antigos removidos.")
+
+            # Delete old LatencyHistory
+            stmt_latency = delete(LatencyHistory).where(LatencyHistory.timestamp < cutoff)
+            res_latency = await session.execute(stmt_latency)
+            if res_latency.rowcount > 0:
+                print(f"[OK] Limpeza: {res_latency.rowcount} logs de latência antigos removidos.")
+
             if deleted_alerts > 0:
                 print(f"[OK] Limpeza: {deleted_alerts} alertas antigos removidos.")
                 

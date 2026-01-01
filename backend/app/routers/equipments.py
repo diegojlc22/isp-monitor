@@ -228,10 +228,6 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
             raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe")
         raise HTTPException(status_code=500, detail=f"Erro ao criar: {error_msg}")
 
-class AutoDetectAllRequest(BaseModel):
-    ip: str
-    community: str = "public"
-    port: int = 161
 
 class DetectBrandRequest(BaseModel):
     ip: str

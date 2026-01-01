@@ -289,32 +289,51 @@ async def scan_network(ips: List[str]):
 
 
 def ensure_singleton():
-    """Garante que apenas uma instância do Pinger rode por vez."""
+    """Garante que apenas uma instância do Pinger rode por vez (Windows/Linux Safe)."""
+    import psutil
+    
     lock_file = os.path.join(tempfile.gettempdir(), "isp_monitor_pinger.lock")
+    
     try:
-        # No Windows usamos uma tentativa de remover o arquivo ou abrir exclusivo
+        current_pid = os.getpid()
+        
+        # Check if lock exists
         if os.path.exists(lock_file):
-             try:
-                 os.remove(lock_file)
-             except OSError:
-                 print("⚠️ Erro: Já existe uma instância do Pinger rodando!")
-                 sys.exit(0)
-        
+            try:
+                with open(lock_file, "r") as f:
+                    old_pid = int(f.read().strip())
+                
+                # Check if process is actually running
+                if psutil.pid_exists(old_pid):
+                    print(f"⚠️ Erro: Já existe uma instância do Pinger rodando (PID {old_pid})!")
+                    sys.exit(0)
+                else:
+                    print(f"⚠️ Aviso: Lock file encontrado (PID {old_pid}), mas processo não existe. Removendo trava staled.")
+                    os.remove(lock_file)
+            except (ValueError, OSError):
+                # File corrupted or empty, force remove
+                print("⚠️ Aviso: Lock file corrompido. Removendo.")
+                try: os.remove(lock_file)
+                except: pass
+
+        # Create new lock
         with open(lock_file, "w") as f:
-            f.write(str(os.getpid()))
+            f.write(str(current_pid))
         
-        # Registrar deleção ao fechar
+        # Cleanup on exit
         import atexit
         def cleanup():
             try:
+                # Only remove if it contains OUR pid (safety check)
                 if os.path.exists(lock_file):
-                    os.remove(lock_file)
+                    with open(lock_file, "r") as f:
+                        if int(f.read().strip()) == current_pid:
+                            os.remove(lock_file)
             except: pass
         atexit.register(cleanup)
         
     except Exception as e:
         logger.error(f"Singleton lock error: {e}")
-
 if __name__ == "__main__":
     ensure_singleton()
     service = PingerService()

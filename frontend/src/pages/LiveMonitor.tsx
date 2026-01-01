@@ -225,7 +225,7 @@ export function LiveMonitor() {
         });
     }, []);
 
-    // NEW: Centralized Poller
+    // NEW: Centralized Safe Poller
     useEffect(() => {
         if (layout.length === 0) return;
 
@@ -234,18 +234,31 @@ export function LiveMonitor() {
 
         if (uniqueIds.length === 0) return;
 
+        let isMounted = true;
+        let timeoutId: any = null;
+
         const fetchLive = async () => {
             try {
                 const data = await getLiveStatus(uniqueIds);
-                setLiveData(data);
+                if (isMounted) {
+                    setLiveData(data);
+                }
             } catch (err) {
                 console.error("Live poll error", err);
+            } finally {
+                if (isMounted) {
+                    // Schedule next poll ONLY after current one finishes
+                    timeoutId = setTimeout(fetchLive, 3000);
+                }
             }
         };
 
-        fetchLive(); // Immediate
-        const interval = setInterval(fetchLive, 3000); // 3 seconds poll
-        return () => clearInterval(interval);
+        fetchLive(); // Start loop
+
+        return () => {
+            isMounted = false;
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, [layout]); // Restart poll when layout (devices) changes
 
     // Load interfaces when equipment and type=traffic change
