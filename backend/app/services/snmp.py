@@ -40,17 +40,53 @@ async def get_snmp_uptime(ip: str, community: str = "public", port: int = 161) -
     except Exception:
         return None
 
-async def get_snmp_interface_traffic(ip: str, community: str = "public", port: int = 161, interface_index: int = 1):
+async def get_snmp_interface_traffic(ip: str, community: str = "public", port: int = 161, interface_index: int = 1, brand: str = None):
     """
     Get In/Out Octets for a specific interface.
     Returns (in_bytes, out_bytes) or None.
     
     1. Tries 64-bit counters (ifHCInOctets/ifHCOutOctets) via SNMP v2c (Preferred for Gibabit+).
     2. Fallback to 32-bit counters (ifInOctets/ifOutOctets) via SNMP v1.
+    3. Special support for Ubiquiti LTU (AirFiber 5XHD) private OIDs.
     """
     from pysnmp.hlapi.asyncio import CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, getCmd
     
-    # OIDs
+    # --- GENERIC UBIQUITI PRIVATE MIB STRATEGY ---
+    if brand == 'ubiquiti':
+        # List of potential counter pairs (In, Out) for UBNT devices
+        ubnt_strategies = []
+        
+        # 1. LTU / AirFiber 5XHD (Detected earlier)
+        if interface_index == 1000 or interface_index == 1:
+            ubnt_strategies.append(('1.3.6.1.4.1.41112.1.10.1.5.3.0', '1.3.6.1.4.1.41112.1.10.1.5.1.0')) # LTU Wireless
+        
+        # 2. AirFiber Classic (AF24, AF5 - from User MIB)
+        ubnt_strategies.append((f'1.3.6.1.4.1.41112.1.3.3.1.66.{interface_index}', f'1.3.6.1.4.1.41112.1.3.3.1.64.{interface_index}'))
+        
+        # 3. AirMAX AC Station Table (Counter64 from MIB)
+        # ubntStaRxBytes: .1.3.6.1.4.1.41112.1.4.7.1.14, ubntStaTxBytes: .1.3.6.1.4.1.41112.1.4.7.1.13
+        ubnt_strategies.append((f'1.3.6.1.4.1.41112.1.4.7.1.14.{interface_index}', f'1.3.6.1.4.1.41112.1.4.7.1.13.{interface_index}'))
+        
+        engine = get_shared_engine()
+        for oid_in, oid_out in ubnt_strategies:
+            try:
+                errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
+                    engine,
+                    CommunityData(community, mpModel=1), # v2c preferred
+                    UdpTransportTarget((ip, port), timeout=1, retries=0),
+                    ContextData(),
+                    ObjectType(ObjectIdentity(oid_in)),
+                    ObjectType(ObjectIdentity(oid_out))
+                )
+                if not errorIndication and not errorStatus and varBinds:
+                    # Verify they are actual numbers
+                    res_in, res_out = varBinds[0][1], varBinds[1][1]
+                    if str(res_in) != "" and str(res_out) != "":
+                        return (int(res_in), int(res_out))
+            except Exception:
+                continue
+
+    # Standard OIDs (RFC1213 / IF-MIB)
     # 32-bit
     oid_in_32 = f'1.3.6.1.2.1.2.2.1.10.{interface_index}'
     oid_out_32 = f'1.3.6.1.2.1.2.2.1.16.{interface_index}'
@@ -60,12 +96,12 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
 
     engine = get_shared_engine()
     
-    # 1. Tentar 64-bit (v2c)
+    # 1. Tentar 64-bit (v2c) - IF-MIB standard
     try:
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             engine,
             CommunityData(community, mpModel=1), # v2c
-            UdpTransportTarget((ip, port), timeout=1, retries=1),
+            UdpTransportTarget((ip, port), timeout=2, retries=1),
             ContextData(),
             ObjectType(ObjectIdentity(oid_in_64)),
             ObjectType(ObjectIdentity(oid_out_64))
@@ -81,7 +117,7 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             engine,
             CommunityData(community, mpModel=0), # v1
-            UdpTransportTarget((ip, port), timeout=1, retries=1),
+            UdpTransportTarget((ip, port), timeout=2, retries=1),
             ContextData(),
             ObjectType(ObjectIdentity(oid_in_32)),
             ObjectType(ObjectIdentity(oid_out_32))

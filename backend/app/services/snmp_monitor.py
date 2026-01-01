@@ -83,7 +83,7 @@ async def snmp_monitor_job():
                 
                 # B) SNMP
                 interface_idx = eq_data.get("snmp_traffic_interface_index") or eq_data.get("snmp_interface_index") or 1
-                traffic = await get_snmp_interface_traffic(ip, community, port, interface_idx)
+                traffic = await get_snmp_interface_traffic(ip, community, port, interface_idx, brand=brand)
                 
                 if traffic:
                     in_bytes, out_bytes = traffic

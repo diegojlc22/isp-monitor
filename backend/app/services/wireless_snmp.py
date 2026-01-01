@@ -186,11 +186,21 @@ async def detect_equipment_type(ip, brand, community, port=161):
 OIDS = {
     'ubiquiti': {
         'signal': [
-            '1.3.6.1.4.1.41112.1.4.5.1.5.1', # M5 Legacy
-            '1.3.6.1.4.1.41112.1.4.7.1.3',   # AC Signal Table (Requires Walk)
-            '1.3.6.1.4.1.41112.1.4.1.1.5.1'  # Generic
+            '1.3.6.1.4.1.41112.1.10.1.4.1.5', # LTU Station Table Signal
+            '1.3.6.1.4.1.41112.1.4.7.1.3',    # AirMAX AC Station Table Signal
+            '1.3.6.1.4.1.41112.1.4.5.1.5.1',  # AirMAX M5/Legacy Generic
+            '1.3.6.1.4.1.41112.1.4.1.1.5.1'   # Generic Radio Table
         ],
-        'ccq': '1.3.6.1.4.1.41112.1.4.5.1.7.1'
+        'ccq': [
+            '1.3.6.1.4.1.41112.1.10.1.4.1.21', # LTU Capacity/Signal Level
+            '1.3.6.1.4.1.41112.1.4.6.1.3',    # AirMAX AC Quality (percentage)
+            '1.3.6.1.4.1.41112.1.4.6.1.4',    # AirMAX AC Capacity (percentage)
+            '1.3.6.1.4.1.41112.1.4.5.1.7.1'    # AirMAX M5/Legacy CCQ
+        ],
+        'clients': [
+            '1.3.6.1.4.1.41112.1.10.1.4',      # LTU Station Table
+            '1.3.6.1.4.1.41112.1.4.5.1.15.1'   # AirMAX M5/AC AP Client Count
+        ]
     },
     'mikrotik': {
         'signal': [
@@ -252,30 +262,35 @@ async def snmp_walk_list(ip, community, root_oid, port=161):
     # Let's implement a specific walk loop here.
     
     try:
-        from pysnmp.hlapi.asyncio import nextCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+        # Use our working helper _snmp_next to get batches
+        # For a full walk, we would need a loop, but for count we can just get the first batch 
+        # as most radios return the whole table in one go for small tables.
+        # However, let's do it right:
+        from pysnmp.hlapi.asyncio import nextCmd, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
         engine = get_shared_engine()
-        
-        # Determine version (try v2c first)
         auth = CommunityData(community, mpModel=1)
         
-        # Iterate
-        # Note: pysnmp-lextudio async API
-        op = nextCmd(engine, auth, UdpTransportTarget((ip, port), timeout=1.0, retries=1), ContextData(), ObjectType(ObjectIdentity(root_oid)), lexicographicMode=False)
-        
-        # Async generator consumption
-        async for (errorIndication, errorStatus, errorIndex, varBinds) in op:
-            if errorIndication or errorStatus:
+        curr_oid = ObjectIdentity(root_oid)
+        while True:
+            errorIndication, errorStatus, errorIndex, varBindTable = await nextCmd(
+                engine, auth, UdpTransportTarget((ip, port), timeout=1.0, retries=1),
+                ContextData(), ObjectType(curr_oid), lexicographicMode=False
+            )
+            
+            if errorIndication or errorStatus or not varBindTable:
                 break
-            for varBind in varBinds:
-                val = varBind[1]
-                # Convert to python native
-                if hasattr(val, 'prettyPrint'):
-                    results.append(str(val.prettyPrint()))
-                else:
+                
+            for varBinds in varBindTable:
+                for vb in varBinds:
+                    oid, val = vb
+                    if not str(oid).startswith(root_oid):
+                        return results
                     results.append(str(val))
-                    
+                    curr_oid = oid
+            
     except Exception as e:
-        pass # Fallback or timeout
+        # print(f"Walk Error: {e}")
+        pass
         
     return results
 
@@ -349,49 +364,50 @@ async def get_wireless_stats(ip, brand, community, port=161, interface_index=Non
     
     # Fetch Signal
     if signal_oid:
-        # Support list of OIDs for fallback (AC vs M5 vs Mikrotik vs Mimosa)
-        if isinstance(signal_oid, list):
-            for oid in signal_oid:
-                sig = None
-                # Special handling for table roots (Ubiquiti AC, Mikrotik, Mimosa)
-                if oid in ['1.3.6.1.4.1.41112.1.4.7.1.3', '1.3.6.1.4.1.14988.1.1.1.2.1.19', '1.3.6.1.4.1.14988.1.1.1.1.1.4', '1.3.6.1.4.1.43356.2.1.2.6.2.1.8']:
-                    sig = await get_snmp_walk_first(ip, community, oid, port)
-                else:
-                    sig = await get_snmp_value(ip, community, oid, port)
-                    
-                if sig is not None:
-                     # Validate reasonable range for signal (e.g., -100 to -10, or 10 to 100)
-                     if isinstance(sig, int):
-                         if sig == 0: continue # Invalid
-                         if sig > 0: sig = -sig
-                         stats['signal_dbm'] = sig
-                         break
-        else:
-            sig = await get_snmp_value(ip, community, signal_oid, port)
+        # Support list of OIDs for fallback
+        oids_to_try = signal_oid if isinstance(signal_oid, list) else [signal_oid]
+        for oid in oids_to_try:
+            sig = None
+            # Special handling for table roots (Require WALK)
+            walk_roots = [
+                '1.3.6.1.4.1.41112.1.10.1.4.1.5', # LTU
+                '1.3.6.1.4.1.41112.1.4.7.1.3',    # AirMAX AC StaTable
+                '1.3.6.1.4.1.14988.1.1.1.2.1.19', # Mikrotik Sta Signal
+                '1.3.6.1.4.1.43356.2.1.2.6.2.1.8' # Mimosa
+            ]
+            
+            if any(oid.startswith(root) for root in walk_roots) or len(oid.split('.')) < 12:
+                sig = await get_snmp_walk_first(ip, community, oid, port)
+            else:
+                sig = await get_snmp_value(ip, community, oid, port)
+                
             if sig is not None:
-                 if isinstance(sig, int) and sig > 0:
-                     sig = -sig
-                 stats['signal_dbm'] = sig
-             
-    # Fetch CCQ (or SNR for Mimosa)
+                 if isinstance(sig, int):
+                     if sig == 0: continue 
+                     if sig > 0: sig = -sig
+                     stats['signal_dbm'] = sig
+                     break
+              
+    # Fetch CCQ / Quality
     if ccq_oid:
-        # Support list of OIDs for fallback (similar to signal)
-        if isinstance(ccq_oid, list):
-            for oid in ccq_oid:
-                ccq = None
-                # Check if this is a Mikrotik Walk OID
-                if oid in ['1.3.6.1.4.1.14988.1.1.1.3.1.10', '1.3.6.1.4.1.14988.1.1.1.1.1.10', '1.3.6.1.4.1.14988.1.1.1.2.1.19']:
-                    ccq = await get_snmp_walk_first(ip, community, oid, port)
-                else:
-                    ccq = await get_snmp_value(ip, community, oid, port)
-                    
-                if ccq is not None and isinstance(ccq, int):
-                    stats['ccq'] = ccq
-                    break
-        else:
-            ccq = await get_snmp_value(ip, community, ccq_oid, port)
+        oids_to_try = ccq_oid if isinstance(ccq_oid, list) else [ccq_oid]
+        for oid in oids_to_try:
+            ccq = None
+            walk_roots = [
+                '1.3.6.1.4.1.41112.1.10.1.4.1.21', # LTU
+                '1.3.6.1.4.1.41112.1.4.6.1.3',    # Quality
+                '1.3.6.1.4.1.41112.1.4.6.1.4',    # Capacity
+                '1.3.6.1.4.1.14988.1.1.1.3.1.10', # Mikrotik
+                '1.3.6.1.4.1.14988.1.1.1.1.1.10'
+            ]
+            if any(oid.startswith(root) for root in walk_roots) or len(oid.split('.')) < 12:
+                ccq = await get_snmp_walk_first(ip, community, oid, port)
+            else:
+                ccq = await get_snmp_value(ip, community, oid, port)
+                
             if ccq is not None and isinstance(ccq, int):
                 stats['ccq'] = ccq
+                break
     
     # For Mimosa, try SNR as quality metric if CCQ not found
     if brand_key == 'mimosa' and stats['ccq'] is None:
@@ -400,7 +416,7 @@ async def get_wireless_stats(ip, brand, community, port=161, interface_index=Non
             snr = await get_snmp_walk_first(ip, community, snr_oid, port)
             if snr is not None and isinstance(snr, int):
                 stats['ccq'] = snr  # Use SNR as quality metric
-              
+                
     return stats
 
 async def get_connected_clients_count(ip, brand, community, port=161):
@@ -409,23 +425,26 @@ async def get_connected_clients_count(ip, brand, community, port=161):
     Returns int or None.
     """
     brand_key = brand.lower()
+    if brand_key not in OIDS: return None
     
-    if brand_key not in OIDS:
-        return None
+    clients_oid_data = OIDS[brand_key].get('clients')
+    if not clients_oid_data: return None
     
-    # Check if brand has a specific clients OID
-    clients_oid = OIDS[brand_key].get('clients')
+    oids_to_try = clients_oid_data if isinstance(clients_oid_data, list) else [clients_oid_data]
     
-    if clients_oid:
-        count = await get_snmp_value(ip, community, clients_oid, port)
-        if count is not None and isinstance(count, int):
-            return count
-    
-    # Fallback for Ubiquiti (legacy)
-    if brand_key == 'ubiquiti':
-        client_oid = '1.3.6.1.4.1.41112.1.4.5.1.15.1'
-        count = await get_snmp_value(ip, community, client_oid, port)
-        if count is not None and isinstance(count, int):
-            return count
-    
+    for oid in oids_to_try:
+        # Special case: LTU Table Walk
+        if oid == '1.3.6.1.4.1.41112.1.10.1.4':
+            try:
+                 rows = await snmp_walk_list(ip, community, '1.3.6.1.4.1.41112.1.10.1.4.1.11', port)
+                 if rows: return len(set(rows))
+            except: continue
+        
+        # Standard OID Get
+        try:
+            count = await get_snmp_value(ip, community, oid, port)
+            if count is not None and isinstance(count, int):
+                return count
+        except: continue
+            
     return None
