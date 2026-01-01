@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -227,6 +227,11 @@ async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depend
         if "UNIQUE constraint" in error_msg or "duplicate key" in error_msg:
             raise HTTPException(status_code=400, detail=f"IP {equipment.ip} já existe")
         raise HTTPException(status_code=500, detail=f"Erro ao criar: {error_msg}")
+
+class AutoDetectAllRequest(BaseModel):
+    ip: str
+    community: str = "public"
+    port: int = 161
 
 class DetectBrandRequest(BaseModel):
     ip: str
@@ -574,9 +579,9 @@ async def auto_configure_traffic_interface(
 
 @router.post("/auto-detect-all")
 async def auto_detect_all(
-    ip: str,
-    community: str = "publicRadionet",
-    port: int = 161,
+    ip: str = Body(...),
+    community: str = Body("publicRadionet"),
+    port: int = Body(161),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -587,7 +592,8 @@ async def auto_detect_all(
     
     Retorna todos os dados para preencher o formulário automaticamente.
     """
-    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic, detect_best_interface
+    from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, get_wireless_stats
+    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic
     from backend.app.models import Parameters
     import time
     
@@ -605,18 +611,23 @@ async def auto_detect_all(
     }
     
     try:
-        # STEP 1: Detectar marca
+        # STEP 1: Detectar marca e tipo
         try:
-            from backend.app.services.snmp import detect_equipment_brand
-            brand_result = await detect_equipment_brand(ip, community, port)
+            brand = await detect_brand(ip, community, port)
+            result["brand"] = brand
             
-            if brand_result:
-                result["brand"] = brand_result.get("brand")
-                result["equipment_type"] = brand_result.get("equipment_type")
-                result["snmp_interface_index"] = brand_result.get("snmp_interface_index")
-                result["signal_dbm"] = brand_result.get("signal_dbm")
+            if brand != "generic":
+                eq_type = await detect_equipment_type(ip, brand, community, port)
+                result["equipment_type"] = eq_type
+                
+                # Try to find signal interface
+                stats = await get_wireless_stats(ip, brand, community, port)
+                if stats.get("signal_dbm") is not None:
+                    result["signal_dbm"] = stats["signal_dbm"]
+                    # In some brands, we might want to store which interface gave the signal
+                    # But for now, we just indicate we found signal.
         except Exception as e:
-            result["errors"].append(f"Erro ao detectar marca: {str(e)}")
+            result["errors"].append(f"Erro ao detectar marca/tipo: {str(e)}")
         
         # STEP 2: Detectar interface de tráfego
         try:

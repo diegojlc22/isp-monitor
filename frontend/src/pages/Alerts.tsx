@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { getTelegramConfig, updateTelegramConfig, testTelegramMessage, testWhatsappMessage, testBackup, getWhatsappGroups, getWhatsappStatus } from '../services/api';
 import { Bell, Save, MessageCircle, Send, Search, Copy, Check, X, RefreshCw, AlertTriangle, Database, BrainCircuit, Radio } from 'lucide-react';
 import QRCode from 'react-qr-code';
@@ -93,10 +94,10 @@ export function Alerts() {
             if (Array.isArray(data)) {
                 setGroups(data);
             } else {
-                alert(data.error || 'Erro ao carregar grupos. Verifique se o ZAP está on.');
+                toast.error(data.error || 'Erro ao carregar grupos. Verifique se o ZAP está on.');
             }
         } catch (e) {
-            alert('Erro ao carregar grupos.');
+            toast.error('Erro ao carregar grupos.');
         } finally {
             setLoadingGroups(false);
         }
@@ -114,7 +115,7 @@ export function Alerts() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        alert('Copiado!');
+        toast.success('Copiado para a área de transferência!');
     };
 
     async function handleSaveConfig(e: React.FormEvent) {

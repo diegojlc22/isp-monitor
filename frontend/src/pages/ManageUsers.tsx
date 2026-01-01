@@ -4,6 +4,7 @@ import { getUsers, createUser, updateUser, deleteUser } from '../services/api';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 export function ManageUsers() {
     const { user: currentUser } = useAuth();
@@ -16,7 +17,7 @@ export function ManageUsers() {
         try {
             const data = await getUsers();
             setUsers(data);
-        } catch (e) { alert('Erro ao carregar usuários'); }
+        } catch (e) { toast.error('Erro ao carregar usuários'); }
     }
 
     useEffect(() => { load(); }, []);
@@ -38,8 +39,9 @@ export function ManageUsers() {
             setEditingUser(null);
             setFormData({ name: '', email: '', password: '', role: 'tech' });
             load();
+            toast.success(editingUser ? 'Usuário atualizado!' : 'Usuário criado!');
         } catch (error) {
-            alert('Erro ao salvar usuário.');
+            toast.error('Erro ao salvar usuário.');
         }
     }
 

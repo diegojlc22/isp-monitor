@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { updateMe } from '../services/api';
+import toast from 'react-hot-toast';
 
 export function Profile() {
     const { user, refreshUser } = useAuth();
@@ -21,9 +22,9 @@ export function Profile() {
             await updateMe(payload);
             await refreshUser();
             setFormData(prev => ({ ...prev, password: '' }));
-            alert('Perfil atualizado com sucesso!');
+            toast.success('Perfil atualizado com sucesso!');
         } catch (e) {
-            alert('Erro ao atualizar perfil.');
+            toast.error('Erro ao atualizar perfil.');
         }
     }
 

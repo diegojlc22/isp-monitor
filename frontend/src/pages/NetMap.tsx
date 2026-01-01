@@ -1,5 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, useMap, Polyline } from 'react-leaflet';
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { getTowers, getLinks, createLink, deleteLink, getUsers, getTechLocation } from '../services/api';
 import L from 'leaflet';
 import { Search, Network, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
@@ -131,7 +132,7 @@ export function NetMap() {
 
     const handleAddLink = async () => {
         if (!newLinkData.source || !newLinkData.target || newLinkData.source === newLinkData.target) {
-            alert("Selecione origem e destino diferentes.");
+            toast.error("Selecione origem e destino diferentes.");
             return;
         }
         try {
@@ -141,8 +142,9 @@ export function NetMap() {
                 type: 'wireless'
             });
             setNewLinkData({ source: '', target: '' });
+            toast.success("Link criado com sucesso!");
             loadData();
-        } catch (e) { alert("Erro ao criar link"); }
+        } catch (e) { toast.error("Erro ao criar link"); }
     };
 
     const handleDeleteLink = async (id: number) => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Plus, X, Activity, ArrowDownUp, Wifi, Users } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory, getLiveStatus } from '../services/api'; // NEW import
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -435,13 +436,13 @@ export function LiveMonitor() {
                                                         const best = await detectBestInterface(eq.ip, comm, eq.snmp_port);
                                                         if (best && best.index) {
                                                             setSelectedInterface(best.index);
-                                                            alert(`Detectado: ${best.name} com ${best.current_mbps} Mbps`);
+                                                            toast.success(`Detectado: ${best.name} (${best.current_mbps} Mbps)`);
                                                         } else {
-                                                            alert("Nenhum tráfego relevante detectado no momento.");
+                                                            toast.error("Nenhum tráfego relevante detectado no momento.");
                                                         }
                                                     } catch (e) {
                                                         console.error(e);
-                                                        alert("Erro ao detectar tráfego.");
+                                                        toast.error("Erro ao detectar tráfego.");
                                                     } finally {
                                                         if (btn) btn.innerText = 'Auto';
                                                     }

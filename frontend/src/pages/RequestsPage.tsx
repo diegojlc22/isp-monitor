@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, X, MapPin, User, Server } from "lucide-react";
+import toast from "react-hot-toast";
 
 // Definição de tipos simples para evitar erros do TS
 interface Request {
@@ -48,14 +49,14 @@ export default function RequestsPage() {
             });
 
             if (res.ok) {
-                alert("Torre Aprovada com sucesso!");
+                toast.success("Torre Aprovada com sucesso!");
                 // Remove da lista local
                 setRequests(prev => prev.filter(r => r.id !== id));
             } else {
                 throw new Error("Falha na aprovação");
             }
         } catch (error) {
-            alert("Erro ao aprovar solicitação.");
+            toast.error("Erro ao aprovar solicitação.");
         }
     };
 
@@ -68,13 +69,13 @@ export default function RequestsPage() {
             });
 
             if (res.ok) {
-                alert("Solicitação rejeitada.");
+                toast.success("Solicitação rejeitada.");
                 setRequests(prev => prev.filter(r => r.id !== id));
             } else {
                 throw new Error("Falha ao rejeitar");
             }
         } catch (error) {
-            alert("Erro ao rejeitar solicitação.");
+            toast.error("Erro ao rejeitar solicitação.");
         }
     };
 

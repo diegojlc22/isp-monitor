@@ -417,16 +417,16 @@ export function Equipments() {
         if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.length} equipamentos ? `)) return;
         try {
             for (const id of selectedIds) { await deleteEquipment(id); }
-            alert('Equipamentos excluídos!'); setSelectedIds([]); load();
-        } catch (e) { alert('Erro ao excluir alguns itens.'); }
+            toast.success('Equipamentos excluídos!'); setSelectedIds([]); load();
+        } catch (e) { toast.error('Erro ao excluir alguns itens.'); }
     };
 
     const handleBatchReboot = async () => {
         if (!confirm(`Reiniciar ${selectedIds.length} equipamentos ? `)) return;
         try {
             for (const id of selectedIds) { rebootEquipment(id).catch(console.error); }
-            alert('Comandos de reboot enviados!'); setSelectedIds([]);
-        } catch (e) { alert('Erro ao enviar comandos.'); }
+            toast.success('Comandos de reboot enviados!'); setSelectedIds([]);
+        } catch (e) { toast.error('Erro ao enviar comandos.'); }
     };
 
 
@@ -477,7 +477,11 @@ export function Equipments() {
             const detectedName = result.name ? `\n✅ Nome: ${result.name}` : '';
             toast.success(`Detectado: \nMarca: ${result.brand.toUpperCase()} \nTipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'} ${detectedName}`);
         } catch (error: any) {
-            toast.error(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
+            const errorDetail = error.response?.data?.detail;
+            const errorMsg = typeof errorDetail === 'object'
+                ? JSON.stringify(errorDetail)
+                : (errorDetail || error.message);
+            toast.error(`Erro na detecção: ${errorMsg}`);
         } finally {
             setIsDetectingForm(false);
         }
@@ -521,7 +525,11 @@ export function Equipments() {
                 toast.error(`Nenhuma informação detectada. Verifique o IP e SNMP.\nErros: ${result.errors?.join(', ')}`);
             }
         } catch (error: any) {
-            toast.error(`Erro na detecção completa: ${error.response?.data?.detail || error.message}`);
+            const errorDetail = error.response?.data?.detail;
+            const errorMsg = typeof errorDetail === 'object'
+                ? JSON.stringify(errorDetail)
+                : (errorDetail || error.message);
+            toast.error(`Erro na detecção completa: ${errorMsg}`);
         } finally {
             setIsDetectingAll(false);
         }
@@ -541,7 +549,11 @@ export function Equipments() {
             );
             setInterfaceList(list);
         } catch (error: any) {
-            toast.error(`Erro ao listar interfaces: ${error.response?.data?.detail || error.message}`);
+            const errorDetail = error.response?.data?.detail;
+            const errorMsg = typeof errorDetail === 'object'
+                ? JSON.stringify(errorDetail)
+                : (errorDetail || error.message);
+            toast.error(`Erro ao listar interfaces: ${errorMsg}`);
         } finally {
             setIsLoadingInterfaces(false);
         }
@@ -628,7 +640,7 @@ export function Equipments() {
         try {
             await loadHistory(eq.id, '24h');
             setShowHistoryModal(true);
-        } catch (e) { alert('Erro ao carregar histórico.'); }
+        } catch (e) { toast.error('Erro ao carregar histórico.'); }
     }, []);
 
     const loadHistory = async (id: number, period: string) => {
@@ -661,7 +673,7 @@ export function Equipments() {
             editingEquipment ? await updateEquipment(editingEquipment.id, payload) : await createEquipment(payload);
             setShowModal(false); setEditingEquipment(null); setFormData(INITIAL_FORM_STATE); load();
         } catch (error: any) {
-            alert('Erro ao salvar: ' + (error.response?.data?.detail || error.message));
+            toast.error('Erro ao salvar: ' + (error.response?.data?.detail || error.message));
         }
     }
 
@@ -686,12 +698,12 @@ export function Equipments() {
             const a = document.createElement('a'); a.href = url;
             a.download = `eq_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        } catch (e) { alert('Erro ao exportar'); }
+        } catch (e) { toast.error('Erro ao exportar'); }
     }
 
     async function handleImportCSV(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]; if (!file) return;
-        try { await importEquipmentsCSV(file); alert('Importado!'); load(); } catch (err: any) { alert("Erro importando: " + err.message); }
+        try { await importEquipmentsCSV(file); toast.success('Importado com sucesso!'); load(); } catch (err: any) { toast.error("Erro importando: " + err.message); }
         e.target.value = '';
     }
 
@@ -719,12 +731,11 @@ export function Equipments() {
 
         try {
             const res = await createEquipmentsBatch(payload);
-            const msg = `Salvo: ${res.success}\nJá cadastrados/Ignorados: ${res.failed}`;
-            alert(msg);
+            toast.success(`Salvo: ${res.success} / Ignorados: ${res.failed}`);
             setShowScannerModal(false);
             load();
         } catch (e: any) {
-            alert("Erro ao salvar lote: " + (e.response?.data?.detail || e.message));
+            toast.error("Erro ao salvar lote: " + (e.response?.data?.detail || e.message));
         }
     }
 
@@ -749,12 +760,11 @@ export function Equipments() {
 
         try {
             const res = await createEquipmentsBatch(payload);
-            const msg = `Salvo: ${res.success}\nJá cadastrados/Ignorados: ${res.failed}`;
-            alert(msg);
+            toast.success(`Salvo: ${res.success} / Ignorados: ${res.failed}`);
             setShowScannerModal(false);
             load();
         } catch (e: any) {
-            alert("Erro ao salvar lote: " + (e.response?.data?.detail || e.message));
+            toast.error("Erro ao salvar lote: " + (e.response?.data?.detail || e.message));
         }
     }
 
