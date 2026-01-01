@@ -1,14 +1,122 @@
 import asyncio
-from pysnmp.hlapi.asyncio import *
+import time
+from pysnmp.hlapi.asyncio import CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, getCmd, nextCmd, SnmpEngine
 
-# Singleton SnmpEngine to save CPU/RAM
-_SHARED_SNMP_ENGINE = None
+# Shared engine to avoid overhead
+_snmp_engine = None
 
 def get_shared_engine():
-    global _SHARED_SNMP_ENGINE
-    if _SHARED_SNMP_ENGINE is None:
-        _SHARED_SNMP_ENGINE = SnmpEngine()
-    return _SHARED_SNMP_ENGINE
+    global _snmp_engine
+    if _snmp_engine is None:
+        _snmp_engine = SnmpEngine()
+    return _snmp_engine
+
+async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
+    """Internal helper to try SNMP get with v2c then v1"""
+    # Try SNMPv2c first
+    try:
+        engine = get_shared_engine()
+        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
+            engine,
+            CommunityData(community, mpModel=1), # v2c
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            *[ObjectType(ObjectIdentity(oid)) for oid in oids]
+        )
+        if not errorIndication and not errorStatus:
+            return varBinds
+    except:
+        pass
+
+    # Try SNMPv1 fallback
+    try:
+        engine = get_shared_engine()
+        errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
+            engine,
+            CommunityData(community, mpModel=0), # v1
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            *[ObjectType(ObjectIdentity(oid)) for oid in oids]
+        )
+        if not errorIndication and not errorStatus:
+            return varBinds
+    except:
+        pass
+    
+    return None
+
+async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
+    """Internal helper to try SNMP walk/next with v2c then v1"""
+    # Try SNMPv2c
+    try:
+        engine = get_shared_engine()
+        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
+            engine,
+            CommunityData(community, mpModel=1),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            ObjectType(ObjectIdentity(root_oid)),
+            lexicographicMode=False
+        )
+        if not errorIndication and not errorStatus and varBinds:
+            return varBinds
+    except:
+        pass
+
+    # Try SNMPv1
+    try:
+        engine = get_shared_engine()
+        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
+            engine,
+            CommunityData(community, mpModel=0),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            ContextData(),
+            ObjectType(ObjectIdentity(root_oid)),
+            lexicographicMode=False
+        )
+        if not errorIndication and not errorStatus and varBinds:
+            return varBinds
+    except:
+        pass
+
+    return None
+
+async def detect_brand(ip, community, port=161):
+    """
+    Auto-detects equipment brand via SNMP.
+    Returns: 'ubiquiti', 'mikrotik', 'mimosa', 'intelbras', or 'generic'
+    """
+    # 1. Try with provided community
+    varBinds = await _snmp_get(ip, community, ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.2.0'], port)
+    
+    # 2. Fallback to 'public' if different
+    if not varBinds and community != 'public':
+        varBinds = await _snmp_get(ip, 'public', ['1.3.6.1.2.1.1.1.0', '1.3.6.1.2.1.1.2.0'], port)
+
+    if varBinds:
+        sys_descr = str(varBinds[0][1]).lower()
+        sys_object_id = str(varBinds[1][1])
+        
+        # Identification Logic
+        if '26138' in sys_object_id or 'intelbras' in sys_descr or 'wom' in sys_descr:
+            return 'intelbras'
+        if 'mikrotik' in sys_descr or 'routeros' in sys_descr or '14988' in sys_object_id:
+            return 'mikrotik'
+        if 'mimosa' in sys_descr or '43356' in sys_object_id:
+            return 'mimosa'
+        if 'ubiquiti' in sys_descr or 'airmax' in sys_descr or 'airfiber' in sys_descr or '41112' in sys_object_id:
+            return 'ubiquiti'
+
+    # Test Ubiquiti Private MIB root
+    if await _snmp_next(ip, community, '1.3.6.1.4.1.41112', port): return 'ubiquiti'
+    
+    # Test Intelbras
+    if await _snmp_next(ip, community, '1.3.6.1.4.1.26138', port): return 'intelbras'
+    
+    # Test Mikrotik
+    if await _snmp_next(ip, community, '1.3.6.1.4.1.14988', port): return 'mikrotik'
+    
+    return 'generic'
 
 async def get_snmp_uptime(ip: str, community: str = "public", port: int = 161) -> int | None:
     """
@@ -56,8 +164,8 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
         # List of potential counter pairs (In, Out) for UBNT devices
         ubnt_strategies = []
         
-        # 1. LTU / AirFiber 5XHD (Detected earlier)
-        if interface_index == 1000 or interface_index == 1:
+        # 1. LTU / AirFiber 5XHD (Specifically for our virtual index)
+        if interface_index == 1000:
             ubnt_strategies.append(('1.3.6.1.4.1.41112.1.10.1.5.3.0', '1.3.6.1.4.1.41112.1.10.1.5.1.0')) # LTU Wireless
         
         # 2. AirFiber Classic (AF24, AF5 - from User MIB)
@@ -133,9 +241,15 @@ async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 16
     """
     Lists all interfaces (index and description) using SNMP walk on ifDescr.
     """
-    from pysnmp.hlapi.asyncio import CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, nextCmd
-    
     interfaces = []
+    
+    # Check Brand First
+    brand = await detect_brand(ip, community, port)
+    
+    # If Ubiquiti, inject our virtual highly-optimized interface
+    if brand == 'ubiquiti':
+         interfaces.append({"index": 1000, "name": "Wireless (UBNT AirFiber/LTU)"})
+
     root_oid = '1.3.6.1.2.1.2.2.1.2' # ifDescr
     
     try:
@@ -175,21 +289,25 @@ async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 16
         
     return interfaces
 
+async def copy_iface(iface, mbps):
+    return {"index": iface['index'], "name": iface['name'], "current_mbps": round(mbps, 2)}
+
 async def detect_best_interface(ip: str, community: str = "public", port: int = 161):
     """
     Measures traffic on all interfaces for 3 seconds and returns the one with highest throughput.
     """
-    import time
-    
     # 1. List Interfaces
     interfaces = await get_snmp_interfaces(ip, community, port)
     if not interfaces:
         return None
 
+    # Determine Brand
+    brand = await detect_brand(ip, community, port)
+    
     # 2. First Measurement
     counters_1 = {}
     for iface in interfaces:
-        res = await get_snmp_interface_traffic(ip, community, port, iface['index'])
+        res = await get_snmp_interface_traffic(ip, community, port, iface['index'], brand=brand)
         if res:
             counters_1[iface['index']] = {'t': time.time(), 'in': res[0], 'out': res[1]}
     
@@ -205,7 +323,7 @@ async def detect_best_interface(ip: str, community: str = "public", port: int = 
         if idx not in counters_1: continue
         
         c1 = counters_1[idx]
-        res = await get_snmp_interface_traffic(ip, community, port, idx)
+        res = await get_snmp_interface_traffic(ip, community, port, idx, brand=brand)
         
         if res:
             dt = time.time() - c1['t']
