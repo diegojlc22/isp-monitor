@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { getTowers, createTower, deleteTower, importTowersCsv } from '../services/api';
 import { Plus, Trash2, MapPin, Search, Upload } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 
 export function Towers() {
@@ -35,7 +36,7 @@ export function Towers() {
             setFormData({ name: '', ip: '', latitude: 0, longitude: 0, observations: '' });
             load();
         } catch (error) {
-            alert('Erro ao criar torre. Verifique os dados.');
+            toast.error('Erro ao criar torre. Verifique os dados.');
         }
     }
 
@@ -57,10 +58,10 @@ export function Towers() {
 
         try {
             const res = await importTowersCsv(file);
-            alert(`Importação concluída!\n\nCadastrados: ${res.imported}\nPulados (Duplicados): ${res.skipped}`);
+            toast.success(`Importação concluída! Cadastrados: ${res.imported} / Pulados: ${res.skipped}`);
             load();
         } catch (error: any) {
-            alert('Falha na importação: ' + (error.response?.data?.detail || error.message));
+            toast.error('Falha na importação: ' + (error.response?.data?.detail || error.message));
         } finally {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }

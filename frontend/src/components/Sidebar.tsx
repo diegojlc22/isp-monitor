@@ -46,6 +46,9 @@ export function Sidebar() {
                     <NavLink to="/live" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
                         <Activity className="w-5 h-5" /> <span className="font-medium">Monitor Live</span>
                     </NavLink>
+                    <NavLink to="/health" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                        <Server className="w-5 h-5" /> <span className="font-medium">Saúde do Sistema</span>
+                    </NavLink>
                     <NavLink to="/map" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
                         <Map className="w-5 h-5" /> <span className="font-medium">Mapa</span>
                     </NavLink>

@@ -572,6 +572,136 @@ async def auto_configure_traffic_interface(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na auto-configuração: {str(e)}")
 
+@router.post("/auto-detect-all")
+async def auto_detect_all(
+    ip: str,
+    community: str = "publicRadionet",
+    port: int = 161,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Auto-detecta TUDO de um equipamento em um único endpoint:
+    1. Marca/Tipo do equipamento
+    2. Interface de sinal wireless
+    3. Interface de tráfego (com mais Mbps)
+    
+    Retorna todos os dados para preencher o formulário automaticamente.
+    """
+    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic, detect_best_interface
+    from backend.app.models import Parameters
+    import time
+    
+    result = {
+        "success": False,
+        "ip": ip,
+        "brand": None,
+        "equipment_type": None,
+        "snmp_interface_index": None,
+        "snmp_traffic_interface_index": None,
+        "signal_dbm": None,
+        "traffic_in": None,
+        "traffic_out": None,
+        "errors": []
+    }
+    
+    try:
+        # STEP 1: Detectar marca
+        try:
+            from backend.app.services.snmp import detect_equipment_brand
+            brand_result = await detect_equipment_brand(ip, community, port)
+            
+            if brand_result:
+                result["brand"] = brand_result.get("brand")
+                result["equipment_type"] = brand_result.get("equipment_type")
+                result["snmp_interface_index"] = brand_result.get("snmp_interface_index")
+                result["signal_dbm"] = brand_result.get("signal_dbm")
+        except Exception as e:
+            result["errors"].append(f"Erro ao detectar marca: {str(e)}")
+        
+        # STEP 2: Detectar interface de tráfego
+        try:
+            interfaces = await get_snmp_interfaces(ip, community, port)
+            if not interfaces:
+                result["errors"].append("Nenhuma interface encontrada via SNMP")
+            else:
+                # Testar tráfego em cada interface
+                async def test_interface(iface):
+                    idx = iface['index']
+                    try:
+                        traffic1 = await get_snmp_interface_traffic(ip, community, port, idx)
+                        if not traffic1:
+                            return None
+                        
+                        in_bytes1, out_bytes1 = traffic1
+                        time1 = time.time()
+                        
+                        await asyncio.sleep(3)
+                        
+                        traffic2 = await get_snmp_interface_traffic(ip, community, port, idx)
+                        if not traffic2:
+                            return None
+                        
+                        in_bytes2, out_bytes2 = traffic2
+                        time2 = time.time()
+                        
+                        dt = time2 - time1
+                        delta_in = max(0, in_bytes2 - in_bytes1)
+                        delta_out = max(0, out_bytes2 - out_bytes1)
+                        
+                        mbps_in = round((delta_in * 8) / (dt * 1_000_000), 2)
+                        mbps_out = round((delta_out * 8) / (dt * 1_000_000), 2)
+                        total_mbps = mbps_in + mbps_out
+                        
+                        if total_mbps > 0:
+                            return {
+                                'index': idx,
+                                'name': iface['name'],
+                                'in_mbps': mbps_in,
+                                'out_mbps': mbps_out,
+                                'total_mbps': total_mbps
+                            }
+                        return None
+                    except Exception:
+                        return None
+                
+                # Testar com limite de concorrência
+                sem = asyncio.Semaphore(10)
+                
+                async def test_with_semaphore(iface):
+                    async with sem:
+                        return await test_interface(iface)
+                
+                tasks = [test_with_semaphore(iface) for iface in interfaces]
+                results = await asyncio.gather(*tasks)
+                
+                valid_results = [r for r in results if r is not None]
+                
+                if valid_results:
+                    valid_results.sort(key=lambda x: x['total_mbps'], reverse=True)
+                    best = valid_results[0]
+                    
+                    result["snmp_traffic_interface_index"] = best['index']
+                    result["traffic_in"] = best['in_mbps']
+                    result["traffic_out"] = best['out_mbps']
+                else:
+                    result["errors"].append("Nenhuma interface com tráfego detectada")
+                    
+        except Exception as e:
+            result["errors"].append(f"Erro ao detectar interface de tráfego: {str(e)}")
+        
+        # Determinar sucesso
+        result["success"] = (
+            result["brand"] is not None or 
+            result["snmp_traffic_interface_index"] is not None
+        )
+        
+        return result
+        
+    except Exception as e:
+        result["errors"].append(f"Erro geral: {str(e)}")
+        return result
+
+
 @router.put("/{eq_id}", response_model=EquipmentSchema)
 async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(

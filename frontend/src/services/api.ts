@@ -125,6 +125,10 @@ export const detectTrafficInterface = (ip: string, community?: string, port: num
 export const autoConfigureTrafficInterface = (equipmentId: number) =>
     api.post(`/equipments/${equipmentId}/auto-configure-traffic`, {}, { timeout: 120000 }).then(res => res.data);
 
+// Auto-detectar TUDO (Marca, Sinal, Tráfego)
+export const autoDetectAll = (ip: string, community?: string, port: number = 161) =>
+    api.post(`/equipments/auto-detect-all`, { ip, community, port }, { timeout: 120000 }).then(res => res.data);
+
 export const getWhatsappStatus = () => api.get('/settings/whatsapp/status').then(res => res.data);
 
 // Expo / Mobile
@@ -134,6 +138,9 @@ export const stopExpo = () => api.post('/expo/stop').then(res => res.data);
 
 // Ngrok / External Access
 export const getNgrokStatus = () => api.get('/ngrok/status').then(res => res.data);
+
+// System Health
+export const getSystemHealth = () => api.get('/system/health').then(res => res.data);
 export const startNgrok = () => api.post('/ngrok/start').then(res => res.data);
 export const stopNgrok = () => api.post('/ngrok/stop').then(res => res.data);
 // Mobile

@@ -5,6 +5,7 @@ import './index.css'
 import 'leaflet/dist/leaflet.css';
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
+import { Toaster } from 'react-hot-toast';
 
 // --- Layouts (Eager Load) ---
 import { DashboardLayout } from './layouts/DashboardLayout'
@@ -22,6 +23,7 @@ const Alerts = lazy(() => import('./pages/Alerts').then(m => ({ default: m.Alert
 const Backup = lazy(() => import('./pages/Backup').then(m => ({ default: m.Backup })));
 const LiveMonitor = lazy(() => import('./pages/LiveMonitor').then(m => ({ default: m.LiveMonitor })));
 const Agent = lazy(() => import('./pages/Agent'));
+const Health = lazy(() => import('./pages/Health').then(m => ({ default: m.Health })));
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage'));
 const MobileApp = lazy(() => import('./pages/MobileApp').then(m => ({ default: m.MobileApp })));
@@ -45,6 +47,16 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <ScannerProvider>
         <BrowserRouter>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: '#0f172a',
+                color: '#fff',
+                border: '1px solid #1e293b',
+              },
+            }}
+          />
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -59,6 +71,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="alerts" element={<Alerts />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="agent" element={<Agent />} />
+                  <Route path="health" element={<Health />} />
 
                   {/* Admin Routes */}
                   <Route element={<AdminRoute />}>

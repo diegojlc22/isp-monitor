@@ -11,6 +11,28 @@ from backend.app.services.snmp_monitor import snmp_monitor_job
 from backend.app.services.synthetic_agent import synthetic_agent_job
 from backend.app.services.maintenance import cleanup_job
 
+async def heartbeat_loop():
+    """Atualiza o timestamp de 'last seen' no banco a cada 10 segundos"""
+    from backend.app.models import Parameters
+    from backend.app.database import AsyncSessionLocal
+    from datetime import datetime, timezone
+    
+    print("[COLLECTOR] Heartbeat iniciado (10s)")
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                param = await db.get(Parameters, "collector_last_seen")
+                if not param:
+                    param = Parameters(key="collector_last_seen", value=datetime.now(timezone.utc).isoformat())
+                    db.add(param)
+                else:
+                    param.value = datetime.now(timezone.utc).isoformat()
+                await db.commit()
+        except Exception as e:
+            print(f"[WARN] Falha no heartbeat do collector: {e}")
+        
+        await asyncio.sleep(10)
+
 async def maintenance_loop():
     """Roda tarefas de limpeza a cada 24 horas"""
     print("[COLLECTOR] Agendador de limpeza iniciado (24h)")
@@ -88,6 +110,9 @@ async def main():
 
     # Manutenção Diária (Limpeza de Logs)
     tasks.append(asyncio.create_task(maintenance_loop()))
+
+    # Heartbeat (Status de Saúde)
+    tasks.append(asyncio.create_task(heartbeat_loop()))
 
     # Manter o processo vivo aguardando as tarefas
     await asyncio.gather(*tasks)

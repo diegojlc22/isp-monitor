@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus, scanInterfaces } from '../services/api';
+import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus, scanInterfaces, autoDetectAll } from '../services/api';
 import { useScanner } from '../contexts/ScannerContext';
 
 import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
+import toast from 'react-hot-toast';
 
 // @ts-ignore
 import { useDebounce } from 'use-debounce';
@@ -444,7 +445,8 @@ export function Equipments() {
     const [templates, setTemplates] = useState<Record<string, Partial<FormData>>>({});
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [isDetectingForm, setIsDetectingForm] = useState(false);
-    const [interfaceList, setInterfaceList] = useState<{ index: number; name: string }[]>([]);
+    const [isDetectingAll, setIsDetectingAll] = useState(false);
+    const [interfaceList, setInterfaceList] = useState<any[]>([]);
     const [isLoadingInterfaces, setIsLoadingInterfaces] = useState(false);
 
     // Global Tasks from Context
@@ -453,7 +455,7 @@ export function Equipments() {
     // Auto-detect equipment brand and type
     const handleAutoDetect = async () => {
         if (!formData.ip) {
-            alert('Por favor, insira um IP primeiro');
+            toast.error('Por favor, insira um IP primeiro');
             return;
         }
 
@@ -473,17 +475,61 @@ export function Equipments() {
             });
 
             const detectedName = result.name ? `\n✅ Nome: ${result.name}` : '';
-            alert(`Detectado: \n✅ Marca: ${result.brand.toUpperCase()} \n✅ Tipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'} ${detectedName}`);
+            toast.success(`Detectado: \nMarca: ${result.brand.toUpperCase()} \nTipo: ${result.equipment_type === 'station' ? 'Station (Cliente)' : result.equipment_type === 'transmitter' ? 'Transmitter (AP)' : 'Outro'} ${detectedName}`);
         } catch (error: any) {
-            alert(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
+            toast.error(`Erro na detecção: ${error.response?.data?.detail || error.message} `);
         } finally {
             setIsDetectingForm(false);
         }
     };
 
+    const handleAutoDetectAll = async () => {
+        if (!formData.ip) {
+            toast.error('Por favor, insira um IP primeiro');
+            return;
+        }
+
+        setIsDetectingAll(true);
+        try {
+            const result = await autoDetectAll(
+                formData.ip,
+                formData.snmp_community || networkDefaults.snmp_community || 'public',
+                formData.snmp_port || networkDefaults.snmp_port || 161
+            );
+
+            if (result.success) {
+                setFormData({
+                    ...formData,
+                    brand: result.brand || formData.brand,
+                    equipment_type: result.equipment_type || formData.equipment_type,
+                    snmp_interface_index: result.snmp_interface_index || formData.snmp_interface_index,
+                    snmp_traffic_interface_index: result.snmp_traffic_interface_index || formData.snmp_traffic_interface_index
+                });
+
+                let msg = 'Detecção completa finalizada com sucesso!';
+                if (result.brand) msg += `\n✅ Marca: ${result.brand.toUpperCase()}`;
+                if (result.equipment_type) msg += `\n✅ Tipo: ${result.equipment_type}`;
+                if (result.snmp_interface_index) msg += `\n✅ Interface Sinal: ${result.snmp_interface_index}`;
+                if (result.snmp_traffic_interface_index) msg += `\n✅ Interface Tráfego: ${result.snmp_traffic_interface_index} (${result.traffic_in} Mbps)`;
+
+                if (result.errors && result.errors.length > 0) {
+                    msg += `\n\n⚠️ Avisos:\n- ${result.errors.join('\n- ')}`;
+                }
+
+                toast.success(msg);
+            } else {
+                toast.error(`Nenhuma informação detectada. Verifique o IP e SNMP.\nErros: ${result.errors?.join(', ')}`);
+            }
+        } catch (error: any) {
+            toast.error(`Erro na detecção completa: ${error.response?.data?.detail || error.message}`);
+        } finally {
+            setIsDetectingAll(false);
+        }
+    };
+
     const handleLoadInterfaces = async () => {
         if (!formData.ip) {
-            alert('Por favor, insira um IP primeiro');
+            toast.error('Por favor, insira um IP primeiro');
             return;
         }
         setIsLoadingInterfaces(true);
@@ -495,7 +541,7 @@ export function Equipments() {
             );
             setInterfaceList(list);
         } catch (error: any) {
-            alert(`Erro ao listar interfaces: ${error.response?.data?.detail || error.message}`);
+            toast.error(`Erro ao listar interfaces: ${error.response?.data?.detail || error.message}`);
         } finally {
             setIsLoadingInterfaces(false);
         }
@@ -504,7 +550,7 @@ export function Equipments() {
     // Batch auto-detect for selected equipments (delegated to background)
     const handleBatchAutoDetect = async () => {
         if (selectedIds.length === 0) {
-            alert('Selecione pelo menos um equipamento');
+            toast.error('Selecione pelo menos um equipamento');
             return;
         }
 
@@ -516,7 +562,7 @@ export function Equipments() {
             await startDetection(selectedIds);
             setSelectedIds([]);
         } catch (e: any) {
-            alert(e.response?.data?.detail || "Erro ao iniciar detecção.");
+            toast.error(e.response?.data?.detail || "Erro ao iniciar detecção.");
         }
     };
 
@@ -540,20 +586,21 @@ export function Equipments() {
 
     const handleReboot = useCallback(async (eq: Equipment) => {
         if (!confirm(`Reiniciar ${eq.name}?`)) return;
-        try { await rebootEquipment(eq.id); alert("Comando enviado!"); } catch (e: any) { alert("Erro: " + (e.response?.data?.detail || e.message)); }
+        try { await rebootEquipment(eq.id); toast.success("Comando de reboot enviado!"); } catch (e: any) { toast.error("Erro: " + (e.response?.data?.detail || e.message)); }
     }, []);
 
     const handleTest = useCallback(async (eq: Equipment) => {
         try {
-            alert(`Iniciando teste de ping para ${eq.ip}... Aguarde.`);
+            toast.loading(`Iniciando teste de ping para ${eq.ip}... Aguarde.`, { id: 'ping-test' });
             const res = await testEquipment(eq.id);
+            toast.dismiss('ping-test');
             if (res.is_online) {
-                alert(`✅ ONLINE\nLatência: ${res.latency}ms\nPerda: ${res.packet_loss}%\n${res.details}`);
+                toast.success(`ONLINE - Latência: ${res.latency}ms / Perda: ${res.packet_loss}%`);
             } else {
-                alert(`❌ OFFLINE\nErro: ${res.error || "Sem resposta"}`);
+                toast.error(`OFFLINE - Erro: ${res.error || "Sem resposta"}`);
             }
         } catch (e: any) {
-            alert("Erro no teste: " + (e.response?.data?.detail || e.message));
+            toast.error("Erro no teste: " + (e.response?.data?.detail || e.message));
         }
     }, []);
 
@@ -899,24 +946,39 @@ export function Equipments() {
                             <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="Nome" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
                             <div className="space-y-2">
                                 <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP" value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} required />
-                                <button
-                                    type="button"
-                                    onClick={handleAutoDetect}
-                                    disabled={isDetectingForm || !formData.ip}
-                                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-2 rounded font-semibold transition-all flex items-center justify-center gap-2"
-                                >
-                                    {isDetectingForm ? (
-                                        <>
-                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                            Detectando...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Search size={16} />
-                                            🔍 Auto-Detectar Marca e Tipo
-                                        </>
-                                    )}
-                                </button>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoDetectAll}
+                                        disabled={isDetectingAll || !formData.ip}
+                                        className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] border border-white/10"
+                                    >
+                                        {isDetectingAll ? (
+                                            <>
+                                                <div className="animate-spin h-5 w-5 border-3 border-white border-t-transparent rounded-full"></div>
+                                                <span className="animate-pulse">Analisando Equipamento... (Aguarde)</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Zap size={20} className="text-yellow-400 fill-yellow-400" />
+                                                <span>� AUTO-DETECTAR TUDO</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoDetect}
+                                        disabled={isDetectingForm || isDetectingAll || !formData.ip}
+                                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-2 border border-slate-700"
+                                    >
+                                        {isDetectingForm ? (
+                                            <div className="animate-spin h-3 w-3 border-2 border-slate-400 border-t-transparent rounded-full"></div>
+                                        ) : (
+                                            <Search size={14} />
+                                        )}
+                                        Detectar apenas Marca e Tipo
+                                    </button>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
