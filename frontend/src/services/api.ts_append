@@ -1,5 +1,0 @@
-
-// Expo / Mobile
-export const getExpoStatus = () => api.get('/expo/status').then(res => res.data);
-export const startExpo = () => api.post('/expo/start').then(res => res.data);
-export const stopExpo = () => api.post('/expo/stop').then(res => res.data);

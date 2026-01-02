@@ -118,6 +118,31 @@ async def detect_brand(ip, community, port=161):
     
     return 'generic'
 
+async def detect_equipment_name(ip, community='public', port=161):
+    """
+    Detects equipment name via SNMP sysName.
+    Returns the equipment name or None if detection fails.
+    OID: 1.3.6.1.2.1.1.5.0 (sysName)
+    """
+    # Try with provided community
+    varBinds = await _snmp_get(ip, community, ['1.3.6.1.2.1.1.5.0'], port)
+    
+    # Fallback to 'public' if different
+    if not varBinds and community != 'public':
+        varBinds = await _snmp_get(ip, 'public', ['1.3.6.1.2.1.1.5.0'], port)
+
+    if not varBinds:
+        return None
+            
+    name = str(varBinds[0][1]).strip()
+    
+    # Return None if name is empty or default values
+    if not name or name.lower() in ['', 'unknown', 'localhost', 'default']:
+        return None
+        
+    return name
+
+
 async def get_snmp_uptime(ip: str, community: str = "public", port: int = 161) -> int | None:
     """
     Get System Uptime (sysUpTime) via SNMP v2c.
@@ -289,34 +314,36 @@ async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 16
         
     return interfaces
 
-async def copy_iface(iface, mbps):
+def copy_iface(iface, mbps):
     return {"index": iface['index'], "name": iface['name'], "current_mbps": round(mbps, 2)}
 
-async def detect_best_interface(ip: str, community: str = "public", port: int = 161):
+async def measure_interfaces_traffic(ip: str, community: str = "public", port: int = 161, interfaces: list = None, brand: str = None, sample_time: int = 3):
     """
-    Measures traffic on all interfaces for 3 seconds and returns the one with highest throughput.
+    Measures traffic on a set of interfaces for a given sample time.
+    Returns a list of interfaces that have traffic (> 0 Mbps), sorted by total traffic descending.
     """
-    # 1. List Interfaces
-    interfaces = await get_snmp_interfaces(ip, community, port)
     if not interfaces:
-        return None
+        return []
 
-    # Determine Brand
-    brand = await detect_brand(ip, community, port)
-    
-    # 2. First Measurement
+    # 1. First Measurement
     counters_1 = {}
     for iface in interfaces:
         res = await get_snmp_interface_traffic(ip, community, port, iface['index'], brand=brand)
         if res:
             counters_1[iface['index']] = {'t': time.time(), 'in': res[0], 'out': res[1]}
     
+    if not counters_1:
+        return []
+
     # Wait
-    await asyncio.sleep(3)
+    await asyncio.sleep(sample_time)
     
-    # 3. Second Measurement & Delta
-    best_rate = -1.0
-    best_iface = None
+    # 2. Second Measurement & Delta
+    valid_results = []
+    
+    # Parallel processing for second sample would be faster, but let's keep it simple for now as per original logic
+    # Actually, the original router logic used a semaphore for everything.
+    # Let's stick to the reliable sequential polling for now to avoid overloading the device's CPU.
     
     for iface in interfaces:
         idx = iface['index']
@@ -333,13 +360,39 @@ async def detect_best_interface(ip: str, community: str = "public", port: int = 
             delta_out = max(0, res[1] - c1['out'])
             
             # Total Mbps
-            mbps = ((delta_in + delta_out) * 8) / (dt * 1_000_000)
+            mbps_in = ((delta_in * 8) / (dt * 1_000_000))
+            mbps_out = ((delta_out * 8) / (dt * 1_000_000))
+            total_mbps = mbps_in + mbps_out
             
-            if mbps > best_rate:
-                best_rate = mbps
-                best_iface = copy_iface(iface, mbps)
-                
-    return best_iface
+            if total_mbps > 0.01: # Threshold 0.01 Mbps to ignore noise
+                valid_results.append({
+                    'index': idx,
+                    'name': iface['name'],
+                    'in_mbps': round(mbps_in, 2),
+                    'out_mbps': round(mbps_out, 2),
+                    'total_mbps': round(total_mbps, 2)
+                })
+    
+    valid_results.sort(key=lambda x: x['total_mbps'], reverse=True)
+    return valid_results
 
-def copy_iface(iface, mbps):
-    return {"index": iface['index'], "name": iface['name'], "current_mbps": round(mbps, 2)}
+async def detect_best_interface(ip: str, community: str = "public", port: int = 161):
+    """
+    Measures traffic on all interfaces and returns the one with highest throughput.
+    """
+    # 1. List Interfaces
+    interfaces = await get_snmp_interfaces(ip, community, port)
+    if not interfaces:
+        return None
+
+    # Determine Brand
+    from backend.app.services.wireless_snmp import detect_brand
+    brand = await detect_brand(ip, community, port)
+    
+    results = await measure_interfaces_traffic(ip, community, port, interfaces, brand=brand)
+    
+    if not results:
+        return None
+    
+    best = results[0]
+    return {"index": best['index'], "name": best['name'], "current_mbps": best['total_mbps']}

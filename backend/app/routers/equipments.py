@@ -323,9 +323,9 @@ async def detect_traffic_interface(
     Auto-detecta qual interface tem tráfego real.
     Testa todas as interfaces e retorna a que tem mais tráfego.
     """
-    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic
+    from backend.app.services.snmp import get_snmp_interfaces, measure_interfaces_traffic
+    from backend.app.services.wireless_snmp import detect_brand
     from backend.app.models import Parameters
-    import time
     
     # Get community from settings if not provided
     final_community = community
@@ -343,60 +343,11 @@ async def detect_traffic_interface(
                 detail="Nenhuma interface encontrada via SNMP. Verifique a community e se o SNMP está habilitado."
             )
         
-        # 2. Testar tráfego em cada interface (paralelo)
-        async def test_interface(iface):
-            idx = iface['index']
-            name = iface['name']
-            
-            try:
-                traffic1 = await get_snmp_interface_traffic(ip, final_community, port, idx)
-                if not traffic1:
-                    return None
-                
-                in_bytes1, out_bytes1 = traffic1
-                time1 = time.time()
-                
-                await asyncio.sleep(3)  # 3 segundos
-                
-                traffic2 = await get_snmp_interface_traffic(ip, final_community, port, idx)
-                if not traffic2:
-                    return None
-                
-                in_bytes2, out_bytes2 = traffic2
-                time2 = time.time()
-                
-                dt = time2 - time1
-                delta_in = max(0, in_bytes2 - in_bytes1)
-                delta_out = max(0, out_bytes2 - out_bytes1)
-                
-                mbps_in = round((delta_in * 8) / (dt * 1_000_000), 2)
-                mbps_out = round((delta_out * 8) / (dt * 1_000_000), 2)
-                total_mbps = mbps_in + mbps_out
-                
-                if total_mbps > 0:
-                    return {
-                        'index': idx,
-                        'name': name,
-                        'in_mbps': mbps_in,
-                        'out_mbps': mbps_out,
-                        'total_mbps': total_mbps
-                    }
-                return None
-                
-            except Exception:
-                return None
+        # 2. Detectar marca para estratégias específicas
+        brand = await detect_brand(ip, final_community, port)
         
-        # Testar com limite de concorrência
-        sem = asyncio.Semaphore(10)
-        
-        async def test_with_semaphore(iface):
-            async with sem:
-                return await test_interface(iface)
-        
-        tasks = [test_with_semaphore(iface) for iface in interfaces]
-        results = await asyncio.gather(*tasks)
-        
-        valid_results = [r for r in results if r is not None]
+        # 3. Medir tráfego
+        valid_results = await measure_interfaces_traffic(ip, final_community, port, interfaces, brand=brand)
         
         if not valid_results:
             return {
@@ -406,8 +357,6 @@ async def detect_traffic_interface(
                 "suggestion": "Verifique se há tráfego real passando pelo equipamento"
             }
         
-        # Ordenar por tráfego total
-        valid_results.sort(key=lambda x: x['total_mbps'], reverse=True)
         best = valid_results[0]
         
         return {
@@ -422,7 +371,6 @@ async def detect_traffic_interface(
             "interfaces_with_traffic": len(valid_results),
             "message": f"Interface {best['index']} ({best['name']}) detectada com {best['total_mbps']} Mbps total"
         }
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -462,9 +410,9 @@ async def auto_configure_traffic_interface(
     """
     Auto-detecta e configura a interface de tráfego em um único passo.
     """
-    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic
+    from backend.app.services.snmp import get_snmp_interfaces, measure_interfaces_traffic
+    from backend.app.services.wireless_snmp import detect_brand
     from backend.app.models import Parameters
-    import time
     
     result = await db.execute(select(Equipment).where(Equipment.id == eq_id))
     equipment = result.scalar_one_or_none()
@@ -488,58 +436,8 @@ async def auto_configure_traffic_interface(
         if not interfaces:
             raise HTTPException(status_code=404, detail="Nenhuma interface encontrada via SNMP")
         
-        async def test_interface(iface):
-            idx = iface['index']
-            name = iface['name']
-            
-            try:
-                traffic1 = await get_snmp_interface_traffic(equipment.ip, community, port, idx)
-                if not traffic1:
-                    return None
-                
-                in_bytes1, out_bytes1 = traffic1
-                time1 = time.time()
-                
-                await asyncio.sleep(3)
-                
-                traffic2 = await get_snmp_interface_traffic(equipment.ip, community, port, idx)
-                if not traffic2:
-                    return None
-                
-                in_bytes2, out_bytes2 = traffic2
-                time2 = time.time()
-                
-                dt = time2 - time1
-                delta_in = max(0, in_bytes2 - in_bytes1)
-                delta_out = max(0, out_bytes2 - out_bytes1)
-                
-                mbps_in = round((delta_in * 8) / (dt * 1_000_000), 2)
-                mbps_out = round((delta_out * 8) / (dt * 1_000_000), 2)
-                total_mbps = mbps_in + mbps_out
-                
-                if total_mbps > 0:
-                    return {
-                        'index': idx,
-                        'name': name,
-                        'in_mbps': mbps_in,
-                        'out_mbps': mbps_out,
-                        'total_mbps': total_mbps
-                    }
-                return None
-                
-            except Exception:
-                return None
-        
-        sem = asyncio.Semaphore(10)
-        
-        async def test_with_semaphore(iface):
-            async with sem:
-                return await test_interface(iface)
-        
-        tasks = [test_with_semaphore(iface) for iface in interfaces]
-        results = await asyncio.gather(*tasks)
-        
-        valid_results = [r for r in results if r is not None]
+        brand = await detect_brand(equipment.ip, community, port)
+        valid_results = await measure_interfaces_traffic(equipment.ip, community, port, interfaces, brand=brand)
         
         if not valid_results:
             return {
@@ -550,7 +448,6 @@ async def auto_configure_traffic_interface(
                 "total_interfaces": len(interfaces)
             }
         
-        valid_results.sort(key=lambda x: x['total_mbps'], reverse=True)
         best = valid_results[0]
         
         equipment.snmp_traffic_interface_index = best['index']
@@ -570,7 +467,6 @@ async def auto_configure_traffic_interface(
             "total_traffic": best['total_mbps'],
             "all_interfaces_with_traffic": valid_results
         }
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -631,66 +527,15 @@ async def auto_detect_all(
         
         # STEP 2: Detectar interface de tráfego
         try:
+            from backend.app.services.snmp import get_snmp_interfaces, measure_interfaces_traffic
             interfaces = await get_snmp_interfaces(ip, community, port)
             if not interfaces:
                 result["errors"].append("Nenhuma interface encontrada via SNMP")
             else:
-                # Testar tráfego em cada interface
-                async def test_interface(iface):
-                    idx = iface['index']
-                    try:
-                        traffic1 = await get_snmp_interface_traffic(ip, community, port, idx)
-                        if not traffic1:
-                            return None
-                        
-                        in_bytes1, out_bytes1 = traffic1
-                        time1 = time.time()
-                        
-                        await asyncio.sleep(3)
-                        
-                        traffic2 = await get_snmp_interface_traffic(ip, community, port, idx)
-                        if not traffic2:
-                            return None
-                        
-                        in_bytes2, out_bytes2 = traffic2
-                        time2 = time.time()
-                        
-                        dt = time2 - time1
-                        delta_in = max(0, in_bytes2 - in_bytes1)
-                        delta_out = max(0, out_bytes2 - out_bytes1)
-                        
-                        mbps_in = round((delta_in * 8) / (dt * 1_000_000), 2)
-                        mbps_out = round((delta_out * 8) / (dt * 1_000_000), 2)
-                        total_mbps = mbps_in + mbps_out
-                        
-                        if total_mbps > 0:
-                            return {
-                                'index': idx,
-                                'name': iface['name'],
-                                'in_mbps': mbps_in,
-                                'out_mbps': mbps_out,
-                                'total_mbps': total_mbps
-                            }
-                        return None
-                    except Exception:
-                        return None
-                
-                # Testar com limite de concorrência
-                sem = asyncio.Semaphore(10)
-                
-                async def test_with_semaphore(iface):
-                    async with sem:
-                        return await test_interface(iface)
-                
-                tasks = [test_with_semaphore(iface) for iface in interfaces]
-                results = await asyncio.gather(*tasks)
-                
-                valid_results = [r for r in results if r is not None]
+                valid_results = await measure_interfaces_traffic(ip, community, port, interfaces, brand=brand)
                 
                 if valid_results:
-                    valid_results.sort(key=lambda x: x['total_mbps'], reverse=True)
                     best = valid_results[0]
-                    
                     result["snmp_traffic_interface_index"] = best['index']
                     result["traffic_in"] = best['in_mbps']
                     result["traffic_out"] = best['out_mbps']

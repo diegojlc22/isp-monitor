@@ -1,6 +1,6 @@
 
 """
-ISP Monitor - Launcher v3.0 (Professional Edition)
+ISP Monitor - Launcher v3.0 (by: Diego)
 Interface gráfica moderna e robusta para gerenciamento do sistema.
 """
 import tkinter as tk
@@ -52,16 +52,16 @@ except Exception as e:
 
 # Cores (Tema Dark Moderno)
 COLORS = {
-    'bg': '#1e1e2e',           # Fundo Principal
-    'card': '#313244',         # Fundo de Cartões/Containers
-    'text': '#cdd6f4',         # Texto Principal
-    'subtext': '#a6adc8',      # Texto Secundário
-    'primary': '#89b4fa',      # Azul (Acentos)
-    'success': '#a6e3a1',      # Verde (Online/Start)
-    'warning': '#f9e2af',      # Amarelo (Reiniciar)
-    'danger': '#f38ba8',       # Vermelho (Parar/Kill)
-    'terminal': '#11111b',     # Fundo do Log
-    'terminal_fg': '#a6e3a1'   # Texto do Log
+    'bg': '#0f172a',           # Slate 950 (Fundo Principal)
+    'card': '#1e293b',         # Slate 800 (Fundo de Cartões)
+    'text': '#f8fafc',         # Slate 50 (Texto Principal)
+    'subtext': '#94a3b8',      # Slate 400 (Texto Secundário)
+    'primary': '#38bdf8',      # Sky 400 (Azul Brilhante)
+    'success': '#4ade80',      # Green 400 (Online)
+    'warning': '#fbbf24',      # Amber 400 (Alerta)
+    'danger': '#f87171',       # Red 400 (Erro)
+    'terminal': '#020617',     # Deep Navy (Log)
+    'terminal_fg': '#4ade80'   # Green 400 (Texto Log)
 }
 
 class ModernLauncher:
@@ -78,7 +78,7 @@ class ModernLauncher:
                     if "PYTHON_VERSION_REQUIRED" in line: self.python_req = line.split('=')[1].strip().strip('"')
         except: pass
 
-        self.root.title(f"ISP Monitor | Python {self.python_req} Edition")
+        self.root.title(f"ISP Monitor | by: Diego")
         
         # Configuração de Janela Inteligente
         self.center_window(700, 600)
@@ -196,16 +196,29 @@ class ModernLauncher:
         header = tk.Frame(main_container, bg=COLORS['bg'])
         header.pack(fill=tk.X, pady=(0, 10))
         
-        tk.Label(
-            header, text="ISP MONITOR", font=("Segoe UI", 20, "bold"), 
-            bg=COLORS['bg'], fg=COLORS['primary']
-        ).pack(side=tk.LEFT)
+        # Título e Subtítulo
+        title_frame = tk.Frame(header, bg=COLORS['bg'])
+        title_frame.pack(side=tk.LEFT)
         
+        tk.Label(
+            title_frame, text="ISP MONITOR", font=("Inter", 24, "bold"), 
+            bg=COLORS['bg'], fg=COLORS['primary']
+        ).pack(anchor="w")
+        
+        tk.Label(
+            title_frame, text="Network Intelligence | by: Diego", font=("Inter", 10, "italic"), 
+            bg=COLORS['bg'], fg=COLORS['subtext']
+        ).pack(anchor="w", padx=2)
+        
+        # Status Badge com estilo de pílula
+        status_container = tk.Frame(header, bg=COLORS['bg'])
+        status_container.pack(side=tk.RIGHT, pady=5)
+
         self.status_badge = tk.Label(
-            header, text="● OFFLINE", font=("Segoe UI", 10), 
-            bg=COLORS['bg'], fg=COLORS['danger']
+            status_container, text="● OFFLINE", font=("Inter", 10, "bold"), 
+            bg=COLORS['bg'], fg=COLORS['danger'], padx=10, pady=5
         )
-        self.status_badge.pack(side=tk.RIGHT, pady=5)
+        self.status_badge.pack()
 
         # Sistema de Abas
         self.notebook = ttk.Notebook(main_container)
@@ -224,7 +237,7 @@ class ModernLauncher:
         self.build_logs_tab(self.tab_logs)
 
         # Rodapé Global
-        self.info_label = tk.Label(main_container, text="Sistema pronto.", font=("Segoe UI", 9), bg=COLORS['bg'], fg=COLORS['subtext'])
+        self.info_label = tk.Label(main_container, text="Sistema pronto.", font=("Inter", 9), bg=COLORS['bg'], fg=COLORS['subtext'])
         self.info_label.pack(side=tk.BOTTOM, pady=5)
 
     def build_home_tab(self, parent):
@@ -240,51 +253,51 @@ class ModernLauncher:
         self.frontend_frame = tk.Frame(force_frame, bg=COLORS['card'], padx=10, pady=8)
         self.frontend_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 20))
         
-        lbl_fe = tk.Label(self.frontend_frame, text="Status Web:", font=("Segoe UI", 9, "bold"), bg=COLORS['card'], fg=COLORS['text'])
+        lbl_fe = tk.Label(self.frontend_frame, text="Status Web:", font=("Inter", 9, "bold"), bg=COLORS['card'], fg=COLORS['text'])
         lbl_fe.pack(side=tk.LEFT)
         
         self.btn_update_front = tk.Button(self.frontend_frame, text="✔ Sistema Atualizado", 
                                           command=self.run_frontend_build_manual,
-                                          bg=COLORS['card'], fg=COLORS['success'], relief="flat", state="disabled", font=("Segoe UI", 8))
+                                          bg=COLORS['card'], fg=COLORS['success'], relief="flat", state="disabled", font=("Inter", 8))
         self.btn_update_front.pack(side=tk.RIGHT)
 
         # --- BOTÃO PRINCIPAL (START) ---
         self.btn_start = self.create_button(force_frame, "▶  INICIAR SISTEMA", self.start_system, 
-                                          bg=COLORS['success'], fg='#1e1e2e', height=2, font=("Segoe UI", 13, "bold"))
+                                          bg=COLORS['success'], fg='#0f172a', height=2, font=("Inter", 13, "bold"))
         self.btn_start.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 5))
         
         self.btn_stop = self.create_button(force_frame, "⏹  PARAR SISTEMA", self.stop_system, 
-                                         bg='#45475a', fg=COLORS['danger'], height=1)
+                                         bg='#334155', fg=COLORS['danger'], height=1)
         self.btn_stop.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 20))
 
         # --- AÇÕES SECUNDÁRIAS (GRID) ---
         
         # Linha 1: Navegador e Atualizar
-        btn_dash = self.create_button(force_frame, "🌐 Abrir Site (Produção)", self.open_dashboard, bg=COLORS['primary'], fg='white')
+        btn_dash = self.create_button(force_frame, "🌐 Abrir Site (Produção)", self.open_dashboard, bg=COLORS['primary'], fg='#0f172a')
         btn_dash.grid(row=3, column=0, sticky="ew", padx=(0, 5), pady=5)
         
-        self.btn_update = self.create_button(force_frame, "⬇  Atualizar", self.update_system, bg='#00a8ff', fg='white')
+        self.btn_update = self.create_button(force_frame, "⬇  Atualizar", self.update_system, bg='#0ea5e9', fg='#0f172a')
         self.btn_update.grid(row=3, column=1, sticky="ew", padx=(5, 0), pady=5)
-
+ 
         # Linha 2: Mobile e Ngrok
-        btn_mobile = self.create_button(force_frame, "📱 Mobile (Expo)", self.start_expo, bg='#8e44ad', fg='white')
+        btn_mobile = self.create_button(force_frame, "📱 Mobile (Expo)", self.start_expo, bg='#a855f7', fg='#ffffff')
         btn_mobile.grid(row=4, column=0, sticky="ew", padx=(0, 5), pady=5)
         
-        btn_ngrok = self.create_button(force_frame, "🌍 Acesso Externo", self.start_ngrok, bg='#27ae60', fg='white')
+        btn_ngrok = self.create_button(force_frame, "🌍 Acesso Externo", self.start_ngrok, bg='#10b981', fg='#0f172a')
         btn_ngrok.grid(row=4, column=1, sticky="ew", padx=(5, 0), pady=5)
 
         # Linha 3: Modo Edição
-        self.btn_dev_mode = self.create_button(force_frame, "⚡ Modo Edição", self.start_dev_mode, bg='#f39c12', fg='#1e1e2e')
+        self.btn_dev_mode = self.create_button(force_frame, "⚡ Modo Edição", self.start_dev_mode, bg='#f59e0b', fg='#0f172a')
         self.btn_dev_mode.grid(row=5, column=0, columnspan=2, sticky="ew", pady=5)
-
+ 
         # Linha 4: Reiniciar
-        self.btn_restart = self.create_button(force_frame, "🔄  Reiniciar Serviços", self.restart_system, bg=COLORS['warning'], fg='#1e1e2e')
+        self.btn_restart = self.create_button(force_frame, "🔄  Reiniciar Serviços", self.restart_system, bg=COLORS['warning'], fg='#0f172a')
         self.btn_restart.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(5, 15))
         
-        # --- RODAPÉ DISCRETO ---
-        self.btn_kill = self.create_button(force_frame, "💀 Force Kill (Emergência)", self.force_kill, bg=COLORS['bg'], fg='#555')
-        self.btn_kill.config(relief="flat", font=("Segoe UI", 8))
-        self.btn_kill.grid(row=6, column=0, columnspan=2, sticky="ew", pady=0)
+        # --- RODAPÉ: BOTÃO DE EMERGÊNCIA REESTILIZADO ---
+        self.btn_kill = self.create_button(force_frame, "💀 Force Kill (Emergência)", self.force_kill, bg='#2d1a1a', fg='#fca5a5', height=1)
+        self.btn_kill.config(font=("Inter", 9, "bold"))
+        self.btn_kill.grid(row=7, column=0, columnspan=2, pady=(15, 0))
         
         # Start background check
         threading.Thread(target=self.check_frontend_updates_async, daemon=True).start()
@@ -600,22 +613,58 @@ class ModernLauncher:
     
 
 
-    def create_button(self, parent, text, command, bg, fg, font=("Segoe UI", 12, "bold"), height=2):
-        """Helper para criar botões estilizados"""
+    def create_button(self, parent, text, command, bg, fg, font=("Inter", 11, "bold"), height=2):
+        """Helper para criar botões com visual premium"""
         btn = tk.Button(
             parent, text=text, command=command,
             bg=bg, fg=fg, font=font,
             relief=tk.FLAT, cursor="hand2",
-            activebackground=bg, activeforeground=fg, # Simples hover
-            height=height
+            activebackground=bg, activeforeground=fg,
+            height=height,
+            padx=20,
+            borderwidth=0,
+            highlightthickness=0
         )
+        
+        # Armazena a cor base para o hover
+        btn.original_bg = bg
+        
+        def on_enter(e):
+            if btn['state'] == tk.NORMAL:
+                btn.config(background=self.get_darker_color(btn.original_bg))
+        
+        def on_leave(e):
+            if btn['state'] == tk.NORMAL:
+                btn.config(background=btn.original_bg)
+        
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+        
         return btn
+
+    def set_button_state(self, btn, state, active_bg=None, active_fg='#0f172a'):
+        """Helper para atualizar estado e cor de um botão de forma segura"""
+        if state == tk.NORMAL:
+            btn.original_bg = active_bg
+            btn.config(state=tk.NORMAL, bg=active_bg, fg=active_fg, cursor="hand2")
+        else:
+            btn.config(state=tk.DISABLED, bg='#1e293b', fg='#475569', cursor="arrow")
+
+    def get_darker_color(self, hex_color):
+        """Calcula uma versão ligeiramente mais escura da cor para o hover"""
+        try:
+            hex_color = hex_color.lstrip('#')
+            rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            darker_rgb = tuple(max(0, int(c * 0.85)) for c in rgb)
+            return '#%02x%02x%02x' % darker_rgb
+        except:
+            return hex_color
 
     # --- LÓGICA DO SISTEMA ---
 
     def check_status_loop(self):
         self.check_status()
-        self.root.after(5000, self.check_status_loop) # A cada 5 segundos
+        self.root.after(3000, self.check_status_loop) # Mais frequente (3s)
 
     def update_logs_loop(self):
         """Auto-atualiza os logs se estiver na aba de logs"""
@@ -656,14 +705,14 @@ class ModernLauncher:
                 self.is_running = is_up
                 if is_up:
                     self.status_badge.config(text=" ● ONLINE ", fg=COLORS['success'], highlightbackground=COLORS['success'])
-                    self.btn_start.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
-                    self.btn_stop.config(state=tk.NORMAL, bg=COLORS['danger'], fg='#1e1e2e')
-                    self.info_label.config(text="Sistema operando normalmente na porta 8080")
+                    self.set_button_state(self.btn_start, tk.DISABLED)
+                    self.set_button_state(self.btn_stop, tk.NORMAL, active_bg=COLORS['danger'], active_fg='#ffffff')
+                    self.info_label.config(text="✓ Sistema operando normalmente na porta 8080")
                 else:
                     self.status_badge.config(text=" ● OFFLINE ", fg=COLORS['danger'], highlightbackground=COLORS['danger'])
-                    self.btn_start.config(state=tk.NORMAL, bg=COLORS['success'], fg='#1e1e2e')
-                    self.btn_stop.config(state=tk.DISABLED, bg='#2a2b3c', fg='#555')
-                    self.info_label.config(text="Sistema parado. Clique em INICIAR para começar.")
+                    self.set_button_state(self.btn_start, tk.NORMAL, active_bg=COLORS['success'])
+                    self.set_button_state(self.btn_stop, tk.DISABLED)
+                    self.info_label.config(text="⚠ Sistema parado. Clique em INICIAR para começar.")
         except Exception as e:
             pass
 
@@ -866,50 +915,22 @@ class ModernLauncher:
         return True
 
     def run_frontend_build(self, new_hash, hash_file):
-        """Build inteligente com progresso real"""
-        # Janela de Progresso
-        build_win = tk.Toplevel(self.root)
-        build_win.title("Atualizando Interface...")
-        build_win.geometry("450x180")
-        build_win.configure(bg=COLORS['bg'])
-        build_win.resizable(False, False)
+        """Build inteligente diretamente no botão da interface (sem popup)"""
         
-        # Centralizar
-        x = (self.root.winfo_screenwidth() - 450) // 2
-        y = (self.root.winfo_screenheight() - 180) // 2
-        build_win.geometry(f"+{x}+{y}")
+        # Configuração inicial do estado de progresso no botão
+        self.btn_update_front.config(state="disabled", text="🔨 Iniciando Build...")
+        self.root.update()
         
-        # Labels
-        title_label = tk.Label(build_win, text="Otimizando e Compilando...", 
-                fg=COLORS['text'], bg=COLORS['bg'], font=("Segoe UI", 12, "bold"))
-        title_label.pack(pady=(20, 5))
-        
-        status_label = tk.Label(build_win, text="Iniciando build...", 
-                fg=COLORS['subtext'], bg=COLORS['bg'], font=("Segoe UI", 9))
-        status_label.pack(pady=5)
-        
-        # Barra de Progresso (Determinada)
-        bar = ttk.Progressbar(build_win, mode='determinate', maximum=100)
-        bar.pack(fill=tk.X, padx=30, pady=10)
-        
-        # Label de Porcentagem
-        percent_label = tk.Label(build_win, text="0%", 
-                fg=COLORS['primary'], bg=COLORS['bg'], font=("Segoe UI", 10, "bold"))
-        percent_label.pack(pady=5)
-        
-        build_win.update()
-        
-        # Executar npm run build em thread separada
         success = False
         error_msg = ""
         
-        def update_progress(percent, message):
-            """Atualiza UI de forma thread-safe"""
+        def update_button_progress(percent, message):
+            """Atualiza o texto do botão de forma thread-safe"""
             try:
-                bar['value'] = percent
-                percent_label.config(text=f"{int(percent)}%")
-                status_label.config(text=message)
-                build_win.update()
+                # Texto resumido para caber no botão
+                percent_int = int(percent)
+                self.btn_update_front.config(text=f"🔨 {percent_int}% - {message}")
+                self.root.update()
             except:
                 pass
         
@@ -925,7 +946,7 @@ class ModernLauncher:
                     error_msg = "Node.js/NPM não encontrado no sistema!"
                     return
                 
-                update_progress(10, "Preparando ambiente...")
+                update_button_progress(5, "Verificando...")
                 
                 # Executar build
                 process = subprocess.Popen(
@@ -939,8 +960,8 @@ class ModernLauncher:
                     bufsize=1
                 )
                 
-                # Monitorar output em tempo real
                 progress = 10
+                update_button_progress(progress, "Compilando...")
                 output_lines = []
                 
                 for line in iter(process.stdout.readline, ''):
@@ -950,63 +971,55 @@ class ModernLauncher:
                     output_lines.append(line)
                     line_lower = line.lower()
                     
-                    # Detectar etapas do Vite
+                    # Detectar etapas do Vite e traduzir/simplificar para o botão
                     if 'vite' in line_lower and 'building' in line_lower:
                         progress = 20
-                        update_progress(progress, "Iniciando Vite...")
+                        update_button_progress(progress, "Vite...")
                     elif 'transforming' in line_lower or 'transform' in line_lower:
-                        progress = min(progress + 15, 50)
-                        update_progress(progress, "Transformando arquivos...")
+                        progress = min(progress + 0.5, 70) # Incremento lento para parecer fluido
+                        update_button_progress(progress, "Processando...")
                     elif 'rendering' in line_lower or 'render' in line_lower:
-                        progress = min(progress + 15, 70)
-                        update_progress(progress, "Renderizando componentes...")
+                        progress = min(progress + 5, 85)
+                        update_button_progress(progress, "Renderizando...")
                     elif 'computing' in line_lower or 'chunk' in line_lower:
-                        progress = min(progress + 10, 85)
-                        update_progress(progress, "Otimizando chunks...")
-                    elif 'writing' in line_lower or 'dist' in line_lower:
-                        progress = min(progress + 10, 95)
-                        update_progress(progress, "Gerando arquivos...")
-                    elif 'built in' in line_lower or 'done' in line_lower:
-                        progress = 100
-                        update_progress(progress, "Build concluído!")
+                        progress = min(progress + 5, 95)
+                        update_button_progress(progress, "Otimizando...")
                 
                 process.wait()
                 
                 if process.returncode == 0:
-                    update_progress(100, "✓ Build concluído com sucesso!")
+                    update_button_progress(100, "Concluído!")
                     # Salvar novo hash
                     with open(hash_file, "w") as f:
                         f.write(new_hash)
                     success = True
                 else:
-                    error_msg = f"Build falhou (código {process.returncode})\n\nÚltimas linhas:\n" + "\n".join(output_lines[-10:])
+                    error_msg = f"Build falhou (Erro {process.returncode}).\n\nConfira os logs ou tente novamente."
                     
             except Exception as e:
-                error_msg = f"Erro crítico durante build:\n{str(e)}"
+                error_msg = f"Erro no build:\n{str(e)}"
         
-        # Executar build em thread
+        # Executar build em thread para manter a interface responsiva
         build_thread = threading.Thread(target=run_build, daemon=True)
         build_thread.start()
         
-        # Aguardar conclusão (com timeout de 120s)
-        timeout = 120
-        start_time = time.time()
+        # Loop de espera na UI principal
         while build_thread.is_alive():
-            if time.time() - start_time > timeout:
-                error_msg = "Build timeout (>120s). Verifique se há erros no código."
-                break
-            build_win.update()
+            self.root.update()
             time.sleep(0.1)
         
-        build_win.destroy()
-        
-        # Mostrar resultado
-        if error_msg:
-            messagebox.showerror("Erro no Build", error_msg)
-        elif success:
-            messagebox.showinfo("Sucesso", "Interface atualizada com sucesso!")
+        # Resultado Final
+        if success:
+            self.btn_update_front.config(text="✔ Sistema Atualizado", bg=COLORS['card'], fg=COLORS['success'], state="disabled")
+            messagebox.showinfo("Sucesso", "Interface do usuário atualizada com sucesso!")
+        else:
+            # Em caso de erro, permitir tentar novamente
+            self.btn_update_front.config(text="❌ Erro (Tentar Novamente)", bg=COLORS['danger'], fg='white', state="normal", cursor="hand2")
+            if error_msg:
+                messagebox.showerror("Erro de Compilação", error_msg)
         
         return success
+
         
     def wait_for_start(self):
         """Aguarda inicialização verificando logs"""
