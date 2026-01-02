@@ -26,7 +26,7 @@ class AlertSchema(BaseModel):
         from_attributes = True
 
 @router.get("/", response_model=List[AlertSchema])
-async def get_alerts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_alerts(skip: int = 0, limit: int = 500, db: AsyncSession = Depends(get_db)):
     """Retorna alertas com cache de 10 segundos (alertas mudam rápido)"""
     # ✅ Tentar cache primeiro
     cache_key = f"alerts_list_{skip}_{limit}"

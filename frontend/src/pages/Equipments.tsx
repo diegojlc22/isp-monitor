@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus, scanInterfaces, autoDetectAll } from '../services/api';
+import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, deleteEquipmentsBatch, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus, scanInterfaces, autoDetectAll } from '../services/api';
 import { useScanner } from '../contexts/ScannerContext';
 
 import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus } from 'lucide-react';
@@ -414,11 +414,15 @@ export function Equipments() {
     };
 
     const handleBatchDelete = async () => {
-        if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.length} equipamentos ? `)) return;
+        if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.length} equipamentos?`)) return;
         try {
-            for (const id of selectedIds) { await deleteEquipment(id); }
-            toast.success('Equipamentos excluídos!'); setSelectedIds([]); load();
-        } catch (e) { toast.error('Erro ao excluir alguns itens.'); }
+            await deleteEquipmentsBatch(selectedIds);
+            toast.success('Equipamentos excluídos!');
+            setSelectedIds([]);
+            load();
+        } catch (e: any) {
+            toast.error('Erro ao excluir alguns itens: ' + (e.response?.data?.detail || e.message));
+        }
     };
 
     const handleBatchReboot = async () => {
@@ -1093,7 +1097,7 @@ export function Equipments() {
                         </div>
                         <div className="flex flex-col gap-2 mb-4">
                             <div className="flex gap-2">
-                                <input className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP Range (ex: 192.168.103.1/24)" value={scanRangeInput} onChange={e => setScanRangeInput(e.target.value)} disabled={isScanning} />
+                                <input className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="Range (ex: 192.168.1.0/24, 10.0.0.50-100, 8.8.8.8)" value={scanRangeInput} onChange={e => setScanRangeInput(e.target.value)} disabled={isScanning} />
                                 <button onClick={handleScanStart} className={clsx("text-white px-6 rounded font-bold shadow-lg transition-all", isScanning ? "bg-red-600 hover:bg-red-500" : "bg-blue-600 hover:bg-blue-500")}>
                                     {isScanning ? 'Parar' : 'Escanear'}
                                 </button>

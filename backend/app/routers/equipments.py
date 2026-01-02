@@ -129,7 +129,7 @@ async def stop_batch_detect(current_user=Depends(get_current_user)):
 @router.get("/", response_model=List[EquipmentSchema])
 async def read_equipments(
     skip: int = 0, 
-    limit: int = 100, 
+    limit: int = 10000, 
     tower_id: Optional[int] = None,
     is_online: Optional[bool] = None,
     db: AsyncSession = Depends(get_db)
@@ -204,6 +204,30 @@ async def create_equipments_batch(equipments: List[EquipmentCreate], db: AsyncSe
             raise HTTPException(status_code=500, detail=f"Erro ao salvar lote: {str(e)}")
             
     return results
+
+class BatchDeleteRequest(BaseModel):
+    ids: List[int]
+
+@router.post("/batch/delete")
+async def delete_equipments_batch(req: BatchDeleteRequest, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    """Bulk delete equipments by IDs"""
+    try:
+        from sqlalchemy import delete
+        
+        # We can use a single DELETE statement for performance
+        # Since we added CASCADE/SET NULL on the DB, this is safe and efficient
+        stmt = delete(Equipment).where(Equipment.id.in_(req.ids))
+        result = await db.execute(stmt)
+        await db.commit()
+        
+        # Clear cache as many items changed
+        await cache.clear()
+        
+        return {"message": f"{result.rowcount} equipments deleted", "count": result.rowcount}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir em lote: {str(e)}")
+
 
 @router.post("/", response_model=EquipmentSchema)
 async def create_equipment(equipment: EquipmentCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
@@ -677,83 +701,142 @@ async def scan_network_stream(
     snmp_community: str = Query("public"),
     snmp_port: int = Query(161)
 ):
+    from backend.app.database import AsyncSessionLocal
+    """
+    Scanner Inteligente e Rápido.
+    Suporta: 
+    - CIDR: 192.168.1.0/24
+    - Range: 192.168.1.10-50
+    - Multi: 10.0.0.1, 10.0.0.5, 192.168.0.0/24
+    """
     try:
         ips_to_scan = []
-        # Parse Logic - More flexible
-        if '/' in ip_range:
-            # Accept any IP with CIDR, e.g., 192.168.108.1/24 or 192.168.108.0/24
-            try:
-                net = ipaddress.ip_network(ip_range, strict=False)
-                ips_to_scan = [str(ip) for ip in net.hosts()]
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=f"CIDR inválido: {str(e)}")
-        elif '-' in ip_range:
-            # Range format: 192.168.1.1-192.168.1.50
-            try:
-                start_ip, end_ip = ip_range.split('-')
-                start = ipaddress.IPv4Address(start_ip.strip())
-                end = ipaddress.IPv4Address(end_ip.strip())
-                curr = start
-                while curr <= end:
-                    ips_to_scan.append(str(curr))
-                    curr += 1
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=f"Range inválido: {str(e)}")
-        else:
-            # Single IP - assume /24 network
-            try:
-                ip_str = ip_range.strip()
-                # Validate it's a valid IP first
-                ipaddress.IPv4Address(ip_str)
-                # Then create /24 network from it
-                net = ipaddress.ip_network(f"{ip_str}/24", strict=False)
-                ips_to_scan = [str(ip) for ip in net.hosts()]
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=f"IP inválido: {str(e)}")
-
-        async def process_result(result):
-            if result.get("is_online"):
+        
+        # Split by comma to support multiple targets
+        targets = [t.strip() for t in ip_range.split(',')]
+        
+        for target in targets:
+            if '/' in target:
                 try:
-                    # Parallelize brand and type detection
-                    brand = await detect_brand(result['ip'], snmp_community, snmp_port)
+                    net = ipaddress.ip_network(target, strict=False)
+                    # Skip network and broadcast for common subnets
+                    if net.prefixlen <= 30:
+                        ips_to_scan.extend([str(ip) for ip in net.hosts()])
+                    else:
+                        ips_to_scan.extend([str(ip) for ip in net])
+                except ValueError as e:
+                    logger.warning(f"CIDR inválido ignorado: {target}")
+            elif '-' in target:
+                try:
+                    if target.count('.') >= 4: # Format 192.168.1.1-192.168.1.10
+                        start_ip, end_ip = target.split('-')
+                    else: # Format 192.168.1.1-50
+                        base = target.rsplit('.', 1)[0]
+                        start_part, end_part = target.rsplit('.', 1)[1].split('-')
+                        start_ip = f"{base}.{start_part}"
+                        end_ip = f"{base}.{end_part}"
+                    
+                    start = ipaddress.IPv4Address(start_ip.strip())
+                    end = ipaddress.IPv4Address(end_ip.strip())
+                    curr = start
+                    while curr <= end:
+                        ips_to_scan.append(str(curr))
+                        curr += 1
+                except ValueError as e:
+                    logger.warning(f"Range inválido ignorado: {target}")
+            else:
+                # Single IP or assume /24 if looks like base
+                try:
+                    target_clean = target.strip()
+                    if target_clean.endswith('.0'):
+                         net = ipaddress.ip_network(f"{target_clean}/24", strict=False)
+                         ips_to_scan.extend([str(ip) for ip in net.hosts()])
+                    else:
+                        ipaddress.IPv4Address(target_clean)
+                        ips_to_scan.append(target_clean)
+                except ValueError:
+                    logger.warning(f"Alvo inválido ignorado: {target}")
+
+        # Unique IPs only and preserve some order
+        ips_to_scan = list(dict.fromkeys(ips_to_scan))
+        
+        if not ips_to_scan:
+            raise HTTPException(status_code=400, detail="Nenhum IP válido encontrado para escanear.")
+
+        # Load existing IPs for "smart" identification
+        async with AsyncSessionLocal() as db:
+            ex_res = await db.execute(select(Equipment.ip))
+            existing_ips = {row[0] for row in ex_res.all() if row[0]}
+
+        async def process_item(result):
+            # Mark as monitored if already in DB
+            result["is_monitored"] = result['ip'] in existing_ips
+            
+            if result.get("is_online") and not result["is_monitored"]:
+                try:
+                    # Brand detection with timeout to not block the stream too long
+                    brand = await asyncio.wait_for(
+                        detect_brand(result['ip'], snmp_community, snmp_port),
+                        timeout=3.0
+                    )
                     eq_type = await detect_equipment_type(result['ip'], brand, snmp_community, snmp_port)
                     result['brand'] = brand
                     result['equipment_type'] = eq_type
-                except Exception as e:
-                    print(f"Scan detection error for {result['ip']}: {e}")
+                except Exception:
+                    result['brand'] = 'generic'
+                    result['equipment_type'] = 'station'
             return result
 
         async def event_generator():
-            # Process in small worker chunks to maintain speed and concurrency
-            sem = asyncio.Semaphore(20) # Limit concurrent SNMP checks
-
-            async def wrapped_process(res):
-                async with sem:
-                    return await process_result(res)
-
-            # We iterate over scan_network results
-            tasks = []
-            async for result in scan_network(ips_to_scan):
-                # We want to yield something immediately for the ping result?
-                # Actually, to be FAST, we can yield the ping result first, 
-                # then yield the SNMP update later? 
-                # But the current frontend might expect one object per IP.
-                # Let's run SNMP in parallel and yield when done.
-                tasks.append(asyncio.create_task(wrapped_process(result)))
-                
-                # If we have a decent amount of tasks, wait for them
-                if len(tasks) >= 10:
-                    done_results = await asyncio.gather(*tasks)
-                    for r in done_results:
-                        yield f"data: {json.dumps(r)}\n\n"
-                    tasks = []
+            # Concurrency limit for SNMP/Details
+            sem = asyncio.Semaphore(15)
+            total_ips = len(ips_to_scan)
+            processed_count = 0
             
-            # Final tasks
-            if tasks:
-                done_results = await asyncio.gather(*tasks)
-                for r in done_results:
-                    yield f"data: {json.dumps(r)}\n\n"
+            async def detect_worker(res):
+                async with sem:
+                    return await process_item(res)
 
+            pending_tasks = set()
+            
+            # Use scan_network generator
+            async for ping_res in scan_network(ips_to_scan):
+                processed_count += 1
+                
+                # Yield progress every 10 IPs or if found something
+                should_yield_progress = (processed_count % 10 == 0 or processed_count == total_ips)
+                
+                # Se estiver online, inicia detecção em background
+                if ping_res.get("is_online"):
+                    task = asyncio.create_task(detect_worker(ping_res))
+                    pending_tasks.add(task)
+                    
+                    # Se tivermos muitas tarefas pendentes, vamos liberando conforme terminam
+                    # para não atrasar o stream
+                    if len(pending_tasks) >= 15:
+                        done, pending_tasks = await asyncio.wait(
+                            pending_tasks, 
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+                        for d in done:
+                            res = d.result()
+                            res["progress"] = round((processed_count / total_ips) * 100)
+                            yield f"data: {json.dumps(res)}\n\n"
+                else:
+                    # Offline - yield immediately if it's a progress milestone
+                    if should_yield_progress:
+                        ping_res["progress"] = round((processed_count / total_ips) * 100)
+                        yield f"data: {json.dumps(ping_res)}\n\n"
+
+            # Finalize any pending detections
+            if pending_tasks:
+                done = await asyncio.gather(*pending_tasks)
+                for res in done:
+                    res["progress"] = 100
+                    yield f"data: {json.dumps(res)}\n\n"
+            
+            # Ensure 100% progress at the end
+            yield f"data: {json.dumps({'progress': 100, 'is_online': False})}\n\n"
             yield "event: done\ndata: {}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")

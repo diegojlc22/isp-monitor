@@ -15,7 +15,7 @@ from backend.app.dependencies import get_current_user
 router = APIRouter(prefix="/towers", tags=["towers"])
 
 @router.get("/", response_model=List[TowerSchema])
-async def read_towers(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def read_towers(skip: int = 0, limit: int = 1000, db: AsyncSession = Depends(get_db)):
     # Tenta buscar do cache
     cache_key = f"towers_list_{skip}_{limit}"
     cached = await cache.get(cache_key)
@@ -38,8 +38,8 @@ async def create_tower(tower: TowerCreate, db: AsyncSession = Depends(get_db), c
     await db.commit()
     await db.refresh(db_tower)
     
-    # Invalida o cache de torres
-    await cache.delete("towers_list_0_100")
+    # Invalida o cache
+    await cache.clear()
     
     return db_tower
 
@@ -184,7 +184,7 @@ async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession
         await db.commit()
         
         # Invalida cache
-        await cache.delete("towers_list_0_100")
+        await cache.clear()
         
         return {"message": "Importação concluída", "imported": imported_count, "skipped": skipped_count}
 
@@ -235,7 +235,7 @@ async def delete_tower(tower_id: int, db: AsyncSession = Depends(get_db), curren
     await db.delete(db_tower)
     await db.commit()
     
-    # Invalida o cache de torres
-    await cache.delete("towers_list_0_100")
+    # Invalida o cache
+    await cache.clear()
     
     return {"message": "Tower deleted"}

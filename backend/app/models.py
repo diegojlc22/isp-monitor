@@ -52,7 +52,7 @@ class Equipment(Base):
     associated_clients = Column(Integer, default=0) # Total clientes
     
     # Hierarchy (If this device depends on another device)
-    parent_id = Column(Integer, ForeignKey("equipments.id"), nullable=True)
+    parent_id = Column(Integer, ForeignKey("equipments.id", ondelete="SET NULL"), nullable=True)
     
     # Status
     is_online = Column(Boolean, default=False)
@@ -116,7 +116,7 @@ class TrafficLog(Base):
     __tablename__ = "traffic_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    equipment_id = Column(Integer, ForeignKey("equipments.id"), index=True)
+    equipment_id = Column(Integer, ForeignKey("equipments.id", ondelete="CASCADE"), index=True)
     interface_index = Column(Integer, default=1, index=True)
     in_mbps = Column(Float)
     out_mbps = Column(Float)
@@ -126,7 +126,7 @@ class TrafficLog(Base):
 class LatencyHistory(Base):
     __tablename__ = "latency_history"
     id = Column(Integer, primary_key=True, index=True)
-    equipment_id = Column(Integer, index=True)
+    equipment_id = Column(Integer, ForeignKey("equipments.id", ondelete="CASCADE"), index=True)
     latency = Column(Float)
     packet_loss = Column(Float)
     timestamp = Column(Float, index=True)

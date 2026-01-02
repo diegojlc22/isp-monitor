@@ -265,16 +265,23 @@ class PingerService:
 import ipaddress
 
 # --- Utility Functions (Legacy Compatibility) ---
-async def scan_network(ips: List[str]):
+async def scan_network(ips: List[str], chunk_size: int = 255):
     """
-    Realiza ping em uma lista de IPs e gera resultados assincronamente.
+    Realiza ping em uma lista de IPs e gera resultados de forma ultra-rápida.
     """
-    chunk_size = 100
+    # Processamos em pedaços para não explodir a memória se a lista for gigante (ex: /16)
     for i in range(0, len(ips), chunk_size):
         chunk = ips[i : i + chunk_size]
         try:
-            # Ping agressivo para scanner de rede local
-            results = await async_multiping(chunk, count=1, interval=0.05, timeout=1.0, privileged=False)
+            # privileged=False usa sockets UDP para ping (padrão no Windows sem root)
+            # count=1 e timeout curto para velocidade máxima de descoberta
+            results = await async_multiping(
+                chunk, 
+                count=1, 
+                interval=0.01, 
+                timeout=0.8, 
+                privileged=False
+            )
             for host in results:
                 yield {
                     "ip": host.address,
@@ -283,9 +290,10 @@ async def scan_network(ips: List[str]):
                     "packet_loss": host.packet_loss
                 }
         except Exception as e:
-            logger.error(f"Scan error for chunk {chunk}: {e}")
-            # Yield some error or offline status for these ips if needed, 
-            # but for now just continue
+            logger.error(f"Rede inacessível ou erro no scan: {e}")
+            # Em caso de erro crítico no chunk, assume offline para não travar
+            for ip in chunk:
+                yield {"ip": ip, "is_online": False, "error": str(e)}
 
 
 def ensure_singleton():
