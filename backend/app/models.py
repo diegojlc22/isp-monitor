@@ -90,6 +90,13 @@ class Equipment(Base):
 
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps
+
+    # Health Metrics (Mikrotik/Health)
+    cpu_usage = Column(Integer, nullable=True)
+    memory_usage = Column(Integer, nullable=True)
+    disk_usage = Column(Integer, nullable=True)
+    temperature = Column(Float, nullable=True)
+    voltage = Column(Float, nullable=True)
     
     tower = relationship("Tower", back_populates="equipments")
     # Removido relationships de logs para evitar erro de FK e overload de memória
@@ -120,7 +127,12 @@ class TrafficLog(Base):
     interface_index = Column(Integer, default=1, index=True)
     in_mbps = Column(Float)
     out_mbps = Column(Float)
-    signal_dbm = Column(Float, nullable=True)
+    signal_dbm = Column(Float, nullable=True)    # Add health snapshots
+    cpu_usage = Column(Integer, nullable=True)
+    memory_usage = Column(Integer, nullable=True)
+    disk_usage = Column(Integer, nullable=True)
+    temperature = Column(Float, nullable=True)
+    voltage = Column(Float, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 class LatencyHistory(Base):

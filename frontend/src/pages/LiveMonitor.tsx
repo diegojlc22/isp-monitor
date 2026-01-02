@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, X, Activity, ArrowDownUp, Wifi, Users } from 'lucide-react';
+import { Plus, X, Activity, ArrowDownUp, Wifi, Users, Heart } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory, getLiveStatus } from '../services/api'; // NEW import
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -11,7 +11,7 @@ interface WidgetItem {
     y: number;
     w: number;
     h: number;
-    type: 'latency' | 'traffic' | 'signal' | 'clients';
+    type: 'latency' | 'traffic' | 'signal' | 'clients' | 'health';
     equipmentId: number;
     title: string;
     interfaceIndex?: number;
@@ -34,7 +34,7 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
         let isMounted = true;
         const fetchHistory = async () => {
             try {
-                if (item.type === 'signal' || item.type === 'clients') {
+                if (item.type === 'signal' || item.type === 'clients' || item.type === 'health') {
                     // Sinal e Client histórico não tem API específica, usa Equipamento status
                     // Vamos simular histórico ou iniciar com vazio
                     // Para simplificar, iniciamos o array apenas com o liveData atual se disponível
@@ -73,7 +73,14 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
         const now = new Date();
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        let newPoint: any = { time: timeStr };
+        let newPoint: any = {
+            time: timeStr,
+            cpu: liveData.health?.cpu_usage || 0,
+            ram: liveData.health?.memory_usage || 0,
+            disk: liveData.health?.disk_usage || 0,
+            temp: liveData.health?.temperature || 0,
+            volt: liveData.health?.voltage || 0
+        };
         let hasData = false;
 
         if (item.type === 'traffic') {
@@ -88,6 +95,8 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
             hasData = true;
         } else if (item.type === 'clients') {
             newPoint.clients = liveData.clients || 0;
+            hasData = true;
+        } else if (item.type === 'health') {
             hasData = true;
         }
 
@@ -109,8 +118,58 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
         if (item.type === 'latency') return <Activity size={14} className="text-emerald-400" />;
         if (item.type === 'traffic') return <ArrowDownUp size={14} className="text-blue-400" />;
         if (item.type === 'clients') return <Users size={14} className="text-purple-400" />;
+        if (item.type === 'health') return <Heart size={14} className="text-rose-400" />;
         return <Wifi size={14} className="text-yellow-400" />;
     };
+
+    const Gauge = ({ value, label, unit, color, max = 100 }: any) => {
+        const radius = 22;
+        const circumference = 2 * Math.PI * radius;
+        const percentage = Math.min(100, Math.max(0, (value / max) * 100));
+        const offset = circumference - (percentage / 100) * circumference;
+
+        return (
+            <div className="flex flex-col items-center justify-center flex-1 min-w-0">
+                <div className="relative w-12 h-12 sm:w-16 sm:h-16">
+                    <svg className="w-full h-full transform -rotate-90">
+                        <circle
+                            cx="50%"
+                            cy="50%"
+                            r={radius}
+                            stroke="#0f172a"
+                            strokeWidth="5"
+                            fill="transparent"
+                        />
+                        <circle
+                            cx="50%"
+                            cy="50%"
+                            r={radius}
+                            stroke={color}
+                            strokeWidth="5"
+                            fill="transparent"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={offset}
+                            strokeLinecap="round"
+                            className="transition-all duration-1000 ease-in-out"
+                            style={{ filter: `drop-shadow(0 0 2px ${color})` }}
+                        />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-[10px] sm:text-xs font-black text-white leading-none">
+                            {Math.round(value)}
+                        </span>
+                        <span className="text-[8px] sm:text-[10px] font-bold text-slate-500 -mt-0.5">{unit}</span>
+                    </div>
+                </div>
+                <span className="text-[9px] sm:text-[10px] uppercase font-black text-slate-300 mt-2 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700/50">
+                    {label}
+                </span>
+            </div>
+        );
+    };
+
+    // --- Componente de Gráfico Individual ---
+    const latest = data[data.length - 1] || {};
 
     return (
         <div className="h-full flex flex-col bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
@@ -127,6 +186,14 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
             <div className="flex-1 min-h-0 p-2 relative">
                 {loading && data.length === 0 ? (
                     <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">Carregando...</div>
+                ) : item.type === 'health' ? (
+                    <div className="h-full flex items-center justify-between px-1 gap-1">
+                        <Gauge value={latest.cpu || 0} label="CPU" unit="%" color="#ef4444" />
+                        <Gauge value={latest.ram || 0} label="RAM" unit="%" color="#3b82f6" />
+                        <Gauge value={latest.disk || 0} label="Disk" unit="%" color="#10b981" />
+                        <Gauge value={latest.temp || 0} label="Temp" unit="°" color="#f97316" />
+                        <Gauge value={latest.volt || 0} label="Volt" unit="V" color="#06b6d4" max={30} />
+                    </div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%">
                         {item.type === 'signal' ? (
@@ -159,7 +226,10 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
                                 <XAxis dataKey="time" hide />
                                 <YAxis stroke="#64748b" fontSize={10} width={25} tickLine={false} axisLine={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }} />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }}
+                                    formatter={(value: any) => [Math.round(value), 'Latência']}
+                                />
                                 <Area type="monotone" dataKey="latency" stroke="#10b981" fill={`url(#gradLatency-${item.i})`} strokeWidth={2} isAnimationActive={false} />
                             </AreaChart>
                         ) : (
@@ -191,7 +261,7 @@ export function LiveMonitor() {
 
     // Form state
     const [selectedEq, setSelectedEq] = useState('');
-    const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal' | 'clients'>('traffic');
+    const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal' | 'clients' | 'health'>('traffic');
     const [selectedInterface, setSelectedInterface] = useState<number>(1);
     const [interfaceList, setInterfaceList] = useState<{ index: number; name: string }[]>([]);
     const [isLoadingInterfaces, setIsLoadingInterfaces] = useState(false);
@@ -314,7 +384,7 @@ export function LiveMonitor() {
             type: selectedType,
             equipmentId: eq.id,
             interfaceIndex: selectedType === 'traffic' ? selectedInterface : undefined,
-            title: `${eq.name} - ${selectedType === 'traffic' ? (interfaceList.find(i => i.index === selectedInterface)?.name || 'Tráfego') : selectedType === 'signal' ? 'Sinal' : selectedType === 'clients' ? 'Clientes' : 'Latência'}`
+            title: `${eq.name} - ${selectedType === 'traffic' ? (interfaceList.find(i => i.index === selectedInterface)?.name || 'Tráfego') : selectedType === 'signal' ? 'Sinal' : selectedType === 'clients' ? 'Clientes' : selectedType === 'health' ? 'Saúde (CPU/T/V)' : 'Latência'}`
         };
 
         const newLayout = [...layout, newItem];
@@ -403,7 +473,16 @@ export function LiveMonitor() {
                                         <Activity size={16} /> Latência
                                     </button>
 
-                                    {(equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'station' || equipments.find(e => e.id.toString() === selectedEq)?.brand === 'mikrotik') && (
+                                    {equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'transmitter' && (
+                                        <button
+                                            onClick={() => setSelectedType('clients')}
+                                            className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'clients' ? 'bg-purple-600/20 border-purple-500 text-purple-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                        >
+                                            <Users size={16} /> Clientes
+                                        </button>
+                                    )}
+
+                                    {equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'station' && (
                                         <button
                                             onClick={() => setSelectedType('signal')}
                                             className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'signal' ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
@@ -412,12 +491,12 @@ export function LiveMonitor() {
                                         </button>
                                     )}
 
-                                    {equipments.find(e => e.id.toString() === selectedEq)?.equipment_type === 'transmitter' && (
+                                    {equipments.find(e => e.id.toString() === selectedEq)?.brand === 'mikrotik' && (
                                         <button
-                                            onClick={() => setSelectedType('clients')}
-                                            className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'clients' ? 'bg-purple-600/20 border-purple-500 text-purple-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                            onClick={() => setSelectedType('health')}
+                                            className={`px-4 py-2 rounded-lg border flex items-center justify-center gap-2 transition-colors ${selectedType === 'health' ? 'bg-rose-600/20 border-rose-500 text-rose-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-600'}`}
                                         >
-                                            <Users size={16} /> Clientes
+                                            <Heart size={16} /> Saúde
                                         </button>
                                     )}
                                 </div>

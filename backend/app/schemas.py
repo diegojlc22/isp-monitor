@@ -44,6 +44,11 @@ class EquipmentBase(BaseModel):
     signal_dbm: Optional[float] = None
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
+    cpu_usage: Optional[int] = None
+    memory_usage: Optional[int] = None
+    disk_usage: Optional[int] = None
+    temperature: Optional[float] = None
+    voltage: Optional[float] = None
     whatsapp_groups: Optional[List[str]] = []
 
     @validator('whatsapp_groups', pre=True)

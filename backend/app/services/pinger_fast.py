@@ -22,7 +22,7 @@ PING_INTERVAL = settings.ping_interval_seconds
 
 class PingerService:
     def __init__(self):
-        self.targets: Dict[str, Dict] = {} # IP -> {id, name, status}
+        self.targets: Dict[str, Dict] = {} # IP -> {id, name, status, fail_count}
         self.config: Dict[str, str] = {}
         self.results_queue = asyncio.Queue()
         self.running = True
@@ -35,13 +35,25 @@ class PingerService:
                     res_eq = await session.execute(select(Equipment.ip, Equipment.id, Equipment.name, Equipment.is_online).where(Equipment.ip != None))
                     eqs = res_eq.all()
                     for row in eqs:
-                        self.targets[row[0]] = {"id": row[1], "name": row[2], "status": row[3]}
+                        prev = self.targets.get(row[0], {})
+                        self.targets[row[0]] = {
+                            "id": row[1], 
+                            "name": row[2], 
+                            "status": row[3],
+                            "fail_count": prev.get("fail_count", 0) 
+                        }
                     
                     # Carregar Torres
                     res_tw = await session.execute(select(Tower.ip, Tower.id, Tower.name, Tower.is_online).where(Tower.ip != None))
                     tws = res_tw.all()
                     for row in tws:
-                        self.targets[row[0]] = {"id": row[1], "name": row[2], "status": row[3]}
+                        prev = self.targets.get(row[0], {})
+                        self.targets[row[0]] = {
+                            "id": row[1], 
+                            "name": row[2], 
+                            "status": row[3],
+                            "fail_count": prev.get("fail_count", 0)
+                        }
 
                 logger.debug(f"Targets synchronized: {len(eqs)} equipments, {len(tws)} towers.")
             except Exception as e:
@@ -69,48 +81,65 @@ class PingerService:
             await asyncio.sleep(60)
 
     async def ping_worker(self):
-        logger.info("Ping Worker Started (Hyper-Turbo Mode)")
-        sem = asyncio.Semaphore(5) # Limita a 5 processos multiping paralelos (1500 IPs simultâneos)
+        logger.info("Ping Worker Started (Zabbix-Style Engine)")
         
-        async def process_chunk(chunk):
-            async with sem:
+        # Zabbix Architecture: Fixed Pool of Pingers (Workers)
+        # We simulate this using a Semaphore to limit concurrent "multiping" batches.
+        # Window's socket limit is strict, so we stay well below.
+        
+        MAX_CONCURRENT_PINGS = 50 # Equivalent to "StartPingers"
+        pool_sem = asyncio.Semaphore(5) # Allow 5 batches parallel (5 * 10 IPs = 50 inflight)
+
+        async def worker_task(targets_chunk):
+            async with pool_sem:
                 try:
-                    # count=1 para monitoramento rápido de status
-                    results = await async_multiping(chunk, count=1, interval=0.1, timeout=PING_TIMEOUT, privileged=False)
+                    # Using RAW Sockets (privileged=True) for real ICMP RTT
+                    # Count=2, Interval=0.05s for stability
+                    results = await async_multiping(
+                        targets_chunk, 
+                        count=2, 
+                        interval=0.05, 
+                        timeout=1.0, 
+                        privileged=True 
+                    )
+                    
                     for host in results:
                         await self.results_queue.put({
                             "ip": host.address,
                             "is_online": host.is_alive,
-                            "latency": host.avg_rtt,
+                            "latency": round(host.avg_rtt, 1) if host.is_alive else 0,
                             "packet_loss": host.packet_loss,
                             "timestamp": time.time()
                         })
                 except Exception as e:
-                    logger.error(f"Error in pinger chunk: {e}")
+                    logger.error(f"Pinger Batch Error: {e}")
 
         while self.running:
-            start_time = time.time()
-            all_targets = list(self.targets.keys())
+            cycle_start = time.time()
             
-            # Filter valid IPs only
-            ips = [ip for ip in all_targets if self.is_valid_target(ip)]
+            # Snapshot targets
+            all_targets = [ip for ip in self.targets.keys() if self.is_valid_target(ip)]
             
-            if not ips:
-                await asyncio.sleep(5)
+            if not all_targets:
+                await asyncio.sleep(2)
                 continue
-            
-            chunk_size = settings.ping_concurrent_limit # Padrão 300
+
+            # Chunk targets into small batches for the "Pool"
+            BATCH_SIZE = 10 
             tasks = []
-            for i in range(0, len(ips), chunk_size):
-                chunk = ips[i : i + chunk_size]
-                tasks.append(asyncio.create_task(process_chunk(chunk)))
+            
+            for i in range(0, len(all_targets), BATCH_SIZE):
+                chunk = all_targets[i : i + BATCH_SIZE]
+                tasks.append(asyncio.create_task(worker_task(chunk)))
             
             if tasks:
                 await asyncio.gather(*tasks)
+
+            # Accurate Interval Control
+            elapsed = time.time() - cycle_start
+            sleep_time = max(0.5, PING_INTERVAL - elapsed) # Respect configured interval
             
-            elapsed = time.time() - start_time
-            sleep_time = max(1.0, PING_INTERVAL - elapsed)
-            logger.debug(f"Cycle finished in {elapsed:.2f}s. Total IPs: {len(ips)}. Sleeping {sleep_time:.2f}s")
+            # logger.debug(f"Ping Cycle: {len(all_targets)} hosts in {elapsed:.2f}s. Sleeping {sleep_time:.2f}s")
             await asyncio.sleep(sleep_time)
 
     def is_valid_target(self, target: str) -> bool:
@@ -171,11 +200,29 @@ class PingerService:
                     
                     eq_id = target_info['id']
                     old_status = target_info['status']
-                    new_status = item['is_online']
+                    raw_new_status = item['is_online']
                     
+                    # --- FLAP PROTECTION LOGIC ---
+                    if not raw_new_status:
+                        # Falhou o ping
+                        target_info['fail_count'] = target_info.get('fail_count', 0) + 1
+                    else:
+                        # Sucesso no ping
+                        target_info['fail_count'] = 0
+
+                    # Somente muda para OFFLINE se falhar 3x seguidas
+                    if target_info['fail_count'] >= 3:
+                        new_status = False
+                    elif raw_new_status:
+                        # Se deu online uma vez, já considera online (recuperação rápida)
+                        new_status = True
+                    else:
+                        # Ainda em "queda livre" mas não atingiu limite, mantém status anterior
+                        new_status = old_status
+
                     # Detect Change
                     if old_status is not None and old_status != new_status:
-                        # Status Mudou!
+                        # Status Mudou Efetivamente!
                         target_info['status'] = new_status # Atualiza memoria IMEDIATAMENTE
                         
                         device_name = target_info['name']
@@ -215,19 +262,22 @@ class PingerService:
                     update_list.append({
                         "p_id": eq_id,
                         "p_online": item['is_online'],
-                        "p_last_ping": item['timestamp']
+                        "p_last_ping": item['timestamp'],
+                        "p_latency": None
                     })
                     if item['is_online']:
+                        latency_val = round(item['latency'])
                         latency_inserts.append({
                             "eid": eq_id,
-                            "lat": item['latency'],
+                            "lat": latency_val,
                             "loss": item['packet_loss'],
                             "ts": item['timestamp']
                         })
+                        update_list[-1]["p_latency"] = latency_val
                 
                 if update_list:
                     await session.execute(
-                        text("UPDATE equipments SET is_online = :p_online, last_ping = :p_last_ping WHERE id = :p_id"),
+                        text("UPDATE equipments SET is_online = :p_online, last_ping = :p_last_ping, last_latency = :p_latency WHERE id = :p_id"),
                         update_list
                     )
                 if latency_inserts:

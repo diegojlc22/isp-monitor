@@ -8,6 +8,66 @@ import psutil
 import time
 from backend.app.services.topology import run_topology_discovery
 from backend.app.dependencies import get_current_user
+import os
+
+# --- APP RESOURCE TRACKING ---
+_proc_cache = {} # pid -> psutil.Process object
+_metrics_cache = {
+    "data": None,
+    "timestamp": 0
+}
+
+def get_app_metrics():
+    """Calculates CPU and RAM consumption for our app processes with 5s cache."""
+    now = time.time()
+    if _metrics_cache["data"] and (now - _metrics_cache["timestamp"]) < 5:
+        return _metrics_cache["data"]
+        
+    app_cpu = 0.0
+    app_ram_rss = 0
+    project_root = os.path.abspath(os.getcwd()).lower()
+    
+    # Identify our processes
+    for proc in psutil.process_iter(['pid', 'cmdline', 'memory_info']):
+        try:
+            pinfo = proc.info
+            cmdline_list = pinfo.get('cmdline')
+            if not cmdline_list: continue
+            
+            cmdline = " ".join(cmdline_list).lower()
+            
+            # Check if it belongs to our project
+            if project_root in cmdline or any(k in cmdline for k in ["backend.app.main", "collector.py", "self_heal.py", "server.js"]):
+                app_ram_rss += pinfo.get('memory_info').rss if pinfo.get('memory_info') else 0
+                
+                pid = pinfo['pid']
+                if pid not in _proc_cache:
+                    _proc_cache[pid] = proc
+                
+                app_cpu += _proc_cache[pid].cpu_percent(interval=None)
+                
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    # Cleanup _proc_cache for dead processes
+    current_pids = {p.pid for p in psutil.process_iter()}
+    for cached_pid in list(_proc_cache.keys()):
+        if cached_pid not in current_pids:
+            del _proc_cache[cached_pid]
+
+    ram_total = psutil.virtual_memory().total
+    cpu_count = psutil.cpu_count() or 1
+    
+    res = {
+        "cpu_percent": round(app_cpu / cpu_count, 1),
+        "ram_percent": round((app_ram_rss / ram_total) * 100, 1) if ram_total > 0 else 0,
+        "ram_used_gb": round(app_ram_rss / (1024**3), 2),
+        "ram_total_gb": round(ram_total / (1024**3), 2),
+        "is_app_only": True
+    }
+    _metrics_cache["data"] = res
+    _metrics_cache["timestamp"] = now
+    return res
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -45,16 +105,14 @@ async def get_system_health(db: AsyncSession = Depends(get_db)):
     # 3. Database Stats
     start_time = time.time()
     await db.execute(select(func.now()))
-    db_latency = round((time.time() - start_time) * 1000, 2)
+    db_latency = round((time.time() - start_time) * 1000)
     
     # 4. Recent Alerts
     res_alerts = await db.execute(select(Alert).order_by(Alert.timestamp.desc()).limit(10))
     alerts = res_alerts.scalars().all()
     
-    # 5. System Resources (CPU/RAM)
-    # interval=None to not block
-    cpu_usage = psutil.cpu_percent()
-    ram = psutil.virtual_memory()
+    # 5. Resources (Cached)
+    resources = get_app_metrics()
     
     return {
         "status": "ok",
@@ -71,12 +129,7 @@ async def get_system_health(db: AsyncSession = Depends(get_db)):
             "status": "connected",
             "latency_ms": db_latency
         },
-        "resources": {
-            "cpu_percent": cpu_usage,
-            "ram_percent": ram.percent,
-            "ram_used_gb": round(ram.used / (1024**3), 2),
-            "ram_total_gb": round(ram.total / (1024**3), 2)
-        },
+        "resources": resources,
         "alerts": alerts,
-        "version": "2.0.0"
+        "version": "2.1.0"
     }

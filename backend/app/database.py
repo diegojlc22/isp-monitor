@@ -19,8 +19,8 @@ try:
         db_url,
         echo=False,
         future=True,
-        pool_size=5,       # Reduzido para 5 (mais leve)
-        max_overflow=2,    # Reduzido para 2
+        pool_size=20,      # Aumentado para lidar com 400+ dispositivos
+        max_overflow=10,   # Aumentado para picos de scanner/polling
         pool_timeout=30,
         pool_recycle=300,  # Recicla a cada 5 min
         pool_pre_ping=True,

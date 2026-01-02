@@ -5,10 +5,10 @@ from backend.app.database import AsyncSessionLocal
 from backend.app.models import Equipment, TrafficLog
 from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
-from backend.app.services.wireless_snmp import get_wireless_stats
+from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats
 
 # Config
-SNMP_INTERVAL = 5 # Check SNMP every 5s (Real-time mode)
+SNMP_INTERVAL = 5 # Check SNMP every 5s (Turbo Mode for Live Monitor)
 
 # ✅ SPRINT 3: Smart Logging - Tracking de estado
 # Armazena último valor salvo para evitar logs duplicados
@@ -60,6 +60,23 @@ async def snmp_monitor_job():
                             clients = await get_connected_clients_count(ip, brand, community, port)
                             if clients is not None:
                                  result["updates"]["connected_clients"] = clients
+                        
+                        # --- HEALTH STATS (CPU, Temp, Voltage) ---
+                        if brand == 'mikrotik':
+                            try:
+                                h_stats = await get_health_stats(ip, brand, community, port)
+                                if h_stats['cpu_usage'] is not None:
+                                    result["updates"]["cpu_usage"] = h_stats['cpu_usage']
+                                if h_stats.get('memory_usage') is not None:
+                                    result["updates"]["memory_usage"] = h_stats['memory_usage']
+                                if h_stats.get('disk_usage') is not None:
+                                    result["updates"]["disk_usage"] = h_stats['disk_usage']
+                                if h_stats['temperature'] is not None:
+                                    result["updates"]["temperature"] = h_stats['temperature']
+                                if h_stats['voltage'] is not None:
+                                    result["updates"]["voltage"] = h_stats['voltage']
+                            except Exception as e:
+                                pass
                     except Exception as e:
                         # Falha silenciosa para wireless não travar tráfego
                         pass
@@ -225,6 +242,11 @@ async def snmp_monitor_job():
                                 "out_mbps": out_mbps,
                                 "interface_index": if_idx,
                                 "signal_dbm": res["updates"].get("signal_dbm"),
+                                "cpu_usage": res["updates"].get("cpu_usage"),
+                                "memory_usage": res["updates"].get("memory_usage"),
+                                "disk_usage": res["updates"].get("disk_usage"),
+                                "temperature": res["updates"].get("temperature"),
+                                "voltage": res["updates"].get("voltage"),
                                 "timestamp": datetime.now()  # Sem timezone para compatibilidade
                             })
                             # Atualizar tracking

@@ -316,3 +316,139 @@ async def get_connected_clients_count(ip, brand, community, port=161):
         except: continue
             
     return None
+
+async def get_health_stats(ip, brand, community, port=161):
+    """
+    Fetches Health Stats (CPU, Temperature, Voltage) based on brand.
+    Primarily for MikroTik.
+    Returns dict: {'cpu_usage': int, 'temperature': float, 'voltage': float}
+    """
+    stats = {
+        'cpu_usage': None, 
+        'memory_usage': None, 
+        'disk_usage': None, 
+        'temperature': None, 
+        'voltage': None
+    }
+    brand_key = brand.lower()
+
+    if brand_key == 'mikrotik':
+        # 1. CPU Load
+        try:
+            cpu = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.3.3.1.2.1', port)
+            if cpu is not None:
+                stats['cpu_usage'] = int(cpu)
+            else:
+                cpu_walk = await get_snmp_walk_first(ip, community, '1.3.6.1.2.1.25.3.3.1.2', port)
+                if cpu_walk is not None: stats['cpu_usage'] = int(cpu_walk)
+        except: pass
+
+        # --- DYNAMIC STORAGE LOOKUP (RAM/DISK) ---
+        try:
+            # Helper to walk an OID and return dict {index: value_str}
+            async def snmp_walk_map(oid_root):
+                mapping = {}
+                from pysnmp.hlapi.asyncio import nextCmd, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, SnmpEngine
+                engine = SnmpEngine()
+                auth = CommunityData(community, mpModel=1)
+                target = UdpTransportTarget((ip, port), timeout=2, retries=1)
+                curr_oid = ObjectIdentity(oid_root)
+                
+                while True:
+                    try:
+                        errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
+                            engine, auth, target, ContextData(), ObjectType(curr_oid), lexicographicMode=False
+                        )
+                        if errorIndication or errorStatus or not varBinds: break
+                        
+                        oid, val = varBinds[0]
+                        str_oid = str(oid)
+                        if not str_oid.startswith(oid_root): break
+                        
+                        idx = str_oid.split('.')[-1]
+                        mapping[idx] = str(val)
+                        curr_oid = oid
+                    except: break
+                return mapping
+
+            # Walk Descriptions: .1.3.6.1.2.1.25.2.3.1.3
+            storage_descs = await snmp_walk_map('1.3.6.1.2.1.25.2.3.1.3')
+            
+            ram_idx = None
+            disk_idx = None
+            
+            for idx, desc in storage_descs.items():
+                d_lower = desc.lower()
+                if 'main memory' in d_lower or 'ram' in d_lower:
+                    ram_idx = idx
+                elif 'flash' in d_lower or 'system disk' in d_lower or 'hard disk' in d_lower:
+                    # Prefer flash/system over others if multiple, but first found is ok
+                    if not disk_idx: disk_idx = idx
+
+            # Get Values if indices found
+            if ram_idx:
+                try:
+                    total = await get_snmp_value(ip, community, f'1.3.6.1.2.1.25.2.3.1.5.{ram_idx}', port)
+                    used = await get_snmp_value(ip, community, f'1.3.6.1.2.1.25.2.3.1.6.{ram_idx}', port)
+                    if total and used and int(total) > 0:
+                        stats['memory_usage'] = round((int(used) / int(total)) * 100)
+                except: pass
+            else:
+                 # Fallback Legacy
+                try:
+                    total_ram = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.2.3.1.5.65536', port)
+                    used_ram = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.2.3.1.6.65536', port)
+                    if total_ram and used_ram and int(total_ram) > 0:
+                        stats['memory_usage'] = round((int(used_ram) / int(total_ram)) * 100)
+                except: pass
+
+            if disk_idx:
+                try:
+                    total = await get_snmp_value(ip, community, f'1.3.6.1.2.1.25.2.3.1.5.{disk_idx}', port)
+                    used = await get_snmp_value(ip, community, f'1.3.6.1.2.1.25.2.3.1.6.{disk_idx}', port)
+                    if total and used and int(total) > 0:
+                        stats['disk_usage'] = round((int(used) / int(total)) * 100)
+                except: pass
+            else:
+                # Fallback Legacy
+                try:
+                    total = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.2.3.1.5.131072', port)
+                    used = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.2.3.1.6.131072', port)
+                    if total and used and int(total) > 0:
+                        stats['disk_usage'] = round((int(used) / int(total)) * 100)
+                except: pass
+
+        except Exception as e:
+            # print(f"Storage Error: {e}")
+            pass
+
+        # 4. Temperature
+        try:
+            # Try OIDs: .6 (CPU Temp), .11 (Device Temp), .10 (Old Temp)
+            for oid in ['1.3.6.1.4.1.14988.1.1.3.11.0', '1.3.6.1.4.1.14988.1.1.3.6.0', '1.3.6.1.4.1.14988.1.1.3.10.0']:
+                temp = await get_snmp_value(ip, community, oid, port)
+                if temp is not None:
+                    stats['temperature'] = round(float(temp) / 10.0, 1)
+                    break
+        except: pass
+
+        # 5. Voltage
+        # 5. Voltage
+        try:
+            # Candidate OIDs: .8.0 (Standard), .8 (No zero), .14.0 (Some newer/older models)
+            for oid in ['1.3.6.1.4.1.14988.1.1.3.8.0', '1.3.6.1.4.1.14988.1.1.3.8', '1.3.6.1.4.1.14988.1.1.3.14.0']:
+                volt = await get_snmp_value(ip, community, oid, port)
+                if volt is not None:
+                    raw_val = float(volt)
+                    # Smart Scaling:
+                    # If > 50, assume DeciVolts (e.g. 245 = 24.5V)
+                    # If <= 50, assume Volts (e.g. 24 = 24V)
+                    # Most MikroTik are 12V-50V range.
+                    if raw_val > 50:
+                        stats['voltage'] = round(raw_val / 10.0, 1)
+                    else:
+                        stats['voltage'] = round(raw_val, 1)
+                    break 
+        except: pass
+
+    return stats

@@ -21,6 +21,7 @@ from backend.app.services.wireless_snmp import detect_brand, detect_equipment_ty
 from backend.app.dependencies import get_current_user
 from pydantic import BaseModel
 from fastapi import BackgroundTasks
+from backend.app.config import logger
 
 router = APIRouter(prefix="/equipments", tags=["equipments"])
 
@@ -651,9 +652,9 @@ async def test_equipment_connection(eq_id: int, db: AsyncSession = Depends(get_d
         return {
             "ip": db_eq.ip,
             "is_online": host.is_alive,
-            "latency": host.avg_rtt,
+            "latency": round(host.avg_rtt) if host.is_alive else 0,
             "packet_loss": host.packet_loss,
-            "details": f"Min: {host.min_rtt}ms, Max: {host.max_rtt}ms"
+            "details": f"Min: {round(host.min_rtt)}ms, Max: {round(host.max_rtt)}ms"
         }
     except Exception as e:
         return {"is_online": False, "error": str(e), "ip": db_eq.ip}
@@ -788,54 +789,65 @@ async def scan_network_stream(
             return result
 
         async def event_generator():
-            # Concurrency limit for SNMP/Details
             sem = asyncio.Semaphore(15)
             total_ips = len(ips_to_scan)
             processed_count = 0
-            
+            pending_tasks = set()
+
             async def detect_worker(res):
                 async with sem:
                     return await process_item(res)
 
-            pending_tasks = set()
-            
-            # Use scan_network generator
             async for ping_res in scan_network(ips_to_scan):
                 processed_count += 1
                 
-                # Yield progress every 10 IPs or if found something
-                should_yield_progress = (processed_count % 10 == 0 or processed_count == total_ips)
-                
-                # Se estiver online, inicia detecção em background
-                if ping_res.get("is_online"):
-                    task = asyncio.create_task(detect_worker(ping_res))
-                    pending_tasks.add(task)
-                    
-                    # Se tivermos muitas tarefas pendentes, vamos liberando conforme terminam
-                    # para não atrasar o stream
-                    if len(pending_tasks) >= 15:
-                        done, pending_tasks = await asyncio.wait(
-                            pending_tasks, 
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-                        for d in done:
+                # Check for finished tasks (non-blocking)
+                if pending_tasks:
+                    done, pending_tasks = await asyncio.wait(
+                        pending_tasks, 
+                        timeout=0, 
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for d in done:
+                        try:
                             res = d.result()
                             res["progress"] = round((processed_count / total_ips) * 100)
                             yield f"data: {json.dumps(res)}\n\n"
+                        except Exception: pass
+
+                if ping_res.get("is_online"):
+                    # Start SNMP worker in background
+                    task = asyncio.create_task(detect_worker(ping_res))
+                    pending_tasks.add(task)
+                    
+                    # If we have too many concurrent workers, wait for some to finish
+                    if len(pending_tasks) >= 30:
+                        done, pending_tasks = await asyncio.wait(
+                            pending_tasks,
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+                        for d in done:
+                            try:
+                                res = d.result()
+                                res["progress"] = round((processed_count / total_ips) * 100)
+                                yield f"data: {json.dumps(res)}\n\n"
+                            except Exception: pass
                 else:
-                    # Offline - yield immediately if it's a progress milestone
-                    if should_yield_progress:
+                    # Offline: yield every 10 IPs to keep connection alive and show progress
+                    if processed_count % 10 == 0 or processed_count == total_ips:
                         ping_res["progress"] = round((processed_count / total_ips) * 100)
                         yield f"data: {json.dumps(ping_res)}\n\n"
 
-            # Finalize any pending detections
+            # Finalize remaining background tasks
             if pending_tasks:
-                done = await asyncio.gather(*pending_tasks)
-                for res in done:
-                    res["progress"] = 100
-                    yield f"data: {json.dumps(res)}\n\n"
+                for completed_task in asyncio.as_completed(pending_tasks):
+                    try:
+                        res = await completed_task
+                        res["progress"] = 100
+                        yield f"data: {json.dumps(res)}\n\n"
+                    except Exception: pass
             
-            # Ensure 100% progress at the end
+            # Ensure 100% progress and close
             yield f"data: {json.dumps({'progress': 100, 'is_online': False})}\n\n"
             yield "event: done\ndata: {}\n\n"
 
@@ -875,7 +887,7 @@ async def get_latency_history(
         dt_object = datetime.fromtimestamp(log.timestamp, timezone.utc)
         data.append({
             "timestamp": dt_object.isoformat(),
-            "latency": log.latency,
+            "latency": round(log.latency) if log.latency is not None else 0,
             "packet_loss": log.packet_loss
         })
     
@@ -1054,8 +1066,15 @@ async def get_live_status_batch(req: LiveStatusRequest, db: AsyncSession = Depen
         resp[eq.id] = {
             "traffic": {"in": eq.last_traffic_in, "out": eq.last_traffic_out},
             "signal": {"dbm": eq.signal_dbm, "ccq": eq.ccq},
+            "health": {
+                "cpu_usage": eq.cpu_usage,
+                "memory_usage": eq.memory_usage,
+                "disk_usage": eq.disk_usage,
+                "temperature": eq.temperature,
+                "voltage": eq.voltage
+            },
             "clients": eq.connected_clients,
-            "latency": eq.last_latency,
+            "latency": round(eq.last_latency) if eq.last_latency is not None else 0,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     return resp

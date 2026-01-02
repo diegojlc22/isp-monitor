@@ -52,7 +52,7 @@ async def check_ping(target: str) -> dict:
         result = await async_ping(host, count=2, timeout=2, privileged=False)
         
         if result.is_alive:
-            return {"success": True, "latency": result.avg_rtt}
+            return {"success": True, "latency": round(result.avg_rtt)}
         else:
              return {"success": False, "latency": None}
     except Exception as e:
@@ -85,7 +85,7 @@ async def check_http(url: str) -> dict:
         reader, writer = await asyncio.open_connection(domain, 443)
         writer.close()
         await writer.wait_closed()
-        latency = (time.time() - start) * 1000
+        latency = round((time.time() - start) * 1000)
         return {"success": True, "latency": latency, "code": 200}
     except Exception:
          # Fallback to ping if HTTP fails (maybe firewall blocks port 443)
@@ -214,7 +214,7 @@ async def run_single_test_cycle():
                 log = SyntheticLog(
                     test_type=t.type,
                     target=t.target,
-                    latency_ms=res.get("latency") if res.get("latency") else 0,
+                    latency_ms=round(res.get("latency")) if res.get("latency") else 0,
                     success=res.get("success"),
                     timestamp=datetime.utcnow()
                 )
@@ -329,7 +329,7 @@ async def synthetic_agent_job():
                     log = SyntheticLog(
                         test_type=r["type"],
                         target=r["target"],
-                        latency_ms=r["latency"] if r["latency"] else 0,
+                        latency_ms=round(r["latency"]) if r["latency"] else 0,
                         success=r["success"],
                         timestamp=datetime.utcnow() # Naive for Postgres
                     )
@@ -397,7 +397,7 @@ async def synthetic_agent_job():
                     msg = (
                         "🚨 *IA DETECTOU DEGRADAÇÃO* 🚨\n\n"
                         "📉 *Status:* Instabilidade Confirmada\n"
-                        f"⏱️ *Latência Média:* {int(avg_lat)}ms\n"
+                        f"⏱️ *Latência Média:* {round(avg_lat)}ms\n"
                         f"🕒 *Horário:* {current_hour}:00h\n\n"
                         "🔍 *Análise Estatística:*\n"
                     )

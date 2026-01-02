@@ -351,7 +351,7 @@ const Agent: React.FC = () => {
                                                     "font-mono text-sm font-bold",
                                                     log.latency_ms > 200 ? "text-amber-400" : "text-green-400"
                                                 )}>
-                                                    {log.latency_ms.toFixed(1)}ms
+                                                    {Math.round(log.latency_ms)}ms
                                                 </span>
                                             ) : (
                                                 <span className="text-gray-600">-</span>

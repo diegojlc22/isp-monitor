@@ -20,25 +20,24 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 ---
 
 
-## 🚀 Novidades da Versão 4.3 (01/01/2026) - Autonomous Network Edition
+## 🚀 Novidades da Versão 4.4 (02/01/2026) - Zabbix Engine Edition
 
-### 🌍 1. Topologia Automática e Descoberta de Rede
-O sistema agora "desenha" o mapa da rede sozinho:
-- **Auto-Discovery via SNMP**: Uma varredura inteligente detecta vizinhos via **LLDP** e **MNDP**.
-- **Desenho Automático de Links**: Criação automática de conexões entre Torres no mapa.
-- **Identificação de Equipamentos**: Detecta automaticamente Marca (Ubiquiti/Mikrotik), Tipo (AP/Estação) e MAC Address.
-- **Botão "Auto Topologia"**: Integrado ao Mapa para atualização sob demanda.
+### ⚡ 1. Novo Motor de Ping (Zabbix Architecture)
+O núcleo de monitoramento foi reescrito para precisão cirúrgica:
+- **ICMP RAW Real**: Abandono de simulações UDP. Agora usa sockets nativos do kernel (igual ao comando `ping`).
+- **Controle de Concorrência**: Sistema de semáforos limita threads "in-flight" para evitar overhead no Windows.
+- **Resultado**: Latência precisa (<1ms em rede local) e eliminação de "falsos positivos" em horários de pico.
 
-### �️ 2. Watchdog de Sistema (Doctor V3.7)
-Um monitor de processos implacável (`scripts/self_heal.py`) que garante "Imortalidade" ao sistema:
-- **Zombie Hunter**: Detecta e mata processos travados ou "zumbis".
-- **Auto-Restart**: Se a API, o Coletor ou o WhatsApp cair, ele levanta novamente em segundos.
-- **Prevenção de Conflitos**: Mecanismo de **Lock File** garante que apenas uma instância do guardião rode por vez.
+### 🏥 2. Monitoramento de Hardware Avançado
+Suporte completo para sensores de saúde de equipamentos (foco em MikroTik):
+- **Métricas Completas**: CPU, Memória RAM, Uso de Disco (Flash/HDD), Temperatura e Voltagem.
+- **Detecção Inteligente**: O sistema descobre automaticamente os sensores corretos via varredura SNMP dinâmica.
+- **Visualização Premium**: Novos gauges circulares para leitura rápida no painel ao vivo.
 
-### � 3. Relatórios PDF & SLA
-- **Relatório de Disponibilidade**: Novo gerador de PDF na aba Relatórios.
-- **Métricas Reais**: Uptime precisa baseada em logs e Latência média por equipamento.
-- **Design Profissional**: Relatórios formatados prontos para enviar ao cliente ou gerência.
+### 🏎️ 3. Live Monitor "Turbo Mode"
+- **Atualização em Tempo Real**: Telemetria de tráfego e latência agora atualiza a cada 5 segundos (antes 30s).
+- **Correção de "Degraus"**: Gráficos suaves e precisos que refletem a realidade instantânea da rede.
+- **Auto-Repair de Banco**: Script de migração (`apply_migration_v2.py`) garante integridade das novas colunas.
 
 ### 🔒 4. Segurança Reforçada
 - **Rotas Protegidas**: Todas as operações críticas (Reboot, Configuração, Delete) agora exigem token JWT.

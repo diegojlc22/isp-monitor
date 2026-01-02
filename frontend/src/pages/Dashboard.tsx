@@ -156,6 +156,7 @@ export function Dashboard() {
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc', fontSize: '12px' }}
                                         labelStyle={{ color: '#94a3b8' }}
+                                        formatter={(value: any) => [Math.round(value), 'Latência']}
                                     />
                                     <ReferenceLine y={historyConfig.critical} stroke="#fb7185" strokeDasharray="3 3" />
                                     <ReferenceLine y={historyConfig.good} stroke="#4ade80" strokeDasharray="3 3" />

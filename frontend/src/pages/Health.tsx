@@ -128,20 +128,20 @@ export function Health() {
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-6">
                         <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                                <span className="flex items-center gap-2 text-slate-400"><Cpu size={16} /> CPU</span>
+                                <span className="flex items-center gap-2 text-slate-400"><Cpu size={16} /> CPU (Monitor)</span>
                                 <span className="text-white font-bold">{health?.resources?.cpu_percent}%</span>
                             </div>
                             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                                 <div
                                     className={clsx("h-full transition-all duration-500", health?.resources?.cpu_percent > 80 ? "bg-rose-500" : "bg-blue-500")}
-                                    style={{ width: `${health?.resources?.cpu_percent}%` }}
+                                    style={{ width: `${Math.min(health?.resources?.cpu_percent, 100)}%` }}
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                                <span className="flex items-center gap-2 text-slate-400"><HardDrive size={16} /> Memória RAM</span>
+                                <span className="flex items-center gap-2 text-slate-400"><HardDrive size={16} /> Memória RAM (Monitor)</span>
                                 <span className="text-white font-bold">{health?.resources?.ram_percent}%</span>
                             </div>
                             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
