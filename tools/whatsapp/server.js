@@ -109,18 +109,28 @@ client.on('ready', () => {
 
     // Apagar o QR code se existir
     if (fs.existsSync('./whatsapp-qr.png')) {
-        fs.unlinkSync('./whatsapp-qr.png');
+        try {
+            fs.unlinkSync('./whatsapp-qr.png');
+        } catch (e) {
+            console.error('[WHATSAPP] Erro ao limpar QR code:', e.message);
+        }
     }
 
     // CRIAR ARQUIVO DE SINAL PARA O LAUNCHER
-    fs.writeFileSync('./whatsapp_is_ready.txt', 'READY');
+    try {
+        fs.writeFileSync('./whatsapp_is_ready.txt', 'READY');
+    } catch (e) {
+        console.error('[WHATSAPP] Erro ao criar arquivo de sinal:', e.message);
+    }
 });
 
 client.on('disconnected', () => {
     console.log('[WHATSAPP] Cliente desconectado!');
     isReady = false;
     if (fs.existsSync('./whatsapp_is_ready.txt')) {
-        fs.unlinkSync('./whatsapp_is_ready.txt');
+        try {
+            fs.unlinkSync('./whatsapp_is_ready.txt');
+        } catch (e) { }
     }
 });
 
@@ -252,9 +262,14 @@ app.listen(PORT, async () => {
             console.warn('[WHATSAPP] 🧹 Detectada sessão corrompida. Limpando para auto-reparo...');
             const sessionPath = path.join(__dirname, 'session');
             if (fs.existsSync(sessionPath)) {
-                fs.rmSync(sessionPath, { recursive: true, force: true });
-                console.log('[WHATSAPP] ✨ Sessão limpa. O sistema tentará gerar um novo QR Code no próximo início.');
-                process.exit(1); // Sai para o Self-Heal reiniciar o processo do zero
+                try {
+                    fs.rmSync(sessionPath, { recursive: true, force: true });
+                    console.log('[WHATSAPP] ✨ Sessão limpa. O sistema tentará gerar um novo QR Code no próximo início.');
+                    process.exit(1); // Sai para o Self-Heal reiniciar o processo do zero
+                } catch (e) {
+                    console.error('[WHATSAPP] Falha ao limpar sessão:', e.message);
+                    // Não sai do processo se falhar o delete, tenta continuar ou avisa
+                }
             }
         }
     }

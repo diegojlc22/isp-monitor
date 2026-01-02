@@ -192,7 +192,7 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
                         <Gauge value={latest.ram || 0} label="RAM" unit="%" color="#3b82f6" />
                         <Gauge value={latest.disk || 0} label="Disk" unit="%" color="#10b981" />
                         <Gauge value={latest.temp || 0} label="Temp" unit="°" color="#f97316" />
-                        <Gauge value={latest.volt || 0} label="Volt" unit="V" color="#06b6d4" max={30} />
+                        <Gauge value={latest.volt || 0} label="Volt" unit="V" color="#06b6d4" max={60} />
                     </div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%">

@@ -424,31 +424,67 @@ async def get_health_stats(ip, brand, community, port=161):
 
         # 4. Temperature
         try:
-            # Try OIDs: .6 (CPU Temp), .11 (Device Temp), .10 (Old Temp)
-            for oid in ['1.3.6.1.4.1.14988.1.1.3.11.0', '1.3.6.1.4.1.14988.1.1.3.6.0', '1.3.6.1.4.1.14988.1.1.3.10.0']:
+            # Try OIDs: .11 (Device), .10 (Old Device), .14 (CPU), .6 (Old CPU)
+            for oid in ['1.3.6.1.4.1.14988.1.1.3.11.0', '1.3.6.1.4.1.14988.1.1.3.10.0', '1.3.6.1.4.1.14988.1.1.3.14.0', '1.3.6.1.4.1.14988.1.1.3.6.0']:
                 temp = await get_snmp_value(ip, community, oid, port)
                 if temp is not None:
+                    # Mikrotik is usually decidegrees (e.g. 570 = 57.0C)
                     stats['temperature'] = round(float(temp) / 10.0, 1)
                     break
         except: pass
 
         # 5. Voltage
-        # 5. Voltage
-        try:
-            # Candidate OIDs: .8.0 (Standard), .8 (No zero), .14.0 (Some newer/older models)
-            for oid in ['1.3.6.1.4.1.14988.1.1.3.8.0', '1.3.6.1.4.1.14988.1.1.3.8', '1.3.6.1.4.1.14988.1.1.3.14.0']:
+        voltage_oids = [
+            '1.3.6.1.4.1.14988.1.1.3.8.0',  # Standard System Voltage
+            '1.3.6.1.4.1.14988.1.1.3.1.0',  # Input Voltage
+            '1.3.6.1.4.1.14988.1.1.3.17.0', # PSU1 Voltage (Newer CRS/CCR)
+            '1.3.6.1.4.1.14988.1.1.3.18.0'  # PSU2 Voltage
+        ]
+        
+        for oid in voltage_oids:
+            try:
                 volt = await get_snmp_value(ip, community, oid, port)
-                if volt is not None:
-                    raw_val = float(volt)
-                    # Smart Scaling:
-                    # If > 50, assume DeciVolts (e.g. 245 = 24.5V)
-                    # If <= 50, assume Volts (e.g. 24 = 24V)
-                    # Most MikroTik are 12V-50V range.
-                    if raw_val > 50:
-                        stats['voltage'] = round(raw_val / 10.0, 1)
+                
+                # Check for None or empty string
+                if volt is None: continue
+                volt_str = str(volt).strip()
+                if not volt_str: continue
+                
+                try:
+                    raw_val = float(volt_str)
+                except ValueError:
+                    continue
+                    
+                if raw_val <= 0: continue
+                
+                # Smart Scaling
+                final_v = raw_val
+                
+                # Case 1: Decivolts (Most common, e.g. 245 -> 24.5V)
+                # Range 10V to 90V (100-900)
+                if 100 <= raw_val <= 900: 
+                    final_v = raw_val / 10.0
+                
+                # Case 2: High Values (centi-volts or milli-volts)
+                # e.g. 7560 
+                elif raw_val > 900:
+                    v_cV = raw_val / 100.0   # 7560 -> 75.6V
+                    v_mV = raw_val / 1000.0  # 7560 -> 7.56V
+                    
+                    # Heuristic: Prefer standard telecom/network ranges (10V-60V)
+                    if 10 <= v_cV <= 60:
+                        final_v = v_cV
                     else:
-                        stats['voltage'] = round(raw_val, 1)
-                    break 
-        except: pass
+                        # Fallback to mV (likely internal rail like 3.3V, 5V, 12V, or just modest voltage)
+                        final_v = v_mV
+                        
+                # Case 3: Already Volts (e.g. 24)
+                elif 3 <= raw_val <= 100:
+                    final_v = raw_val
+                    
+                stats['voltage'] = round(final_v, 1)
+                break 
+            except: 
+                continue
 
     return stats

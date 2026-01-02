@@ -132,7 +132,25 @@ async def main():
     tasks.append(asyncio.create_task(heartbeat_loop()))
 
     # Manter o processo vivo aguardando as tarefas
-    await asyncio.gather(*tasks)
+    print("[COLLECTOR] 🚀 Todas as tarefas iniciadas. Entrando em loop infinito monitorado.")
+    
+    try:
+        # return_exceptions=True impede que uma falha em uma tarefa mate as outras
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Se chegou aqui, é porque TODAS as tarefas terminaram (o que não deveria acontecer)
+        for r in results:
+            if isinstance(r, Exception):
+                print(f"[CRITICAL] Uma tarefa falhou fatalmente: {r}")
+                import traceback
+                # Tentar imprimir traceback se disponível
+                try: traceback.print_exception(type(r), r, r.__traceback__)
+                except: pass
+                
+    except Exception as e:
+        print(f"[CRITICAL] Erro catastrófico no gather principal: {e}")
+    finally:
+        print("[COLLECTOR] O processo principal está encerrando (todas as tarefas morreram).")
 
 if __name__ == "__main__":
     try:
