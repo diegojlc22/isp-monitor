@@ -112,7 +112,7 @@ class PingerService:
                             "timestamp": time.time()
                         })
                 except Exception as e:
-                    logger.error(f"Pinger Batch Error: {e}")
+                    logger.error(f"Pinger Batch Error (continuing): {e}")
 
         while self.running:
             cycle_start = time.time()

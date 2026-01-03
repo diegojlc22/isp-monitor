@@ -1,6 +1,9 @@
 import asyncio
 import sys
 import os
+import signal
+import traceback
+from loguru import logger
 
 # Adicionar o diretório raiz ao PYTHONPATH para imports funcionarem
 sys.path.append(os.getcwd())
@@ -10,18 +13,23 @@ from backend.app.services.pinger_fast import PingerService
 from backend.app.services.snmp_monitor import snmp_monitor_job
 from backend.app.services.synthetic_agent import synthetic_agent_job
 from backend.app.services.maintenance import cleanup_job
-
 from backend.app.services.topology import run_topology_discovery
+
+# Configure Loguru
+logger.add("collector_supervisor.log", rotation="1 MB", retention="5 days", level="INFO")
 
 async def topology_loop():
     """Roda descoberta de topologia a cada 30 minutos"""
-    print("[COLLECTOR] Discovery de Topologia agendado (30min)")
+    logger.info("[COLLECTOR] Discovery de Topologia agendado (30min)")
     while True:
         try:
             await asyncio.sleep(60) # Espera sistema inicializar
             await run_topology_discovery()
+        except asyncio.CancelledError:
+            logger.info("[TOPOLOGY] Loop cancelado.")
+            break
         except Exception as e:
-            print(f"[ERROR] Falha na descoberta de topologia: {e}")
+            logger.error(f"[ERROR] Falha na descoberta de topologia: {e}")
             
         await asyncio.sleep(1800) # 30 min
 
@@ -31,7 +39,7 @@ async def heartbeat_loop():
     from backend.app.database import AsyncSessionLocal
     from datetime import datetime, timezone
     
-    print("[COLLECTOR] Heartbeat iniciado (10s)")
+    logger.info("[COLLECTOR] Heartbeat iniciado (10s)")
     while True:
         try:
             async with AsyncSessionLocal() as db:
@@ -42,51 +50,57 @@ async def heartbeat_loop():
                 else:
                     param.value = datetime.now(timezone.utc).isoformat()
                 await db.commit()
+        except asyncio.CancelledError:
+            logger.info("[HEARTBEAT] Loop cancelado.")
+            break
         except Exception as e:
-            print(f"[WARN] Falha no heartbeat do collector: {e}")
+            logger.warning(f"[WARN] Falha no heartbeat do collector: {e}")
         
         await asyncio.sleep(10)
 
 async def maintenance_loop():
     """Roda tarefas de limpeza a cada 24 horas"""
-    print("[COLLECTOR] Agendador de limpeza iniciado (24h)")
+    logger.info("[COLLECTOR] Agendador de limpeza iniciado (24h)")
     while True:
         try:
             await asyncio.sleep(60) # Espera sistema estabilizar na primeira vez
             await cleanup_job()
+        except asyncio.CancelledError:
+            logger.info("[MAINTENANCE] Loop cancelado.")
+            break
         except Exception as e:
-            print(f"[ERROR] Falha na manutenção diária: {e}")
+            logger.error(f"[ERROR] Falha na manutenção diária: {e}")
         
         # Esperar 24h (86400 segundos)
         await asyncio.sleep(86400)
 
 async def main():
-    print("---------------------------------------------------------")
-    print("[COLLECTOR] Iniciando Processo de Coleta Independente...")
-    print("---------------------------------------------------------")
+    logger.info("---------------------------------------------------------")
+    logger.info("[COLLECTOR] Iniciando Processo de Coleta Independente (SUPERVISOR V2)...")
+    logger.info("---------------------------------------------------------")
     
     # Garantir que o banco existe (With Retries)
     db_ok = False
-    print("[COLLECTOR] ⏳ Aguardando estabilização do PostgreSQL...")
-    for attempt in range(10): # Mais tentativas para o coletor
+    logger.info("[COLLECTOR] ⏳ Aguardando estabilização do PostgreSQL...")
+    for attempt in range(10): 
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("[COLLECTOR] ✅ Conexão estabelecida e banco verificado.")
+            logger.info("[COLLECTOR] ✅ Conexão estabelecida e banco verificado.")
             db_ok = True
             break
         except Exception as e:
             error_str = str(e).lower()
             if "connection was closed" in error_str or "connectiondoesnotexist" in error_str:
                 wait_time = 2 + attempt
-                print(f"[COLLECTOR] 📡 Conexão instável. Aguardando {wait_time}s ({attempt+1}/10)...")
+                logger.warning(f"[COLLECTOR] 📡 Conexão instável. Aguardando {wait_time}s ({attempt+1}/10)...")
                 await asyncio.sleep(wait_time)
             else:
-                print(f"[COLLECTOR] ⏳ Tentativa {attempt+1}/10 falhou: {e}")
+                logger.error(f"[COLLECTOR] ⏳ Tentativa {attempt+1}/10 falhou: {e}")
                 await asyncio.sleep(2)
     
     if not db_ok:
-        print("[CRITICAL] Falha total na conexão com o banco após 10 tentativas.")
+        logger.critical("[CRITICAL] Falha total na conexão com o banco após 10 tentativas.")
         return
 
     # Aplicar otimizações avançadas
@@ -94,74 +108,122 @@ async def main():
         from backend.app.services.postgres_optimizer import apply_postgres_optimizations
         await apply_postgres_optimizations()
     except Exception as e:
-        print(f"[WARN] Erro ao aplicar otimizações Postgres: {e}")
+        logger.warning(f"[WARN] Erro ao aplicar otimizações Postgres: {e}")
 
-    # Iniciar tarefas concorrentes
-    # 1. Pinger (monitor_job_fast já tem loop infinito)
-    # 2. SNMP (snmp_monitor_job tem loop infinito?) -> Vamos verificar.
-    # 3. Agent (synthetic_agent_job tem loop infinito?) -> Vamos verificar.
-    
-    tasks = []
-    
-    # Pinger (Crítico)
-    print("[COLLECTOR] Iniciando Pinger...")
+    # Definição das Tarefas supervisionadas
     pinger = PingerService()
-    tasks.append(asyncio.create_task(pinger.start()))
     
-    # SNMP (Opcional, se existir)
-    try:
-        print("[COLLECTOR] Iniciando Monitor SNMP...")
-        tasks.append(asyncio.create_task(snmp_monitor_job()))
-    except Exception as e:
-        print(f"[WARN] SNMP Monitor falhou na inicialização: {e}")
-
-    # IA Agent (Opcional)
-    try:
-        print("[COLLECTOR] Iniciando IA Agent...")
-        tasks.append(asyncio.create_task(synthetic_agent_job()))
-    except Exception as e:
-        print(f"[WARN] IA Agent falhou na inicialização: {e}")
-
-    # Manutenção Diária (Limpeza de Logs)
-    tasks.append(asyncio.create_task(maintenance_loop()))
-
-    # Topologia Automática
-    tasks.append(asyncio.create_task(topology_loop()))
-
-    # Heartbeat (Status de Saúde)
-    tasks.append(asyncio.create_task(heartbeat_loop()))
-
-    # Manter o processo vivo aguardando as tarefas
-    print("[COLLECTOR] 🚀 Todas as tarefas iniciadas. Entrando em loop infinito monitorado.")
+    # Dicionário de tarefas ativas: {name: Task}
+    active_tasks = {}
     
+    def start_task(name, coro):
+        task = asyncio.create_task(coro)
+        task.set_name(name)
+        active_tasks[name] = task
+        return task
+
+    # 1. Start Initial Tasks
+    start_task("Pinger", pinger.start())
+    # Note: snmp_monitor_job and others are infinite loops. 
+    start_task("SNMP Monitor", snmp_monitor_job())
+    start_task("AI Agent", synthetic_agent_job())
+    start_task("Topology", topology_loop())
+    start_task("Maintenance", maintenance_loop())
+    start_task("Heartbeat", heartbeat_loop())
+    
+    logger.info(f"[SUPERVISOR] {len(active_tasks)} tarefas iniciais disparadas.")
+
+    # SUPERVISOR LOOP
     try:
-        # return_exceptions=True impede que uma falha em uma tarefa mate as outras
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        while True:
+            # Check for done tasks
+            # Use list() because we modify dict in loop
+            for name, task in list(active_tasks.items()):
+                if task.done():
+                    try:
+                        exc = task.exception()
+                        if exc:
+                            logger.error(f"[SUPERVISOR] ⚠️ Tarefa '{name}' MORREU com erro: {exc}")
+                            # Não precisamos imprimir traceback completo aqui se já foi logado pelo loguru,
+                            # mas útil para debug profundo.
+                        else:
+                            logger.warning(f"[SUPERVISOR] ⚠️ Tarefa '{name}' terminou inesperadamente (sem erro).")
+                    except asyncio.CancelledError:
+                        logger.info(f"[SUPERVISOR] Tarefa '{name}' foi cancelada.")
+                        del active_tasks[name]
+                        continue
+                    
+                    # RESTART STRATEGY
+                    logger.info(f"[SUPERVISOR] 🔄 Reiniciando '{name}' em 5 segundos...")
+                    del active_tasks[name]
+                    
+                    # Recreate coroutine based on name
+                    new_coro = None
+                    if name == "Pinger": new_coro = pinger.start()
+                    elif name == "SNMP Monitor": new_coro = snmp_monitor_job()
+                    elif name == "AI Agent": new_coro = synthetic_agent_job()
+                    elif name == "Topology": new_coro = topology_loop()
+                    elif name == "Maintenance": new_coro = maintenance_loop()
+                    elif name == "Heartbeat": new_coro = heartbeat_loop()
+                    
+                    if new_coro:
+                         # Launch restart delay as a separate task? 
+                         # No, we can just sleep here? No, blocking loop blocks supervisor.
+                         # Better to launch a "restarter" task.
+                         # Simpler: Just restart immediately but the task itself handles initial delay?
+                         # Or simpler: asyncio.create_task(restart_with_delay(name, new_coro))
+                         
+                         async def delayed_restart(n, c):
+                             await asyncio.sleep(5)
+                             logger.info(f"[SUPERVISOR] Relançando {n} agora.")
+                             start_task(n, c)
+
+                         asyncio.create_task(delayed_restart(name, new_coro))
+
+                    else:
+                        logger.critical(f"[SUPERVISOR] Não sei como reiniciar '{name}'!")
+
+            await asyncio.sleep(2) # Check every 2 seconds
+
+    except asyncio.CancelledError:
+        logger.info("[SUPERVISOR] Recebido sinal de parada. Cancelando tarefas...")
+        for name, task in active_tasks.items():
+            task.cancel()
         
-        # Se chegou aqui, é porque TODAS as tarefas terminaram (o que não deveria acontecer)
-        for r in results:
-            if isinstance(r, Exception):
-                print(f"[CRITICAL] Uma tarefa falhou fatalmente: {r}")
-                import traceback
-                # Tentar imprimir traceback se disponível
-                try: traceback.print_exception(type(r), r, r.__traceback__)
-                except: pass
-                
-    except Exception as e:
-        print(f"[CRITICAL] Erro catastrófico no gather principal: {e}")
-    finally:
-        print("[COLLECTOR] O processo principal está encerrando (todas as tarefas morreram).")
+        await asyncio.gather(*active_tasks.values(), return_exceptions=True)
+        logger.info("[SUPERVISOR] Todas as tarefas encerradas.")
 
 if __name__ == "__main__":
     try:
-        # Policy fix for Windows (evita erros de loop fechado)
+        # Policy fix for Windows
         if sys.platform == 'win32':
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
             
-        asyncio.run(main())
+        # Signal Handling for Graceful Shutdown
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        main_task = loop.create_task(main())
+        
+        def signal_handler(sig, frame):
+            logger.info(f"[COLLECTOR] Signal {sig} received. Shutting down...")
+            if not main_task.done():
+                main_task.cancel()
+            
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        try:
+            loop.run_until_complete(main_task)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            loop.close()
+            logger.info("[COLLECTOR] Processo finalizado.")
+            
     except KeyboardInterrupt:
-        print("[COLLECTOR] Encerrando coleta...")
+        logger.info("[COLLECTOR] Encerrando via KeyboardInterrupt...")
     except Exception as e:
-        print(f"[CRITICAL] Erro no coletor: {e}")
+        logger.critical(f"[CRITICAL] Erro fatal no coletor: {e}")
         import traceback
         traceback.print_exc()

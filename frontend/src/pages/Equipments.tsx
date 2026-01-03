@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 
 // @ts-ignore
 import { useDebounce } from 'use-debounce';
+import { MetricCard } from '../components/MetricCard';
 
 // --- Interfaces ---
 interface Tower { id: number; name: string; }
@@ -205,22 +206,31 @@ const WirelessMonitorModal = ({ equipment, onClose }: { equipment: any, onClose:
                 {/* Big Stats */}
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     {isTransmitter ? (
-                        <div className="col-span-2 bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
-                            <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Clientes Conectados</div>
-                            <div className="text-4xl font-bold text-purple-400">{currentEq.connected_clients || 0}</div>
+                        <div className="col-span-2">
+                            <MetricCard
+                                title="Clientes Conectados"
+                                value={currentEq.connected_clients || 0}
+                                status="good"
+                                description="Total de estações associadas."
+                                icon={Users}
+                            />
                         </div>
                     ) : isStation ? (
                         <>
-                            <div className="bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
-                                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Sinal</div>
-                                <div className={clsx("text-3xl font-bold", (currentEq.signal_dbm || -100) > -65 ? "text-emerald-400" : "text-yellow-400")}>
-                                    {currentEq.signal_dbm ? `${currentEq.signal_dbm} dBm` : 'N/A'}
-                                </div>
-                            </div>
-                            <div className="bg-slate-800/50 p-4 rounded border border-slate-700 text-center">
-                                <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">CCQ</div>
-                                <div className="text-3xl font-bold text-blue-400">{currentEq.ccq ? `${currentEq.ccq}% ` : 'N/A'}</div>
-                            </div>
+                            <MetricCard
+                                title="Sinal"
+                                value={`${currentEq.signal_dbm || 'N/A'} dBm`}
+                                status={(currentEq.signal_dbm || -100) > -65 ? 'good' : 'average'}
+                                description="Intensidade do sinal recebido."
+                                icon={Wifi}
+                            />
+                            <MetricCard
+                                title="CCQ"
+                                value={`${currentEq.ccq || 'N/A'}%`}
+                                status={(currentEq.ccq || 0) > 90 ? 'good' : 'average'}
+                                description="Qualidade da conexão (Client Connection Quality)."
+                                icon={Activity}
+                            />
                         </>
                     ) : (
                         <div className="col-span-2 bg-slate-800/50 p-6 rounded border border-slate-700 text-center text-slate-500 text-sm">
@@ -287,7 +297,7 @@ export function Equipments() {
 
     // Scanner State
     // Scanner Context
-    const { isScanning, progress, scannedDevices, startScan: startContextScan, stopScan, showScannerModal, setShowScannerModal, scanRange: contextScanRange, clearResults } = useScanner();
+    const { isScanning, progress, scannedDevices, startScan: startContextScan, stopScan, showScannerModal, setShowScannerModal, scanRange: contextScanRange } = useScanner();
 
     // Local Scanner UI
     const [selectedIps, setSelectedIps] = useState<string[]>([]);
@@ -792,303 +802,381 @@ export function Equipments() {
         setShowModal(true);
     };
 
+    const getMetrics = () => {
+        const total = equipments.length;
+        if (total === 0) return { total: 0, online: 0, offline: 0, health: 0 };
+        const online = equipments.filter(e => e.is_online).length;
+        const offline = total - online;
+        const health = Math.round((online / total) * 100);
+        return { total, online, offline, health };
+    };
+
+    const metrics = getMetrics();
+
     return (
-        <div className="h-[calc(100vh-2rem)] flex flex-col relative">
 
+        <div className="flex h-[calc(100vh-2rem)] overflow-hidden gap-6 mt-4">
 
-            <div className="flex justify-between items-center mb-6 shrink-0 mt-4">
-                <h2 className="text-2xl font-bold text-white">Equipamentos <span className="text-sm font-normal text-slate-500 ml-2">({filteredEquipments.length})</span></h2>
-                <div className="flex gap-2">
-                    <button onClick={() => setShowScannerModal(true)} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
-                        <MonitorPlay size={18} /> Scan
-                    </button>
-                    <button
-                        onClick={toggleSelectAll}
-                        className="flex gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg"
-                        title={selectedIds.length === filteredEquipments.length && filteredEquipments.length > 0 ? "Desmarcar Todos" : "Selecionar Todos"}
-                    >
-                        {selectedIds.length === filteredEquipments.length && filteredEquipments.length > 0 ? (
-                            <><CheckSquare size={18} /> Desmarcar Todos</>
+            {/* --- LEFT MAIN CONTENT --- */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+                {/* 1. Metrics Area */}
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Activity size={20} className="text-blue-500" /> Métricas em Tempo Real
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 shrink-0">
+                    <MetricCard
+                        title="Total Dispositivos"
+                        value={metrics.total}
+                        description="Total de equipamentos cadastrados."
+                        icon={Server}
+                    />
+                    <MetricCard
+                        title="Saúde da Rede"
+                        value={`${metrics.health}%`}
+                        status={metrics.health > 90 ? 'good' : metrics.health > 70 ? 'average' : 'poor'}
+                        description={metrics.health > 90 ? "Rede operando em ótima performance." : "Atenção requerida em alguns setores."}
+                        icon={Activity}
+                    />
+                    <MetricCard
+                        title="Online Agora"
+                        value={metrics.online}
+                        status="good"
+                        description={`${metrics.online} dispositivos respondendo.`}
+                        icon={Wifi}
+                        linkText="Ver filtro online"
+                        onClick={() => setFilterStatus('online')}
+                    />
+                    <MetricCard
+                        title="Offline (Crítico)"
+                        value={metrics.offline}
+                        status={metrics.offline === 0 ? 'good' : 'poor'}
+                        description={metrics.offline === 0 ? "Nenhum dispositivo offline!" : `${metrics.offline} dispositivos sem resposta.`}
+                        icon={Zap}
+                        linkText={metrics.offline > 0 ? "Ver falhas" : undefined}
+                        onClick={() => setFilterStatus('offline')}
+                    />
+                </div>
+
+                {/* 2. Tabs / List Header */}
+                <div className="flex justify-between items-end border-b border-slate-800 mb-4 px-1">
+                    <div className="flex gap-6">
+                        <button className="pb-3 text-sm font-medium border-b-2 border-blue-500 text-blue-400">
+                            Lista de Equipamentos ({filteredEquipments.length})
+                        </button>
+                        <button className="pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-300 transition-colors">
+                            Mapa de Topologia
+                        </button>
+                    </div>
+                </div>
+
+                {/* 3. The List Content */}
+                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden flex flex-col shadow-xl relative">
+                    {/* List Header */}
+                    <div className="flex bg-slate-950/50 text-slate-400 uppercase text-[10px] font-bold py-3 border-b border-slate-800 shrink-0 select-none">
+                        <div className="w-10 pl-4 flex items-center justify-center cursor-pointer" onClick={toggleSelectAll}>
+                            {selectedIds.length > 0 && selectedIds.length === filteredEquipments.length ? <CheckSquare size={16} className="text-blue-500" /> : <Square size={16} className="text-slate-600 hover:text-slate-400" />}
+                        </div>
+                        <div className="w-16 text-center cursor-pointer hover:text-white flex justify-center items-center gap-1" onClick={() => handleSort('is_online')}>
+                            STATUS {getSortIcon('is_online')}
+                        </div>
+                        <div className="flex-1 px-4 cursor-pointer hover:text-white flex items-center gap-1" onClick={() => handleSort('name')}>
+                            NOME {getSortIcon('name')}
+                        </div>
+                        <div className="w-32 px-4 hidden sm:flex items-center cursor-pointer hover:text-white gap-1" onClick={() => handleSort('ip')}>
+                            IP {getSortIcon('ip')}
+                        </div>
+                        <div className="w-48 px-4 text-right">AÇÕES</div>
+                    </div>
+
+                    {/* Scrollable List */}
+                    <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+                        {filteredEquipments.length === 0 ? (
+                            <div className="flex flex-col justify-center items-center h-full text-slate-500 italic">
+                                <Search size={48} className="mb-4 opacity-20" />
+                                Nenhum equipamento encontrado.
+                            </div>
                         ) : (
-                            <><Square size={18} /> Selecionar Todos</>
+                            <div className="w-full">
+                                {filteredEquipments.map((eq, index) => (
+                                    <EquipmentRow
+                                        key={eq.id}
+                                        index={index}
+                                        data={{
+                                            equipments: filteredEquipments,
+                                            towers,
+                                            onAction: handleWirelessInfo,
+                                            onReboot: handleReboot,
+                                            onTest: handleTest,
+                                            onDelete: handleDelete,
+                                            onHistory: handleShowHistory,
+                                            onEdit: handleEdit,
+                                            selectedIds,
+                                            toggleSelection
+                                        }}
+                                    />
+                                ))}
+                            </div>
                         )}
-                    </button>
-                    <button
-                        onClick={handleBatchAutoDetect}
-                        disabled={selectedIds.length === 0 || isDetecting}
-                        className="relative overflow-hidden flex gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Auto-detectar ${selectedIds.length} equipamento(s)`}
-                    >
-                        {isDetecting && (
-                            <div
-                                className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300"
-                                style={{ width: `${detectionProgress}%` }}
-                            />
-                        )}
-                        <span className="relative flex items-center gap-2">
-                            <Search size={18} />
-                            {isDetecting ? `Detectando... ${detectionProgress}%` : `Auto-Detectar Marca e Tipo ${selectedIds.length > 0 ? `(${selectedIds.length})` : ''}`}
-                        </span>
-                    </button>
-                    <button
-                        onClick={handleBatchReboot}
-                        disabled={selectedIds.length === 0}
-                        className="flex gap-2 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Reiniciar ${selectedIds.length} equipamento(s)`}
-                    >
-                        <Power size={18} /> Reiniciar {selectedIds.length > 0 && `(${selectedIds.length})`}
-                    </button>
-                    <button
-                        onClick={handleBatchDelete}
-                        disabled={selectedIds.length === 0}
-                        className="flex gap-2 bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={selectedIds.length === 0 ? "Selecione equipamentos primeiro" : `Excluir ${selectedIds.length} equipamento(s)`}
-                    >
-                        <Trash2 size={18} /> Excluir {selectedIds.length > 0 && `(${selectedIds.length})`}
-                    </button>
-                    <button onClick={handleExportCSV} className="flex gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
-                        <Download size={18} /> Exportar
-                    </button>
-                    <button
-                        onClick={handleBatchAutoDetect}
-                        disabled={isDetecting}
-                        className={clsx(
-                            "flex gap-2 px-3 py-2 rounded-lg text-sm transition-all shadow-lg",
-                            isDetecting ? "bg-slate-800 text-blue-400" : "bg-purple-600 hover:bg-purple-700 text-white"
-                        )}
-                        title="Auto-detectar marca e tipo dos selecionados"
-                    >
-                        {isDetecting ? <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" /> : <Wifi size={18} />}
-                        {isDetecting ? `Detectando...` : `Detectar Selecionados`}
-                    </button>
-                    <label className="flex gap-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg cursor-pointer">
-                        <Upload size={18} /> Importar
-                        <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
-                    </label>
-                    <button onClick={handleNewEquipment} className="flex gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors shadow-lg">
-                        <Plus size={18} /> Novo
-                    </button>
+                    </div>
                 </div>
             </div>
-            {(isScanning || scannedDevices.length > 0) && !showScannerModal && (
-                <div className="bg-blue-900/50 border border-blue-700/50 p-3 rounded-lg mb-4 flex justify-between items-center shadow-lg backdrop-blur-sm">
-                    <div className="flex items-center gap-3">
-                        {isScanning && <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>}
-                        <span className="text-blue-100 text-sm font-medium">
-                            {isScanning ? `Escaneando rede... ${progress > 0 ? `(${progress}%)` : ''}` : `Scan finalizado. ${scannedDevices.length} dispositivos encontrados.`}
-                        </span>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => { clearResults(); }} className="text-slate-400 hover:text-white text-xs px-2">Esconder</button>
-                        <button onClick={() => setShowScannerModal(true)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-500 transition-colors shadow">
-                            Abrir Scanner
+
+            {/* --- RIGHT SIDEBAR --- */}
+            <div className="w-80 shrink-0 flex flex-col gap-6 overflow-y-auto pb-4 pr-1">
+
+                {/* Section 1: Actions */}
+                <div className="space-y-3">
+                    <h3 className="font-semibold text-slate-300 text-sm">Ações Rápidas</h3>
+                    <button onClick={handleNewEquipment} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-900/20">
+                        <Plus size={18} /> Novo Equipamento
+                    </button>
+                    <button onClick={() => setShowScannerModal(true)} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 p-3 rounded-lg text-sm font-medium transition-colors border border-slate-700">
+                        <MonitorPlay size={18} /> Rede Scanner
+                        {isScanning && <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse ml-auto" />}
+                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={handleExportCSV} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg text-xs font-medium border border-slate-700">
+                            <Download size={14} /> Exportar
                         </button>
+                        <label className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg text-xs font-medium border border-slate-700 cursor-pointer">
+                            <Upload size={14} /> Importar
+                            <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
+                        </label>
+                    </div>
+                </div>
+
+                {/* Section 2: Filters */}
+                <div className="space-y-4">
+                    <h3 className="font-semibold text-slate-300 text-sm flex items-center justify-between">
+                        Filtros de Lista
+                        <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">{filteredEquipments.length}</span>
+                    </h3>
+
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Buscar nome ou IP..."
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                            value={filterText}
+                            onChange={e => setFilterText(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs text-slate-500 uppercase font-bold">Status</label>
+                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500">
+                            <option value="all">Mostrar Todos</option>
+                            <option value="online">🟢 Apenas Online</option>
+                            <option value="offline">🔴 Apenas Offline</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs text-slate-500 uppercase font-bold">Torre</label>
+                        <select value={filterTower} onChange={e => setFilterTower(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500">
+                            <option value="all">Todas as Torres</option>
+                            {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs text-slate-500 uppercase font-bold">Tipo</label>
+                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500">
+                            <option value="all">Todos os Tipos</option>
+                            <option value="station">Clientes (Station)</option>
+                            <option value="transmitter">Torres (AP)</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Section 3: Batch Selection (Conditional) */}
+                {selectedIds.length > 0 && (
+                    <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-right-4">
+                        <h3 className="text-indigo-300 text-sm font-bold flex items-center justify-between">
+                            {selectedIds.length} Selecionados
+                            <button onClick={() => setSelectedIds([])} className="text-[10px] uppercase text-indigo-400 hover:text-white">Limpar</button>
+                        </h3>
+
+                        <button
+                            onClick={handleBatchAutoDetect}
+                            disabled={isDetecting}
+                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-lg text-xs font-medium transition-colors shadow-lg"
+                        >
+                            {isDetecting ? <div className="animate-spin h-3 w-3 border-2 border-white/50 border-t-white rounded-full" /> : <Wifi size={14} />}
+                            {isDetecting ? 'Detectando...' : 'Auto-Detectar'}
+                        </button>
+
+                        <button
+                            onClick={handleBatchReboot}
+                            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 p-2.5 rounded-lg text-xs font-medium transition-colors border border-slate-700 hover:border-amber-500"
+                        >
+                            <Power size={14} /> Reiniciar em Massa
+                        </button>
+
+                        <button
+                            onClick={handleBatchDelete}
+                            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-300 p-2.5 rounded-lg text-xs font-medium transition-colors border border-slate-700 hover:border-rose-500"
+                        >
+                            <Trash2 size={14} /> Excluir Seleção
+                        </button>
+                    </div>
+                )}
+
+                {/* System Status / Footer */}
+                <div className="mt-auto pt-6 border-t border-slate-800">
+                    <div className="text-[10px] text-slate-600 uppercase font-bold tracking-wider mb-2">Ambiente</div>
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-xs text-slate-400">
+                            <span>CPU Throttling</span>
+                            <span className="text-slate-500">Disabled</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-400">
+                            <span>Network (Scanner)</span>
+                            <span className="text-emerald-500">Active</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            {showModal && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-xl font-bold text-white mb-4">{editingEquipment ? 'Editar' : 'Novo'} Equipamento</h3>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="Nome" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+                            <div className="space-y-2">
+                                <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP" value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} required />
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoDetectAll}
+                                        disabled={isDetectingAll || !formData.ip}
+                                        className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] border border-white/10"
+                                    >
+                                        {isDetectingAll ? (
+                                            <>
+                                                <div className="animate-spin h-5 w-5 border-3 border-white border-t-transparent rounded-full"></div>
+                                                <span className="animate-pulse">Analisando Equipamento... (Aguarde)</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Zap size={20} className="text-yellow-400 fill-yellow-400" />
+                                                <span>� AUTO-DETECTAR TUDO</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleAutoDetect}
+                                        disabled={isDetectingForm || isDetectingAll || !formData.ip}
+                                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-2 border border-slate-700"
+                                    >
+                                        {isDetectingForm ? (
+                                            <div className="animate-spin h-3 w-3 border-2 border-slate-400 border-t-transparent rounded-full"></div>
+                                        ) : (
+                                            <Search size={14} />
+                                        )}
+                                        Detectar apenas Marca e Tipo
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
+                                    <option value="">Sem Torre</option>
+                                    {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                                <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}>
+                                    <option value="generic">Genérico</option>
+                                    <option value="ubiquiti">Ubiquiti</option>
+                                    <option value="mikrotik">Mikrotik</option>
+                                    <option value="mimosa">Mimosa</option>
+                                    <option value="intelbras">Intelbras</option>
+                                </select>
+                            </div>
+
+                            <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
+                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Tipo de Equipamento</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="eqType" checked={formData.equipment_type === 'station'} onChange={() => setFormData({ ...formData, equipment_type: 'station' })} className="accent-blue-500" />
+                                        <span className="text-white">Station (Cliente/Ponto)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="eqType" checked={formData.equipment_type === 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'transmitter' })} className="accent-purple-500" />
+                                        <span className="text-white">Transmissor (AP)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="eqType" checked={formData.equipment_type !== 'station' && formData.equipment_type !== 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'other' })} className="accent-slate-500" />
+                                        <span className="text-white">Nenhum</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {['mikrotik', 'ubiquiti', 'mimosa', 'intelbras'].includes(formData.brand) && (
+                                <div className="space-y-3">
+                                    <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-xs text-slate-400 uppercase font-bold">Interface SFP / Wireless (Sinal)</label>
+                                            <button
+                                                type="button"
+                                                onClick={handleLoadInterfaces}
+                                                disabled={isLoadingInterfaces}
+                                                className="bg-blue-600 hover:bg-blue-500 text-[10px] uppercase font-bold text-white px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                                            >
+                                                {isLoadingInterfaces ? '...' : 'Escanear Interfaces'}
+                                            </button>
+                                        </div>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
+                                            value={formData.snmp_interface_index}
+                                            onChange={e => setFormData({ ...formData, snmp_interface_index: parseInt(e.target.value) })}
+                                        >
+                                            <option value={1}>Padrão (1)</option>
+                                            {interfaceList.map(iface => (
+                                                <option key={iface.index} value={iface.index}>{iface.index}: {iface.name}</option>
+                                            ))}
+                                            {interfaceList.length === 0 && <option value={formData.snmp_interface_index}>Atual (ID: {formData.snmp_interface_index})</option>}
+                                        </select>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
+                                        <label className="block text-xs text-slate-400 uppercase font-bold">Interface de Tráfego (Uplink/LAN)</label>
+                                        <select
+                                            className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
+                                            value={formData.snmp_traffic_interface_index || ''}
+                                            onChange={e => setFormData({ ...formData, snmp_traffic_interface_index: e.target.value ? parseInt(e.target.value) : null })}
+                                        >
+                                            <option value="">Mesma da Interface de Sinal</option>
+                                            {interfaceList.map(iface => (
+                                                <option key={`traffic-${iface.index}`} value={iface.index}>{iface.index}: {iface.name}</option>
+                                            ))}
+                                            {interfaceList.length === 0 && formData.snmp_traffic_interface_index && (
+                                                <option value={formData.snmp_traffic_interface_index}>Atual (ID: {formData.snmp_traffic_interface_index})</option>
+                                            )}
+                                        </select>
+                                        <p className="text-[10px] text-slate-500 italic">Se vazio, usará a mesma interface configurada acima.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="SSH User (admin)" value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
+                                <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" type="password" placeholder="SSH Password" value={formData.ssh_password} onChange={e => setFormData({ ...formData, ssh_password: e.target.value })} />
+                            </div>
+
+                            <div className="flex justify-end gap-2 mt-4">
+                                <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
+                                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Salvar</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
 
-            <div className="bg-slate-900 rounded-t-xl border border-slate-800 p-4 shrink-0 flex flex-wrap gap-3">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                    <input type="text" placeholder="Buscar..." className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500" value={filterText} onChange={e => setFilterText(e.target.value)} />
-                </div>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
-                    <option value="all">Status: Todos</option>
-                    <option value="online">🟢 Online</option>
-                    <option value="offline">🔴 Offline</option>
-                </select>
-                <select value={filterTower} onChange={e => setFilterTower(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none max-w-[200px]">
-                    <option value="all">Torres: Todas</option>
-                    {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
-                    <option value="all">Tipos: Todos</option>
-                    <option value="station">Station</option>
-                    <option value="transmitter">Transmitter</option>
-                </select>
-            </div>
-
-            <div className="flex-1 bg-slate-900 border-x border-b border-slate-800 rounded-b-xl overflow-hidden flex flex-col shadow-xl">
-                <div className="flex bg-slate-950 text-slate-400 uppercase text-xs font-bold py-3 border-b border-slate-800 shrink-0 select-none">
-                    <div className="w-10 pl-4 flex items-center justify-center cursor-pointer" onClick={toggleSelectAll}>
-                        {selectedIds.length > 0 && selectedIds.length === filteredEquipments.length ? <CheckSquare size={18} className="text-blue-500" /> : <Square size={18} className="text-slate-600 hover:text-slate-400" />}
-                    </div>
-                    <div className="w-16 text-center cursor-pointer hover:text-white flex justify-center items-center" onClick={() => handleSort('is_online')}>
-                        Status {getSortIcon('is_online')}
-                    </div>
-                    <div className="flex-1 px-4 cursor-pointer hover:text-white flex items-center" onClick={() => handleSort('name')}>
-                        Nome {getSortIcon('name')}
-                    </div>
-                    <div className="w-32 px-4 hidden sm:flex items-center cursor-pointer hover:text-white" onClick={() => handleSort('ip')}>
-                        IP {getSortIcon('ip')}
-                    </div>
-                    <div className="w-48 px-4 text-right">Ações</div>
-                </div>
-
-                <div className="flex-1 bg-slate-950 overflow-y-auto min-h-0">
-                    {filteredEquipments.length === 0 ? (
-                        <div className="flex justify-center items-center h-full text-slate-500">Nenhum equipamento encontrado.</div>
-                    ) : (
-                        <div className="w-full">
-                            {filteredEquipments.map((eq, index) => (
-                                <EquipmentRow
-                                    key={eq.id}
-                                    index={index}
-                                    data={{
-                                        equipments: filteredEquipments,
-                                        towers,
-                                        onAction: handleWirelessInfo,
-                                        onReboot: handleReboot,
-                                        onTest: handleTest,
-                                        onDelete: handleDelete,
-                                        onHistory: handleShowHistory,
-                                        onEdit: handleEdit,
-                                        selectedIds,
-                                        toggleSelection
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {
-                showModal && (
-                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-xl font-bold text-white mb-4">{editingEquipment ? 'Editar' : 'Novo'} Equipamento</h3>
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="Nome" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-                                <div className="space-y-2">
-                                    <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP" value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} required />
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={handleAutoDetectAll}
-                                            disabled={isDetectingAll || !formData.ip}
-                                            className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] border border-white/10"
-                                        >
-                                            {isDetectingAll ? (
-                                                <>
-                                                    <div className="animate-spin h-5 w-5 border-3 border-white border-t-transparent rounded-full"></div>
-                                                    <span className="animate-pulse">Analisando Equipamento... (Aguarde)</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Zap size={20} className="text-yellow-400 fill-yellow-400" />
-                                                    <span>� AUTO-DETECTAR TUDO</span>
-                                                </>
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleAutoDetect}
-                                            disabled={isDetectingForm || isDetectingAll || !formData.ip}
-                                            className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-2 border border-slate-700"
-                                        >
-                                            {isDetectingForm ? (
-                                                <div className="animate-spin h-3 w-3 border-2 border-slate-400 border-t-transparent rounded-full"></div>
-                                            ) : (
-                                                <Search size={14} />
-                                            )}
-                                            Detectar apenas Marca e Tipo
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
-                                        <option value="">Sem Torre</option>
-                                        {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                    </select>
-                                    <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}>
-                                        <option value="generic">Genérico</option>
-                                        <option value="ubiquiti">Ubiquiti</option>
-                                        <option value="mikrotik">Mikrotik</option>
-                                        <option value="mimosa">Mimosa</option>
-                                        <option value="intelbras">Intelbras</option>
-                                    </select>
-                                </div>
-
-                                <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                                    <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Tipo de Equipamento</label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="radio" name="eqType" checked={formData.equipment_type === 'station'} onChange={() => setFormData({ ...formData, equipment_type: 'station' })} className="accent-blue-500" />
-                                            <span className="text-white">Station (Cliente/Ponto)</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="radio" name="eqType" checked={formData.equipment_type === 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'transmitter' })} className="accent-purple-500" />
-                                            <span className="text-white">Transmissor (AP)</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="radio" name="eqType" checked={formData.equipment_type !== 'station' && formData.equipment_type !== 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'other' })} className="accent-slate-500" />
-                                            <span className="text-white">Nenhum</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                {['mikrotik', 'ubiquiti', 'mimosa', 'intelbras'].includes(formData.brand) && (
-                                    <div className="space-y-3">
-                                        <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <label className="text-xs text-slate-400 uppercase font-bold">Interface SFP / Wireless (Sinal)</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleLoadInterfaces}
-                                                    disabled={isLoadingInterfaces}
-                                                    className="bg-blue-600 hover:bg-blue-500 text-[10px] uppercase font-bold text-white px-2 py-0.5 rounded transition-colors disabled:opacity-50"
-                                                >
-                                                    {isLoadingInterfaces ? '...' : 'Escanear Interfaces'}
-                                                </button>
-                                            </div>
-                                            <select
-                                                className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
-                                                value={formData.snmp_interface_index}
-                                                onChange={e => setFormData({ ...formData, snmp_interface_index: parseInt(e.target.value) })}
-                                            >
-                                                <option value={1}>Padrão (1)</option>
-                                                {interfaceList.map(iface => (
-                                                    <option key={iface.index} value={iface.index}>{iface.index}: {iface.name}</option>
-                                                ))}
-                                                {interfaceList.length === 0 && <option value={formData.snmp_interface_index}>Atual (ID: {formData.snmp_interface_index})</option>}
-                                            </select>
-                                        </div>
-
-                                        <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
-                                            <label className="block text-xs text-slate-400 uppercase font-bold">Interface de Tráfego (Uplink/LAN)</label>
-                                            <select
-                                                className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
-                                                value={formData.snmp_traffic_interface_index || ''}
-                                                onChange={e => setFormData({ ...formData, snmp_traffic_interface_index: e.target.value ? parseInt(e.target.value) : null })}
-                                            >
-                                                <option value="">Mesma da Interface de Sinal</option>
-                                                {interfaceList.map(iface => (
-                                                    <option key={`traffic-${iface.index}`} value={iface.index}>{iface.index}: {iface.name}</option>
-                                                ))}
-                                                {interfaceList.length === 0 && formData.snmp_traffic_interface_index && (
-                                                    <option value={formData.snmp_traffic_interface_index}>Atual (ID: {formData.snmp_traffic_interface_index})</option>
-                                                )}
-                                            </select>
-                                            <p className="text-[10px] text-slate-500 italic">Se vazio, usará a mesma interface configurada acima.</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="SSH User (admin)" value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
-                                    <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" type="password" placeholder="SSH Password" value={formData.ssh_password} onChange={e => setFormData({ ...formData, ssh_password: e.target.value })} />
-                                </div>
-
-                                <div className="flex justify-end gap-2 mt-4">
-                                    <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
-                                    <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Salvar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )
-            }
             {
                 showScannerModal && (
                     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -1239,7 +1327,7 @@ export function Equipments() {
                     </div>
                 )
             }
-        </div >
+        </div>
     );
 }
 
