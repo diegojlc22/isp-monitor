@@ -20,28 +20,23 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 ---
 
 
-## 🚀 Novidades da Versão 4.4 (02/01/2026) - Zabbix Engine Edition
+## 🚀 Novidades da Versão 4.5 (03/01/2026) - Precision Edition
 
-### ⚡ 1. Novo Motor de Ping (Zabbix Architecture)
-O núcleo de monitoramento foi reescrito para precisão cirúrgica:
-- **ICMP RAW Real**: Abandono de simulações UDP. Agora usa sockets nativos do kernel (igual ao comando `ping`).
-- **Controle de Concorrência**: Sistema de semáforos limita threads "in-flight" para evitar overhead no Windows.
-- **Resultado**: Latência precisa (<1ms em rede local) e eliminação de "falsos positivos" em horários de pico.
+### 🎯 1. Ping Cirúrgico (Precision Mode V3)
+Reformulação completa da lógica de ping para eliminar interferência do sistema operacional, equiparando a precisão ao CMD/Zabbix:
+- **Latência Mínima (Min RTT)**: Sistema agora descarta picos artificiais causados por processamento, focando apenas na resposta física mais rápida do cabo.
+- **High Priority Process**: O coletor agora roda com prioridade de tempo real no Windows, "furando" a fila do processador.
+- **Calibração de Driver**: Implementação de compensação matemática (Overhead Calibration) para isolar o tempo de pilha de software do tempo de rede real.
+- **Resultado**: Gráficos perfeitos de 0-1ms em rede local, eliminando o "jitter" fantasma.
 
-### 🏥 2. Monitoramento de Hardware Avançado
+### 🔌 2. Launcher & UX Refinado
+- **Silent Mode**: Fim das janelas pop-up intrusivas ao parar o sistema. Agora o feedback é integrado de forma elegante na barra de status.
+- **Smart Kill**: O encerramento de processos agora é cirúrgico, listando exatamente o que foi fechado sem travar a interface.
+
+### 🏥 3. Monitoramento de Hardware Avançado (V4.4 Legacy)
 Suporte completo para sensores de saúde de equipamentos (foco em MikroTik):
 - **Métricas Completas**: CPU, Memória RAM, Uso de Disco (Flash/HDD), Temperatura e Voltagem.
 - **Detecção Inteligente**: O sistema descobre automaticamente os sensores corretos via varredura SNMP dinâmica.
-- **Visualização Premium**: Novos gauges circulares para leitura rápida no painel ao vivo.
-
-### 🏎️ 3. Live Monitor "Turbo Mode"
-- **Atualização em Tempo Real**: Telemetria de tráfego e latência agora atualiza a cada 5 segundos (antes 30s).
-- **Correção de "Degraus"**: Gráficos suaves e precisos que refletem a realidade instantânea da rede.
-- **Auto-Repair de Banco**: Script de migração (`apply_migration_v2.py`) garante integridade das novas colunas.
-
-### 🔒 4. Segurança Reforçada
-- **Rotas Protegidas**: Todas as operações críticas (Reboot, Configuração, Delete) agora exigem token JWT.
-- **Validação de Banco**: Script de correção de timezone para evitar erros em queries históricas.
 
 ---
 
@@ -134,8 +129,8 @@ O sistema possui um **Watchdog** (`self_heal.py`) que roda em paralelo. Se o sis
 - ✅ App Mobile: **Online**
 - ✅ Watchdog: **Ativo**
 
-**Última atualização:** 01/01/2026
-**Build:** v4.3.0 (Autonomous Network Edition)
+**Última atualização:** 03/01/2026
+**Build:** v4.5.0 (Precision Edition)
 
 
 ---

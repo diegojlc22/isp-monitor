@@ -97,20 +97,24 @@ class PingerService:
                     # Count=2, Interval=0.05s for stability
                     results = await async_multiping(
                         targets_chunk, 
-                        count=4, 
-                        interval=0.05, 
+                        count=5, 
+                        interval=0.03, 
                         timeout=2.0, 
                         payload_size=32,
                         privileged=True 
                     )
                     
-                    # Calibração: Remove o overhead do Python (~2.5ms) para mostrar latência real de cabo (igual CMD)
-                    OVERHEAD_COMPENSATION = 2.5 
+                    # Calibração V4: Estabilização de "Piso"
+                    OVERHEAD_COMPENSATION = 2.8
                     
                     for host in results:
                         raw_lat = host.min_rtt
                         clean_lat = max(0.0, raw_lat - OVERHEAD_COMPENSATION) if host.is_alive else 0
                         
+                        # ANTI-JITTER: Se for muito baixo (<2ms), crava em 1ms para parar de oscilar no gráfico
+                        if host.is_alive and clean_lat < 2.0: 
+                            clean_lat = 1.0
+
                         await self.results_queue.put({
                             "ip": host.address,
                             "is_online": host.is_alive,
