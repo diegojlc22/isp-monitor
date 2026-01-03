@@ -348,8 +348,11 @@ async def get_health_stats(ip, brand, community, port=161):
             # Helper to walk an OID and return dict {index: value_str}
             async def snmp_walk_map(oid_root):
                 mapping = {}
-                from pysnmp.hlapi.asyncio import nextCmd, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, SnmpEngine
-                engine = SnmpEngine()
+                from pysnmp.hlapi.asyncio import nextCmd, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+                # Use shared engine to save massive CPU alloc
+                from backend.app.services.snmp import get_shared_engine
+                engine = get_shared_engine()
+                
                 auth = CommunityData(community, mpModel=1)
                 target = UdpTransportTarget((ip, port), timeout=2, retries=1)
                 curr_oid = ObjectIdentity(oid_root)

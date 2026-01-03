@@ -19,7 +19,7 @@ logger.add(
     "logs/backend.log", 
     rotation="10 MB", 
     retention="7 days", 
-    level="DEBUG",
+    level="INFO", # CHANGED: DEBUG -> INFO to save CPU
     compression="zip"
 )
 

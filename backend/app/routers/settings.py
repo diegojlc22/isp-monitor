@@ -496,7 +496,18 @@ async def get_dashboard_layout(db: AsyncSession = Depends(get_db)):
     return []
 
 @router.post("/dashboard-layout")
-async def update_dashboard_layout(layout: list, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_admin_user)):
+async def update_dashboard_layout(
+    payload: dict = Body(...), # Accept raw dict to flexible
+    db: AsyncSession = Depends(get_db), 
+    current_user = Depends(get_current_admin_user)
+):
+    # Extract "layout" from body if wrapped, or use body as list if array
+    # Frontend sends {layout: [...]} usually
+    layout = payload.get("layout")
+    if layout is None:
+        # Silently ignore to stop log spam, or default to empty
+        return {"message": "No layout provided (Ignored)"}
+
     import json
     val = json.dumps(layout)
     

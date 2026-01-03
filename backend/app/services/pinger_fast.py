@@ -13,10 +13,10 @@ from backend.app.config import settings
 from backend.app.models import Equipment, Tower, Alert, Parameters
 from backend.app.services.notifier import send_notification
 
-# Configuração Otimizada (V2 - Transplanted)
+# Configuração Otimizada (V3 - Eco Mode)
 BATCH_SIZE = 50 
-WRITE_BUFFER_SIZE = 100
-WRITE_INTERVAL = 1.0
+WRITE_BUFFER_SIZE = 500 # Aumentado de 100 para 500 (Menos I/O no disco)
+WRITE_INTERVAL = 3.0    # Aumentado de 1.0s para 3.0s (Menos commits no banco)
 PING_TIMEOUT = settings.ping_timeout_seconds
 PING_INTERVAL = settings.ping_interval_seconds
 
@@ -97,8 +97,8 @@ class PingerService:
                     # Count=2, Interval=0.05s for stability
                     results = await async_multiping(
                         targets_chunk, 
-                        count=5, 
-                        interval=0.03, 
+                        count=3,        # Reduzido de 5 para 3 (Menos carga)
+                        interval=0.05,  # Aumentado de 0.03 para 0.05 (Mais "respiro" entre pings)
                         timeout=2.0, 
                         payload_size=32,
                         privileged=True 
@@ -406,17 +406,19 @@ def ensure_singleton():
 if __name__ == "__main__":
     ensure_singleton()
     
-    # ⚡ BOOST DE PRIORIDADE (PRECISÃO EXTREMA DO PING) ⚡
-    try:
-        import psutil
-        p = psutil.Process(os.getpid())
-        if os.name == 'nt':
-            p.nice(psutil.HIGH_PRIORITY_CLASS)
-        else:
-            p.nice(-10) # Linux nice
-        logger.success("🚀 Process Priority set to HIGH for maximum ping precision.")
-    except Exception as e:
-        logger.warning(f"Could not boost process priority: {e}")
+    # ⚡ BOOST DE PRIORIDADE - DESATIVADO PARA TESTE DE CPU ⚡
+    # (High priority com loop apertado causa 100% de CPU e trava o sistema, piorando o ping)
+    # try:
+    #     import psutil
+    #     p = psutil.Process(os.getpid())
+    #     if os.name == 'nt':
+    #         # p.nice(psutil.HIGH_PRIORITY_CLASS)
+    #         p.nice(psutil.NORMAL_PRIORITY_CLASS)
+    #     else:
+    #         p.nice(0)
+    #     logger.info("ℹ️ Process Priority reset to NORMAL to prevent CPU starvation.")
+    # except Exception as e:
+    #     logger.warning(f"Could not adjust process priority: {e}")
 
     service = PingerService()
     try:

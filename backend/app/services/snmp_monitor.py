@@ -8,7 +8,7 @@ from backend.app.services.snmp import get_snmp_interface_traffic
 from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats
 
 # Config
-SNMP_INTERVAL = 5 # Check SNMP every 5s (Turbo Mode for Live Monitor)
+SNMP_INTERVAL = 10 # Check SNMP every 10s (Balanced for CPU/Responsiveness)
 
 # ✅ SPRINT 3: Smart Logging - Tracking de estado
 # Armazena último valor salvo para evitar logs duplicados
@@ -20,10 +20,10 @@ async def snmp_monitor_job():
     Parallelized for high performance (Semaphore limited).
     """
     import time
-    print("[INFO] Traffic/Wireless Monitor started (Interval: 60s)...")
+    print("[INFO] Traffic/Wireless Monitor started (Interval: 10s)...")
     
-    # Limit Concurrency to avoid network flood
-    sem = asyncio.Semaphore(100) 
+    # Limit Concurrency to avoid network flood and CPU spikes
+    sem = asyncio.Semaphore(25) # Reduced from 100 to 25 
     
     # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 
@@ -268,10 +268,17 @@ async def snmp_monitor_job():
                 await session.commit()
                 # print(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
 
-        except Exception as e:
-            print(f"Errors in SNMP loop: {e}")
-            
-        await asyncio.sleep(SNMP_INTERVAL)
+        if updates_count > 0 or traffic_logs_buffer:
+             # Basic GC for memory cache (Run every 10 cycles roughly, or just here)
+             active_ids = {eq["id"] for eq in equipments_data}
+             keys_to_remove = [k for k in snmp_last_logged.keys() if k not in active_ids]
+             for k in keys_to_remove:
+                 del snmp_last_logged[k]
+
+    except Exception as e:
+        print(f"Errors in SNMP loop: {e}")
+        
+    await asyncio.sleep(SNMP_INTERVAL)
 
 if __name__ == "__main__":
     try:
