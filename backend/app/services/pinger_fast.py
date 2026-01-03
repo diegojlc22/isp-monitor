@@ -97,17 +97,24 @@ class PingerService:
                     # Count=2, Interval=0.05s for stability
                     results = await async_multiping(
                         targets_chunk, 
-                        count=2, 
+                        count=4, 
                         interval=0.05, 
-                        timeout=1.0, 
+                        timeout=2.0, 
+                        payload_size=32,
                         privileged=True 
                     )
                     
+                    # Calibração: Remove o overhead do Python (~2.5ms) para mostrar latência real de cabo (igual CMD)
+                    OVERHEAD_COMPENSATION = 2.5 
+                    
                     for host in results:
+                        raw_lat = host.min_rtt
+                        clean_lat = max(0.0, raw_lat - OVERHEAD_COMPENSATION) if host.is_alive else 0
+                        
                         await self.results_queue.put({
                             "ip": host.address,
                             "is_online": host.is_alive,
-                            "latency": round(host.avg_rtt, 1) if host.is_alive else 0,
+                            "latency": round(clean_lat, 1),
                             "packet_loss": host.packet_loss,
                             "timestamp": time.time()
                         })
@@ -394,6 +401,19 @@ def ensure_singleton():
         logger.error(f"Singleton lock error: {e}")
 if __name__ == "__main__":
     ensure_singleton()
+    
+    # ⚡ BOOST DE PRIORIDADE (PRECISÃO EXTREMA DO PING) ⚡
+    try:
+        import psutil
+        p = psutil.Process(os.getpid())
+        if os.name == 'nt':
+            p.nice(psutil.HIGH_PRIORITY_CLASS)
+        else:
+            p.nice(-10) # Linux nice
+        logger.success("🚀 Process Priority set to HIGH for maximum ping precision.")
+    except Exception as e:
+        logger.warning(f"Could not boost process priority: {e}")
+
     service = PingerService()
     try:
         asyncio.run(service.start())

@@ -1089,9 +1089,11 @@ class ModernLauncher:
             self.check_status()
         
             if killed:
-                messagebox.showinfo("Sucesso", f"O sistema foi parado.\nEncerramos: {', '.join(set(killed))}")
+                # messagebox.showinfo("Sucesso", f"O sistema foi parado.\nEncerramos: {', '.join(set(killed))}")
+                self.info_label.config(text=f"Sistema parado. Encerrados: {', '.join(set(killed))}", fg=COLORS['warning'])
             else:
-                messagebox.showinfo("Info", "Nenhum processo ativo encontrado.")
+                # messagebox.showinfo("Info", "Nenhum processo ativo encontrado.")
+                self.info_label.config(text="Nenhum processo ativo encontrado.", fg=COLORS['subtext'])
             
         except Exception as e:
             messagebox.showerror("Erro", str(e))
