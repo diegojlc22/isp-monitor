@@ -59,12 +59,12 @@ const Reports: React.FC = () => {
                                 <select
                                     value={period}
                                     onChange={(e) => setPeriod(e.target.value)}
-                                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:focus:ring-blue-400 dark:focus:ring-offset-gray-900"
+                                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:focus:ring-blue-400 dark:focus:ring-offset-gray-900"
                                 >
-                                    <option value="7">Últimos 7 dias</option>
-                                    <option value="15">Últimos 15 dias</option>
-                                    <option value="30">Últimos 30 dias</option>
-                                    <option value="90">Últimos 3 Meses</option>
+                                    <option className="bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100" value="7">Últimos 7 dias</option>
+                                    <option className="bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100" value="15">Últimos 15 dias</option>
+                                    <option className="bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100" value="30">Últimos 30 dias</option>
+                                    <option className="bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100" value="90">Últimos 3 Meses</option>
                                 </select>
                             </div>
 
