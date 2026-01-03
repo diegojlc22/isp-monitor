@@ -52,12 +52,12 @@ export const MetricCard: React.FC<MetricCardProps> = ({
             </div>
 
             {/* Footer / Description */}
-            <div className="mt-2 text-xs text-slate-500">
-                {description}
+            <div className="mt-2 text-xs text-slate-500 flex flex-col gap-0.5">
+                <span>{description}</span>
                 {linkText && (
                     <span
                         onClick={onClick}
-                        className="ml-2 text-blue-400 hover:text-blue-300 cursor-pointer underline decoration-blue-400/30 underline-offset-2"
+                        className="text-blue-400 hover:text-blue-300 cursor-pointer hover:underline decoration-blue-400/30 underline-offset-2 w-fit"
                     >
                         {linkText}
                     </span>

@@ -10,9 +10,10 @@ import {
     clearAgentLogs,
     getAgentLogs,
     getAgentSettings,
-    updateAgentSettings
+    updateAgentSettings,
+    updateMonitorTarget
 } from '../services/api';
-import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp, RefreshCw, Eraser } from 'lucide-react';
+import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp, RefreshCw, Eraser, Pencil, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
@@ -46,6 +47,10 @@ const Agent: React.FC = () => {
     const [newName, setNewName] = useState('');
     const [newTarget, setNewTarget] = useState('');
     const [newType, setNewType] = useState('http');
+
+    // Editing State
+    const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
+    const [editingName, setEditingName] = useState('');
 
     // Settings Form
     const [latencyThreshold, setLatencyThreshold] = useState(300);
@@ -110,6 +115,30 @@ const Agent: React.FC = () => {
         } catch (err) {
             toast.error('Erro ao adicionar alvo.');
         }
+    };
+
+    const startEditing = (target: MonitorTarget) => {
+        setEditingTargetId(target.id);
+        setEditingName(target.name);
+    };
+
+    const saveEdit = async () => {
+        if (!editingTargetId || !editingName.trim()) return;
+        try {
+            await updateMonitorTarget(editingTargetId, { name: editingName });
+            toast.success('Nome atualizado!');
+            setEditingTargetId(null);
+            fetchData();
+        } catch (err: any) {
+            console.error(err);
+            const msg = err.response?.data?.detail || err.message || 'Erro desconhecido';
+            toast.error(`Erro ao atualizar: ${msg}`);
+        }
+    };
+
+    const cancelEdit = () => {
+        setEditingTargetId(null);
+        setEditingName('');
     };
 
     const handleDeleteTarget = async (id: number) => {
@@ -227,8 +256,31 @@ const Agent: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {targets.map(t => (
                     <div key={t.id} className="bg-slate-900 border border-slate-800 p-4 rounded-lg flex justify-between items-center group">
-                        <div>
-                            <h4 className="font-semibold text-slate-200 group-hover:text-purple-400 transition-colors">{t.name}</h4>
+                        <div className="flex-1 min-w-0 mr-4">
+                            {editingTargetId === t.id ? (
+                                <div className="flex items-center gap-2 mb-1">
+                                    <input
+                                        type="text"
+                                        value={editingName}
+                                        onChange={e => setEditingName(e.target.value)}
+                                        className="bg-slate-800 border border-slate-700 text-white text-sm rounded px-2 py-1 w-full outline-none focus:ring-1 focus:ring-purple-500"
+                                        autoFocus
+                                        onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                                    />
+                                    <button onClick={saveEdit} className="text-green-400 hover:text-green-300 p-1"><Check size={16} /></button>
+                                    <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300 p-1"><X size={16} /></button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <h4 className="font-semibold text-slate-200 group-hover:text-purple-400 transition-colors truncate">{t.name}</h4>
+                                    <button
+                                        onClick={() => startEditing(t)}
+                                        className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-purple-400 transition-all p-1"
+                                    >
+                                        <Pencil size={12} />
+                                    </button>
+                                </div>
+                            )}
                             <p className="text-xs text-slate-500 font-mono text-ellipsis overflow-hidden w-full max-w-[150px]" title={t.target}>{t.target}</p>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] uppercase bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 border border-slate-700">{t.type}</span>
@@ -532,5 +584,4 @@ const Agent: React.FC = () => {
         </div>
     );
 };
-
 export default Agent;

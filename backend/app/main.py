@@ -142,6 +142,7 @@ async def add_process_time_header(request: Request, call_next):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint for monitoring"""
+    # Force reload
     # Check DB connection
     db_status = "ok"
     try:

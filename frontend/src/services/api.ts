@@ -71,6 +71,7 @@ export const getTrafficHistory = (id: number, period: string) => api.get(`/equip
 export const getAgentLogs = () => api.get('/agent/logs').then(res => res.data);
 export const getMonitorTargets = () => api.get('/agent/targets').then(res => res.data);
 export const createMonitorTarget = (data: any) => api.post('/agent/targets', data).then(res => res.data);
+export const updateMonitorTarget = (id: number, data: any) => api.put(`/agent/targets/${id}`, data).then(res => res.data);
 export const deleteMonitorTarget = (id: number) => api.delete(`/agent/targets/${id}`).then(res => res.data);
 export const triggerAgentTest = () => api.post('/agent/trigger').then(res => res.data);
 export const stopAgentTest = () => api.post('/agent/stop').then(res => res.data);

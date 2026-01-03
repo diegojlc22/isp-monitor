@@ -110,6 +110,38 @@ async def delete_target(
         await db.commit()
     return {"status": "deleted"}
 
+from typing import Optional
+
+class TargetUpdate(BaseModel):
+    name: Optional[str] = None
+    target: Optional[str] = None
+    type: Optional[str] = None
+
+@router.put("/targets/{target_id}")
+async def update_target(
+    target_id: int,
+    data: TargetUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    stmt = select(MonitorTarget).where(MonitorTarget.id == target_id)
+    result = await db.execute(stmt)
+    db_target = result.scalar_one_or_none()
+    
+    if not db_target:
+        return {"error": "Target not found"}
+        
+    if data.name is not None:
+        db_target.name = data.name
+    if data.target is not None:
+        db_target.target = data.target
+    if data.type is not None:
+        db_target.type = data.type
+        
+    await db.commit()
+    await db.refresh(db_target)
+    return db_target
+
 # Settings Management
 from backend.app.models import Parameters
 

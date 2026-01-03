@@ -292,6 +292,8 @@ export function Equipments() {
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
     const [formData, setFormData] = useState<FormData>(INITIAL_FORM_STATE);
     const [networkDefaults, setNetworkDefaults] = useState<any>({});
+    const [showMetrics, setShowMetrics] = useState(true);
+    const [showList, setShowList] = useState(true);
 
 
 
@@ -821,43 +823,51 @@ export function Equipments() {
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
                 {/* 1. Metrics Area */}
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Activity size={20} className="text-blue-500" /> Métricas em Tempo Real
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 shrink-0">
-                    <MetricCard
-                        title="Total Dispositivos"
-                        value={metrics.total}
-                        description="Total de equipamentos cadastrados."
-                        icon={Server}
-                    />
-                    <MetricCard
-                        title="Saúde da Rede"
-                        value={`${metrics.health}%`}
-                        status={metrics.health > 90 ? 'good' : metrics.health > 70 ? 'average' : 'poor'}
-                        description={metrics.health > 90 ? "Rede operando em ótima performance." : "Atenção requerida em alguns setores."}
-                        icon={Activity}
-                    />
-                    <MetricCard
-                        title="Online Agora"
-                        value={metrics.online}
-                        status="good"
-                        description={`${metrics.online} dispositivos respondendo.`}
-                        icon={Wifi}
-                        linkText="Ver filtro online"
-                        onClick={() => setFilterStatus('online')}
-                    />
-                    <MetricCard
-                        title="Offline (Crítico)"
-                        value={metrics.offline}
-                        status={metrics.offline === 0 ? 'good' : 'poor'}
-                        description={metrics.offline === 0 ? "Nenhum dispositivo offline!" : `${metrics.offline} dispositivos sem resposta.`}
-                        icon={Zap}
-                        linkText={metrics.offline > 0 ? "Ver falhas" : undefined}
-                        onClick={() => setFilterStatus('offline')}
-                    />
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Activity size={20} className="text-blue-500" /> Métricas em Tempo Real
+                    </h3>
+                    <button
+                        onClick={() => setShowMetrics(!showMetrics)}
+                        className="p-1 px-3 bg-slate-800 text-slate-400 hover:text-white rounded text-xs font-semibold hover:bg-slate-700 transition"
+                    >
+                        {showMetrics ? 'Ocultar Resumo' : 'Mostrar Resumo'}
+                    </button>
                 </div>
+
+                {showMetrics && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 shrink-0 animate-in fade-in slide-in-from-top-4">
+                        <MetricCard
+                            title="Total Dispositivos"
+                            value={metrics.total}
+                            description="Total de equipamentos cadastrados."
+                            icon={Server}
+                        />
+                        <MetricCard
+                            title="Saúde da Rede"
+                            value={`${metrics.health}%`}
+                            status={metrics.health > 90 ? 'good' : metrics.health > 70 ? 'average' : 'poor'}
+                            description={metrics.health > 90 ? "Rede operando em ótima performance." : "Atenção requerida em alguns setores."}
+                            icon={Activity}
+                        />
+                        <MetricCard
+                            title="Online Agora"
+                            value={metrics.online}
+                            status="good"
+                            description={`${metrics.online} dispositivos respondendo.`}
+                            icon={Wifi}
+                        />
+                        <MetricCard
+                            title="Offline (Crítico)"
+                            value={metrics.offline}
+                            status={metrics.offline === 0 ? 'good' : 'poor'}
+                            description={metrics.offline === 0 ? "Nenhum dispositivo offline!" : `${metrics.offline} dispositivos sem resposta.`}
+                            icon={Zap}
+                            linkText={metrics.offline > 0 ? "Ver falhas" : undefined}
+                            onClick={() => setFilterStatus('offline')}
+                        />
+                    </div>
+                )}
 
                 {/* 2. Tabs / List Header */}
                 <div className="flex justify-between items-end border-b border-slate-800 mb-4 px-1">
@@ -869,58 +879,66 @@ export function Equipments() {
                             Mapa de Topologia
                         </button>
                     </div>
+                    <button
+                        onClick={() => setShowList(!showList)}
+                        className="mb-2 p-1 px-3 bg-slate-800 text-slate-400 hover:text-white rounded text-xs font-semibold hover:bg-slate-700 transition"
+                    >
+                        {showList ? 'Ocultar Lista' : 'Mostrar Lista'}
+                    </button>
                 </div>
 
                 {/* 3. The List Content */}
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden flex flex-col shadow-xl relative">
-                    {/* List Header */}
-                    <div className="flex bg-slate-950/50 text-slate-400 uppercase text-[10px] font-bold py-3 border-b border-slate-800 shrink-0 select-none">
-                        <div className="w-10 pl-4 flex items-center justify-center cursor-pointer" onClick={toggleSelectAll}>
-                            {selectedIds.length > 0 && selectedIds.length === filteredEquipments.length ? <CheckSquare size={16} className="text-blue-500" /> : <Square size={16} className="text-slate-600 hover:text-slate-400" />}
+                {showList && (
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden flex flex-col shadow-xl relative animate-in fade-in slide-in-from-bottom-4">
+                        {/* List Header */}
+                        <div className="flex bg-slate-950/50 text-slate-400 uppercase text-[10px] font-bold py-3 border-b border-slate-800 shrink-0 select-none">
+                            <div className="w-10 pl-4 flex items-center justify-center cursor-pointer" onClick={toggleSelectAll}>
+                                {selectedIds.length > 0 && selectedIds.length === filteredEquipments.length ? <CheckSquare size={16} className="text-blue-500" /> : <Square size={16} className="text-slate-600 hover:text-slate-400" />}
+                            </div>
+                            <div className="w-16 text-center cursor-pointer hover:text-white flex justify-center items-center gap-1" onClick={() => handleSort('is_online')}>
+                                STATUS {getSortIcon('is_online')}
+                            </div>
+                            <div className="flex-1 px-4 cursor-pointer hover:text-white flex items-center gap-1" onClick={() => handleSort('name')}>
+                                NOME {getSortIcon('name')}
+                            </div>
+                            <div className="w-32 px-4 hidden sm:flex items-center cursor-pointer hover:text-white gap-1" onClick={() => handleSort('ip')}>
+                                IP {getSortIcon('ip')}
+                            </div>
+                            <div className="w-48 px-4 text-right">AÇÕES</div>
                         </div>
-                        <div className="w-16 text-center cursor-pointer hover:text-white flex justify-center items-center gap-1" onClick={() => handleSort('is_online')}>
-                            STATUS {getSortIcon('is_online')}
-                        </div>
-                        <div className="flex-1 px-4 cursor-pointer hover:text-white flex items-center gap-1" onClick={() => handleSort('name')}>
-                            NOME {getSortIcon('name')}
-                        </div>
-                        <div className="w-32 px-4 hidden sm:flex items-center cursor-pointer hover:text-white gap-1" onClick={() => handleSort('ip')}>
-                            IP {getSortIcon('ip')}
-                        </div>
-                        <div className="w-48 px-4 text-right">AÇÕES</div>
-                    </div>
 
-                    {/* Scrollable List */}
-                    <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
-                        {filteredEquipments.length === 0 ? (
-                            <div className="flex flex-col justify-center items-center h-full text-slate-500 italic">
-                                <Search size={48} className="mb-4 opacity-20" />
-                                Nenhum equipamento encontrado.
-                            </div>
-                        ) : (
-                            <div className="w-full">
-                                {filteredEquipments.map((eq, index) => (
-                                    <EquipmentRow
-                                        key={eq.id}
-                                        index={index}
-                                        data={{
-                                            equipments: filteredEquipments,
-                                            towers,
-                                            onAction: handleWirelessInfo,
-                                            onReboot: handleReboot,
-                                            onTest: handleTest,
-                                            onDelete: handleDelete,
-                                            onHistory: handleShowHistory,
-                                            onEdit: handleEdit,
-                                            selectedIds,
-                                            toggleSelection
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                        {/* Scrollable List */}
+                        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+                            {filteredEquipments.length === 0 ? (
+                                <div className="flex flex-col justify-center items-center h-full text-slate-500 italic">
+                                    <Search size={48} className="mb-4 opacity-20" />
+                                    Nenhum equipamento encontrado.
+                                </div>
+                            ) : (
+                                <div className="w-full">
+                                    {filteredEquipments.map((eq, index) => (
+                                        <EquipmentRow
+                                            key={eq.id}
+                                            index={index}
+                                            data={{
+                                                equipments: filteredEquipments,
+                                                towers,
+                                                onAction: handleWirelessInfo,
+                                                onReboot: handleReboot,
+                                                onTest: handleTest,
+                                                onDelete: handleDelete,
+                                                onHistory: handleShowHistory,
+                                                onEdit: handleEdit,
+                                                selectedIds,
+                                                toggleSelection
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* --- RIGHT SIDEBAR --- */}

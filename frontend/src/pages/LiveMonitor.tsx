@@ -88,7 +88,9 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
             newPoint.out_mbps = liveData.traffic.out;
             hasData = true;
         } else if (item.type === 'latency') {
-            newPoint.latency = liveData.latency;
+            // Filter out 0 latency (invalid/timeout) to prevent graph drops
+            const lat = liveData.latency;
+            newPoint.latency = (lat && lat > 0) ? lat : null;
             hasData = true;
         } else if (item.type === 'signal') {
             newPoint.signal = liveData.signal.dbm;
@@ -230,7 +232,7 @@ const ChartWidget = React.memo(({ item, onRemove, liveData }: WidgetProps) => {
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }}
                                     formatter={(value: any) => [Math.round(value), 'Latência']}
                                 />
-                                <Area type="monotone" dataKey="latency" stroke="#10b981" fill={`url(#gradLatency-${item.i})`} strokeWidth={2} isAnimationActive={false} />
+                                <Area type="monotone" dataKey="latency" stroke="#10b981" fill={`url(#gradLatency-${item.i})`} strokeWidth={2} isAnimationActive={false} connectNulls />
                             </AreaChart>
                         ) : (
                             <AreaChart data={data}>
