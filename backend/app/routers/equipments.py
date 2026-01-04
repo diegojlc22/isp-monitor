@@ -761,6 +761,9 @@ async def scan_network_stream(
         # Unique IPs only and preserve some order
         ips_to_scan = list(dict.fromkeys(ips_to_scan))
         
+        # Filter out Gateway IPs (ending in .1) as requested
+        ips_to_scan = [ip for ip in ips_to_scan if not ip.endswith('.1')]
+        
         if not ips_to_scan:
             raise HTTPException(status_code=400, detail="Nenhum IP válido encontrado para escanear.")
 

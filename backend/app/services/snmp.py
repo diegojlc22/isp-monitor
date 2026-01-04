@@ -11,7 +11,7 @@ def get_shared_engine():
         _snmp_engine = SnmpEngine()
     return _snmp_engine
 
-async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
+async def _snmp_get(ip, community, oids, port=161, timeout=2.0):
     """Internal helper to try SNMP get with v2c then v1"""
     # Try SNMPv2c first
     try:
@@ -45,7 +45,7 @@ async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
     
     return None
 
-async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
+async def _snmp_next(ip, community, root_oid, port=161, timeout=2.0):
     """Internal helper to try SNMP walk/next with v2c then v1"""
     # Try SNMPv2c
     try:

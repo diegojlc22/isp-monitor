@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, X, Activity, ArrowDownUp, Wifi, Users, Heart } from 'lucide-react';
+import { Plus, X, Activity, ArrowDownUp, Wifi, Users, Heart, Search, ChevronDown } from 'lucide-react';
 import { getEquipments, getLatencyHistory, getTrafficHistory, getLiveStatus } from '../services/api'; // NEW import
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -263,6 +263,8 @@ export function LiveMonitor() {
 
     // Form state
     const [selectedEq, setSelectedEq] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const [selectedType, setSelectedType] = useState<'latency' | 'traffic' | 'signal' | 'clients' | 'health'>('traffic');
     const [selectedInterface, setSelectedInterface] = useState<number>(1);
     const [interfaceList, setInterfaceList] = useState<{ index: number; name: string }[]>([]);
@@ -447,16 +449,66 @@ export function LiveMonitor() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-1">Equipamento</label>
-                                <select
-                                    value={selectedEq}
-                                    onChange={e => setSelectedEq(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none"
-                                >
-                                    <option value="">Selecione...</option>
-                                    {equipments.map(eq => (
-                                        <option key={eq.id} value={eq.id}>{eq.name} ({eq.ip})</option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => {
+                                            setIsDropdownOpen(!isDropdownOpen);
+                                            if (!isDropdownOpen) setSearchTerm('');
+                                        }}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-blue-500 outline-none flex justify-between items-center"
+                                    >
+                                        <span className={selectedEq ? "text-white" : "text-slate-500"}>
+                                            {selectedEq
+                                                ? equipments.find(e => e.id.toString() === selectedEq)?.name || selectedEq
+                                                : "Selecione..."}
+                                        </span>
+                                        <ChevronDown size={16} className="text-slate-500" />
+                                    </button>
+
+                                    {isDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)}></div>
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-20 max-h-60 flex flex-col">
+                                                <div className="p-2 border-b border-slate-800 sticky top-0 bg-slate-900 z-30">
+                                                    <div className="relative">
+                                                        <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500" />
+                                                        <input
+                                                            autoFocus
+                                                            type="text"
+                                                            placeholder="Buscar..."
+                                                            className="w-full bg-slate-950 border border-slate-700 rounded-md pl-8 pr-3 py-1.5 text-sm text-white focus:border-blue-500 outline-none"
+                                                            value={searchTerm}
+                                                            onChange={e => setSearchTerm(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="overflow-y-auto flex-1">
+                                                    {equipments.filter(eq =>
+                                                        eq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                        eq.ip.includes(searchTerm)
+                                                    ).map(eq => (
+                                                        <button
+                                                            key={eq.id}
+                                                            onClick={() => {
+                                                                setSelectedEq(eq.id.toString());
+                                                                setIsDropdownOpen(false);
+                                                            }}
+                                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-800 transition-colors flex items-center justify-between ${selectedEq === eq.id.toString() ? 'bg-blue-600/10 text-blue-400' : 'text-slate-300'}`}
+                                                        >
+                                                            <span>{eq.name}</span>
+                                                            <span className="text-xs text-slate-500 font-mono ml-2">{eq.ip}</span>
+                                                        </button>
+                                                    ))}
+                                                    {equipments.filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || eq.ip.includes(searchTerm)).length === 0 && (
+                                                        <div className="px-3 py-4 text-center text-slate-500 text-xs">
+                                                            Nenhum equipamento encontrado.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             <div>

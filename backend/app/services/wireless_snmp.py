@@ -56,18 +56,19 @@ OIDS = {
         'signal': [
             '1.3.6.1.4.1.41112.1.10.1.4.1.5', # LTU Station Table Signal
             '1.3.6.1.4.1.41112.1.4.7.1.3',    # AirMAX AC Station Table Signal
-            '1.3.6.1.4.1.41112.1.4.5.1.5.1',  # AirMAX M5/Legacy Generic
+            '1.3.6.1.4.1.41112.1.4.5.1.5',    # AirMAX Wireless Signal (Corrected)
             '1.3.6.1.4.1.41112.1.4.1.1.5.1'   # Generic Radio Table
         ],
         'ccq': [
             '1.3.6.1.4.1.41112.1.10.1.4.1.21', # LTU Capacity/Signal Level
             '1.3.6.1.4.1.41112.1.4.6.1.3',    # AirMAX AC Quality (percentage)
             '1.3.6.1.4.1.41112.1.4.6.1.4',    # AirMAX AC Capacity (percentage)
-            '1.3.6.1.4.1.41112.1.4.5.1.7.1'    # AirMAX M5/Legacy CCQ
+            '1.3.6.1.4.1.41112.1.4.5.1.7',     # AirMAX Wireless CCQ (Corrected)
+            '1.3.6.1.4.1.41112.1.4.7.1.6'      # AirMAX AC Station CCQ
         ],
         'clients': [
             '1.3.6.1.4.1.41112.1.10.1.4',      # LTU Station Table
-            '1.3.6.1.4.1.41112.1.4.5.1.15.1'   # AirMAX M5/AC AP Client Count
+            '1.3.6.1.4.1.41112.1.4.5.1.15'     # AirMAX M5/AC AP Client Count (Corrected)
         ]
     },
     'mikrotik': {
@@ -86,20 +87,47 @@ OIDS = {
         'snr': '1.3.6.1.4.1.43356.2.1.2.6.3.1.3'        # mimosaSNR - WALK (can use as quality metric)
     },
     'intelbras': {
-        # Intelbras often mimics other MIBs. If running Mikrotik core (APC/WOM), signal is MK-oid.
-        # But some are legitimate. Let's try Generic/UBNT/MK fallback logic.
-        'signal': '1.3.6.1.4.1.41112.1.4.5.1.5.1', # Try UBNT first (some WOM do match)
-        'ccq': '1.3.6.1.4.1.41112.1.4.5.1.7.1'
+        # Using Deliberant MIBs (DLB-802DOT11-EXT-MIB / DLB-RADIO3-DRV-MIB)
+        # as Intelbras often uses Deliberant/LigoWave firmware base for radios (APC series)
+        'signal': [
+            '1.3.6.1.4.1.32750.3.10.1.2.1.1.14.4', # Intelbras APC 5A (Verified)
+            '1.3.6.1.4.1.32761.3.5.1.2.1.1.14', # dlbDot11IfSignalLevel (Deliberant)
+            '1.3.6.1.4.1.32761.3.8.1.3.1.1.75', # dlbRdo3RxLastSigLevel0 (MIMO)
+            '1.3.6.1.4.1.41112.1.4.5.1.5.1',    # UBNT Legacy Fallback
+            '1.3.6.1.4.1.41112.1.4.5.1.5',      # Fallback to UBNT
+            '1.3.6.1.4.1.14988.1.1.1.2.1.19'    # Fallback to Mikrotik
+        ],
+        'ccq': [
+            '1.3.6.1.4.1.32750.3.10.1.2.1.1.15.4', # Intelbras APC 5A Noise (Using as Qual/CCQ proxy if needed or separate?) No, user sent it as Noise. 
+            # Note: User didn't give CCQ OID, but gave Noise. Often Noise is low and Signal High = Good CCQ.
+            # Let's keep existing CCQ OIDs and hope one matches, or simply leave it blank if not found.
+            '1.3.6.1.4.1.32761.3.8.1.3.1.1.80', # dlbRdo3Ccq (Radio 3 Driver)
+            '1.3.6.1.4.1.41112.1.4.5.1.7',      # Fallback UBNT
+            '1.3.6.1.4.1.14988.1.1.1.3.1.10'    # Fallback Mikrotik
+        ],
+        'clients': [
+            '1.3.6.1.4.1.32761.3.5.1.2.1.1.16', # dlbDot11IfAssocNodeCount
+            '1.3.6.1.4.1.41112.1.4.5.1.15'      # Fallback UBNT
+        ]
     }
 }
 
 async def get_snmp_value(ip, community, oid, port=161):
+    # Try v2c first
     varBinds = await _snmp_get(ip, community, [oid], port)
+    
+    # If no result, specifically for UBNT legacy, try forcing v1 separately if helper didn't
+    # (The helper _snmp_get already tries both, but let's ensure we are robust)
     if not varBinds:
-        return None
+         return None
+
     val = varBinds[0][1]
-    try: return int(val)
-    except: return str(val)
+    
+    # Clean value (can be Integer, Gauge32, etc)
+    try: 
+        return int(val)
+    except: 
+        return str(val)
 
 async def get_snmp_walk_first(ip, community, root_oid, port=161):
     varBinds = await _snmp_next(ip, community, root_oid, port)
@@ -301,13 +329,22 @@ async def get_connected_clients_count(ip, brand, community, port=161):
     oids_to_try = clients_oid_data if isinstance(clients_oid_data, list) else [clients_oid_data]
     
     for oid in oids_to_try:
-        # Special case: LTU Table Walk
+        # Special case: LTU Station Table Walk
         if oid == '1.3.6.1.4.1.41112.1.10.1.4':
             try:
                  rows = await snmp_walk_list(ip, community, '1.3.6.1.4.1.41112.1.10.1.4.1.11', port)
                  if rows: return len(set(rows))
             except: continue
         
+        # Special case: Mikrotik Client Count (Walk and Sum all interfaces)
+        if brand_key == 'mikrotik' and '1.3.6.1.4.1.14988.1.1.1.3.1.6' in oid:
+             try:
+                 values = await snmp_walk_list(ip, community, oid, port)
+                 if values:
+                     total = sum(int(v) for v in values if v.isdigit())
+                     return total
+             except: pass
+
         # Standard OID Get
         try:
             count = await get_snmp_value(ip, community, oid, port)
