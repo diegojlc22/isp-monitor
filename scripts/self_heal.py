@@ -21,7 +21,7 @@ SERVICES = {
         # "port": 3001, (Removed to force process check)
         "check": ["node", "server.js"],
         "log": "logs/whatsapp.log",
-        "cwd": "tools/whatsapp"
+        "cwd": "backend/tools/whatsapp"
     },
     "api": {
         "cmd": f'"{PYTHON_EXE}" -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8080',

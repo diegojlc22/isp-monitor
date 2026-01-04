@@ -23,7 +23,9 @@ class NgrokManager:
     def _get_ngrok_path(self):
         # Check known paths
         paths = [
-            os.path.join(os.getcwd(), "tools", "ngrok", "ngrok.exe"),
+            os.path.join(os.getcwd(), "backend", "tools", "ngrok", "ngrok.exe"),
+            os.path.join(os.getcwd(), "backend", "tools", "ngrok.exe"), # Solto na pasta
+            os.path.join(os.getcwd(), "tools", "ngrok", "ngrok.exe"), # Fallback
             os.path.join(os.getcwd(), "ngrok.exe"),
             "ngrok" # System PATH
         ]
