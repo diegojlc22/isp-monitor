@@ -96,32 +96,40 @@ const EquipmentRow = ({ index, data }: any) => {
             </div>
 
             {/* Ações */}
-            <div className="w-48 px-4 flex justify-end gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Ações */}
+            <div className="flex-1 sm:w-48 sm:flex-none px-2 sm:px-4 flex justify-end items-center gap-1 sm:gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 {/* Status Button based on Type */}
                 {eq.equipment_type === 'station' && (
                     <button onClick={() => onAction(eq)} className="text-slate-400 hover:text-yellow-400 p-1.5 rounded hover:bg-slate-700" title="Ver Sinal">
-                        <Wifi size={16} />
+                        <Wifi size={18} />
                     </button>
                 )}
                 {eq.equipment_type === 'transmitter' && (
                     <button onClick={() => onAction(eq)} className="text-slate-400 hover:text-purple-400 p-1.5 rounded hover:bg-slate-700" title="Ver Clientes">
-                        <Users size={16} />
+                        <Users size={18} />
                     </button>
                 )}
                 <button onClick={() => onTest && onTest(eq)} className="text-slate-400 hover:text-green-400 p-1.5 rounded hover:bg-slate-700" title="Testar Ping">
-                    <Zap size={16} />
+                    <Zap size={18} />
                 </button>
-                <button onClick={() => onReboot(eq)} className="text-slate-400 hover:text-orange-500 p-1.5 rounded hover:bg-slate-700" title="Reiniciar">
-                    <Power size={16} />
+
+                {/* Secondary Actions (Hidden on very small screens, shown in dropdown or just hidden to save space?) 
+                    For now, let's keep them but maybe hide less critical ones if space is tight? 
+                    Actually, let's just allow horizontal scroll or wrapping if needed, but flex-nowrap is default.
+                    On mobile, we might want to hide History/Edit/Delete behind a "More" menu? 
+                    For simplicity and speed, let's just make them visible.
+                */}
+                <button onClick={() => onReboot(eq)} className="text-slate-400 hover:text-orange-500 p-1.5 rounded hover:bg-slate-700 hidden sm:block" title="Reiniciar">
+                    <Power size={18} />
                 </button>
                 <button onClick={() => onHistory(eq)} className="text-slate-400 hover:text-amber-400 p-1.5 rounded hover:bg-slate-700" title="Histórico">
-                    <Activity size={16} />
+                    <Activity size={18} />
                 </button>
                 <button onClick={() => onEdit(eq)} className="text-slate-400 hover:text-blue-400 p-1.5 rounded hover:bg-slate-700" title="Editar">
-                    <Edit2 size={16} />
+                    <Edit2 size={18} />
                 </button>
-                <button onClick={() => onDelete(eq.id)} className="text-slate-400 hover:text-rose-500 p-1.5 rounded hover:bg-slate-700" title="Remover">
-                    <Trash2 size={16} />
+                <button onClick={() => onDelete(eq.id)} className="text-slate-400 hover:text-rose-500 p-1.5 rounded hover:bg-slate-700 hidden sm:block" title="Remover">
+                    <Trash2 size={18} />
                 </button>
             </div>
         </div>

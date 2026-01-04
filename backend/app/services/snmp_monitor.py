@@ -268,17 +268,17 @@ async def snmp_monitor_job():
                 await session.commit()
                 # print(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
 
-        if updates_count > 0 or traffic_logs_buffer:
-             # Basic GC for memory cache (Run every 10 cycles roughly, or just here)
-             active_ids = {eq["id"] for eq in equipments_data}
-             keys_to_remove = [k for k in snmp_last_logged.keys() if k not in active_ids]
-             for k in keys_to_remove:
-                 del snmp_last_logged[k]
+            if updates_count > 0 or traffic_logs_buffer:
+                # Basic GC for memory cache (Run every 10 cycles roughly, or just here)
+                active_ids = {eq["id"] for eq in equipments_data}
+                keys_to_remove = [k for k in snmp_last_logged.keys() if k not in active_ids]
+                for k in keys_to_remove:
+                    del snmp_last_logged[k]
 
-    except Exception as e:
-        print(f"Errors in SNMP loop: {e}")
+        except Exception as e:
+            print(f"Errors in SNMP loop: {e}")
         
-    await asyncio.sleep(SNMP_INTERVAL)
+        await asyncio.sleep(SNMP_INTERVAL)
 
 if __name__ == "__main__":
     try:

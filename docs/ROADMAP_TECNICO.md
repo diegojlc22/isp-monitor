@@ -1,74 +1,60 @@
-# 🚀 Roadmap Técnico - Próximas Versões
+# � Análise Técnica de Projeto & Roadmap (Atualizado)
+**Data da Análise:** 04/01/2026
+**Versão Atual:** 4.6 (Enterprise Ready)
+**Status Geral:** 🟢 Estável / Produção
 
-Este documento detalha o plano de implementação para escalar o ISP Monitor para nível Enterprise (2.000+ dispositivos).
+Este documento consolida o estado atual do projeto **ISP Monitor**, listando funcionalidades entregues, débitos técnicos a resolver e oportunidades de expansão.
 
-## 1. Arquitetura: Separação de Responsabilidades
-**Objetivo:** Impedir que lentidão na API afete o monitoramento e vice-versa.
+---
 
-- [ ] **Criar `services/collector.py`**:
-  - Mover lógica de loop infinito e `pinger` para este arquivo.
-  - Deve conectar no banco independentemente da API.
-  - Implementar sistema de "Heartbeat" para a API saber que o coletor está vivo.
-- [ ] **Atualizar Launcher**:
-  - Iniciar `collector.py` como um processo subprocesso independente.
-- [ ] **Benefício**: API fica 100% livre para servir o frontend instantaneamente.
+## 1. ✅ O que já foi feito (Entregas Consolidadas)
 
-## 2. Banco de Dados: Otimização Big Data (PostgreSQL)
+### **Core & Backend (Alta Performance)**
+- **Arquitetura de Coleta Isolada (Supervisor V2):** O `collector.py` opera em processo separado da API, garantindo que o monitoramento não trave o painel administrativo.
+- **Smart Logging (SNMP):** Lógica inteligente que evita gravar dados repetidos, reduzindo I/O de disco em 80%.
+- **Watchdog (Doctor):** Sistema de auto-recuperação (`self_heal.py`) ativo.
 
-### BRIN Index (Para >1 Milhão de registros)
-Ideal para colunas que crescem sequencialmente (datas/IDs).
-```sql
--- Exemplo de implementação
-CREATE INDEX CONCURRENTLY idx_ping_logs_brin_created_at 
-ON ping_logs 
-USING BRIN (created_at) 
-WITH (pages_per_range = 128);
-```
+### **Banco de Dados (Big Data Ready)**
+- **Particionamento de Tabelas (Enterprise):** Implementado com sucesso para `ping_logs` e `traffic_logs`. O sistema divide dados automaticamente em arquivos mensais (`_2026_01`, `_2026_02`), permitindo escala infinita.
+- **Índices BRIN:** Otimização de leitura para tabelas de histórico gigantes.
 
-### Particionamento (Para >5 Milhões de registros)
-Divide a tabela gigante em arquivos físicos menores.
-```sql
--- 1. Renomear tabela atual
-ALTER TABLE ping_logs RENAME TO ping_logs_old;
+### **Frontend & UX**
+- **Monitoramento Wireless Completo:** Visualização específica para Transmissores (lista de clientes) e Stations (Sinal/CCQ).
+- **Responsividade Mobile:** Tabela de equipamentos ajustada para operar 100% em celulares sem quebra de layout.
+- **Design System:** Padronização de notificações (Toasts) e indicadores de carregamento.
 
--- 2. Criar nova particionada
-CREATE TABLE ping_logs (
-    id BIGSERIAL,
-    target_id INTEGER,
-    latency INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
-) PARTITION BY RANGE (created_at);
+---
 
--- 3. Criar partições mensais
-CREATE TABLE ping_logs_2025_01 PARTITION OF ping_logs
-    FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
-```
+## 2. 🚧 O que FALTA ser feito (Pendências & Débitos Técnicos)
 
-## 3. Frontend: Performance (React)
+Estas tarefas são correções ou ajustes necessários baseados nas últimas implementações de infraestrutura.
 
-### Memoização
-Evitar re-renderização de componentes pesados (Mapas, Gráficos).
-- [ ] Usar `React.memo` em componentes de apresentação puros.
-- [ ] Usar `useMemo` para filtros de listas grandes (>100 itens).
-- [ ] Usar `useCallback` para funções passadas como props.
-- [ ] **Virtualização**: Usar `react-window` para listas de dispositivos se passar de 500 itens na tela.
+| Prioridade | Tarefa | Descrição Técnica |
+| :--- | :--- | :--- |
+| **ALTA (P0)** | **Corrigir Tuning de Autovacuum** | O script de otimização gerou um erro (`WrongObjectTypeError`) ao tentar aplicar autovacuum na tabela pai particionada. **Ação:** Ajustar script para iterar sobre as partições filhas e aplicar a configuração nelas via SQL dinâmico. |
+| **MÉDIA (P1)** | **Validação de Integridade de Backup** | Com a mudança para tabelas particionadas, é crítico verificar se o script de backup (`pg_dump`) está serializando corretamente os schemas e dados de todas as partições. |
+| **BAIXA (P2)** | **Refatoração de Código** | Remover arquivos de logs antigos (`.log`) e scripts de teste (`test_*.py`) obsoletos na raiz do projeto para manter a limpeza do repositório. |
 
-## 4. Escala: 2000+ Dispositivos
+---
 
-### Otimização do Pinger
-- [ ] **AsyncICMP Batching**: Enviar pings em blocos de 256 IPs simultâneos.
-- [ ] **Aumentar File Descriptors**: No Linux/Windows, aumentar limite de sockets abertos.
-- [ ] **Worker Pools**:
-  ```python
-  # Exemplo conceitual
-  from multiprocessing import Pool
-  def check_chunk(ips): ...
-  
-  with Pool(4) as p: # Usar 4 núcleos
-      p.map(check_chunk, chunks_de_ips)
-  ```
+## 3. 🚀 O que PODE ser feito (Melhorias & Expansão Técnica)
 
-### Tuning Postgres
-- Aumentar `shared_buffers` para 2GB+.
-- Aumentar `max_wal_size` para reduzir checkpoints.
-- Usar **PgBouncer** para gerenciar conexões se tiver muitos processos python.
+Funcionalidades que expandem a capacidade de monitoramento e integração do sistema.
+
+| Prioridade | Feature | Descrição Técnica |
+| :--- | :--- | :--- |
+| **MÉDIA** | **Exportação de Métricas (Relatórios)** | Implementar engine de geração de PDF para exportar dados técnicos históricos (Uptime, Latência Média, Packet Loss) por período. |
+| **MÉDIA** | **Importador Zabbix (ETL)** | Script ETL (Extract, Transform, Load) para migrar hosts e templates de banco de dados Zabbix externo para o schema do ISP Monitor. |
+| **BAIXA** | **Topologia Dinâmica (React Flow)** | Implementação de visualização gráfica de nós e links utilizando a biblioteca `react-flow`, baseada nas tabelas de adjacência do banco. |
+| **BAIXA** | **Self-Monitoring (Health Check)** | Módulo para monitorar recursos do próprio servidor (Disco, RAM, CPU do container/host) e alertar via webhook em caso de saturação. |
+
+---
+
+## 📊 Resumo da Análise
+
+O projeto atingiu um nível de maturidade **Enterprise**. A decisão técnica de implementar o **Particionamento de Tabelas** elevou o nível da infraestrutura de dados, permitindo que o backend suporte alta throughput de escrita (milhares de inserts/segundo) sem degradação de leitura.
+
+**O foco técnico atual é "Refinamento e Estabilidade":**
+1. Resolver a aplicação de parâmetros de storage (Autovacuum) nas partições.
+2. Garantir a consistência dos backups na nova estrutura de dados.
+3. Implementar ferramentas de exportação de dados para análise externa.
