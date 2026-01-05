@@ -259,6 +259,7 @@ class MonitorTarget(Base):
     target = Column(String, unique=True, index=True) # IP or Domain (e.g. "8.8.8.8")
     type = Column(String) # "icmp" (ping), "http", "dns"
     enabled = Column(Boolean, default=True)
+    is_priority = Column(Boolean, default=False) # Auto-monitor if True
 
 class Insight(Base):
     """

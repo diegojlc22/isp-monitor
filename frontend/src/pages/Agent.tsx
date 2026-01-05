@@ -47,6 +47,7 @@ const Agent: React.FC = () => {
     const [newName, setNewName] = useState('');
     const [newTarget, setNewTarget] = useState('');
     const [newType, setNewType] = useState('http');
+    const [newIsPriority, setNewIsPriority] = useState(false);
 
     // Editing State
     const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
@@ -106,11 +107,17 @@ const Agent: React.FC = () => {
         if (!newName || !newTarget) return;
 
         try {
-            await createMonitorTarget({ name: newName, target: newTarget, type: newType });
-            toast.success('Alvo adicionado!');
+            await createMonitorTarget({
+                name: newName,
+                target: newTarget,
+                type: newType,
+                is_priority: newIsPriority
+            });
+            toast.success(newIsPriority ? 'Alvo prioritário adicionado! Monitoramento automático ativado.' : 'Alvo adicionado!');
             setShowModal(false);
             setNewName('');
             setNewTarget('');
+            setNewIsPriority(false);
             fetchData();
         } catch (err) {
             toast.error('Erro ao adicionar alvo.');
@@ -484,6 +491,24 @@ const Agent: React.FC = () => {
                                     <option value="icmp">Ping/ICMP</option>
                                     <option value="dns">DNS Resolution</option>
                                 </select>
+                            </div>
+                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={newIsPriority}
+                                        onChange={e => setNewIsPriority(e.target.checked)}
+                                        className="w-5 h-5 rounded border-amber-500 bg-slate-950 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900"
+                                    />
+                                    <div>
+                                        <span className="text-amber-400 font-bold flex items-center gap-2">
+                                            ⭐ Monitoramento Prioritário
+                                        </span>
+                                        <p className="text-xs text-amber-400/70 mt-0.5">
+                                            Ativa monitoramento automático contínuo (a cada 5 minutos)
+                                        </p>
+                                    </div>
+                                </label>
                             </div>
                             <div className="pt-2">
                                 <button

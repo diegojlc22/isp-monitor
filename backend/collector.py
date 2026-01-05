@@ -12,7 +12,7 @@ sys.path.append(os.getcwd())
 from backend.app.database import engine, Base
 from backend.app.services.pinger_fast import PingerService
 from backend.app.services.snmp_monitor import snmp_monitor_job
-from backend.app.services.synthetic_agent import synthetic_agent_job
+from backend.app.services.synthetic_agent import synthetic_agent_job, start_auto_priority_loop
 from backend.app.services.maintenance import cleanup_job
 from backend.app.services.topology import run_topology_discovery
 from backend.app.services.security_audit import security_audit_job
@@ -144,6 +144,7 @@ async def main():
     # Note: snmp_monitor_job and others are infinite loops. 
     start_task("SNMP Monitor", snmp_monitor_job())
     start_task("AI Agent", synthetic_agent_job())
+    start_task("Auto Priority Monitor", start_auto_priority_loop())  # 🎯 NEW: Auto-monitor priority targets
     start_task("Topology", topology_loop())
     start_task("Maintenance", maintenance_loop())
     start_task("Heartbeat", heartbeat_loop())

@@ -17,6 +17,41 @@ DEFAULT_DNS = "8.8.8.8"
 manual_loop_running = False
 manual_loop_task = None
 
+# --- AUTO LOOP FOR PRIORITY TARGETS ---
+auto_priority_loop_running = False
+auto_priority_loop_task = None
+
+async def start_auto_priority_loop():
+    """Monitora automaticamente APENAS alvos prioritários em background."""
+    global auto_priority_loop_running
+    if auto_priority_loop_running:
+        return
+    
+    auto_priority_loop_running = True
+    print("[IA-AGENT] Loop automático de PRIORITÁRIOS INICIADO.")
+    
+    try:
+        while auto_priority_loop_running:
+            await run_priority_test_cycle()
+            # Espera intervalo configurável (padrão: 5 minutos)
+            async with AsyncSessionLocal() as session:
+                params_res = await session.execute(
+                    select(Parameters).where(Parameters.key == "agent_check_interval")
+                )
+                param = params_res.scalar_one_or_none()
+                interval = int(param.value) if param else 300
+            
+            for _ in range(interval):
+                if not auto_priority_loop_running: break
+                await asyncio.sleep(1)
+    finally:
+        auto_priority_loop_running = False
+        print("[IA-AGENT] Loop automático de PRIORITÁRIOS PARADO.")
+
+async def stop_auto_priority_loop():
+    global auto_priority_loop_running
+    auto_priority_loop_running = False
+
 async def start_manual_test_loop():
     """Roda testes continuamente em background até ser parado."""
     global manual_loop_running
@@ -165,6 +200,55 @@ async def train_baselines_job():
             
     except Exception as e:
         print(f"[IA-BRAIN] Error training: {e}")
+
+async def run_priority_test_cycle():
+    """
+    🎯 Executa testes APENAS em alvos marcados como prioritários.
+    Usado pelo loop automático em background.
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            # Get ONLY priority targets
+            targets_res = await session.execute(
+                select(MonitorTarget).where(
+                    MonitorTarget.enabled == True,
+                    MonitorTarget.is_priority == True
+                )
+            )
+            priority_targets = targets_res.scalars().all()
+            
+            if not priority_targets:
+                return {"message": "No priority targets configured"}
+            
+            print(f"[IA-AGENT AUTO] Testando {len(priority_targets)} alvos prioritários...")
+            
+            # Execute Tests
+            for t in priority_targets:
+                res = {}
+                if t.type == 'dns':
+                    res = await check_dns(t.target)
+                elif t.type == 'http':
+                    url = t.target if t.target.startswith("http") else f"https://{t.target}"
+                    res = await check_http(url)
+                elif t.type == 'icmp':
+                    res = await check_ping(t.target)
+                
+                # Save Log
+                log = SyntheticLog(
+                    test_type=t.type,
+                    target=t.target,
+                    latency_ms=res.get("latency"),
+                    success=res.get("success", False),
+                    timestamp=datetime.utcnow()
+                )
+                session.add(log)
+            
+            await session.commit()
+            return {"message": f"Tested {len(priority_targets)} priority targets"}
+    
+    except Exception as e:
+        print(f"[PRIORITY TEST ERROR] {e}")
+        return {"error": str(e)}
 
 async def run_single_test_cycle():
     """
