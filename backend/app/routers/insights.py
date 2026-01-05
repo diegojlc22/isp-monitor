@@ -62,3 +62,36 @@ async def dismiss_insight(insight_id: int, db: AsyncSession = Depends(get_db)):
     )
     await db.commit()
     return {"status": "success"}
+
+@router.post("/analyze")
+async def force_analysis(db: AsyncSession = Depends(get_db)):
+    """Force immediate AI analysis (Security + Capacity)"""
+    from backend.app.services.security_audit import run_security_audit
+    from backend.app.services.capacity_planning import analyze_capacity_trends
+    
+    results = {
+        "security": {"status": "pending", "error": None},
+        "capacity": {"status": "pending", "error": None}
+    }
+    
+    # Run security audit
+    try:
+        await run_security_audit()
+        results["security"]["status"] = "success"
+    except Exception as e:
+        results["security"]["status"] = "error"
+        results["security"]["error"] = str(e)
+    
+    # Run capacity planning
+    try:
+        await analyze_capacity_trends()
+        results["capacity"]["status"] = "success"
+    except Exception as e:
+        results["capacity"]["status"] = "error"
+        results["capacity"]["error"] = str(e)
+    
+    return {
+        "status": "completed",
+        "results": results,
+        "message": "AI analysis executed. Check /insights/ for results."
+    }
