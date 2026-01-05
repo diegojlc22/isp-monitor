@@ -28,6 +28,7 @@ const Health = lazy(() => import('./pages/Health').then(m => ({ default: m.Healt
 const RequestsPage = lazy(() => import('./pages/RequestsPage'));
 const MobileApp = lazy(() => import('./pages/MobileApp').then(m => ({ default: m.MobileApp })));
 const Reports = lazy(() => import('./pages/Reports'));
+const Schedules = lazy(() => import('./pages/Schedules').then(m => ({ default: m.Schedules })));
 
 // Loading Component
 const PageLoader = () => (
@@ -80,6 +81,7 @@ createRoot(document.getElementById('root')!).render(
                     <Route path="requests" element={<RequestsPage />} />
                     <Route path="mobile" element={<MobileApp />} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="schedules" element={<Schedules />} />
                     <Route path="users" element={<ManageUsers />} />
                     <Route path="backup" element={<Backup />} />
                   </Route>

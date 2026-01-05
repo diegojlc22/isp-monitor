@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getNetworkDefaults, updateNetworkDefaults, getMonitoringSchedules, updateMonitoringSchedules } from '../services/api';
+import { getSystemName, updateSystemName, getLatencyConfig, updateLatencyConfig, getNetworkDefaults, updateNetworkDefaults } from '../services/api';
 import { Save, Smartphone, Settings as SettingsIcon, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,15 +8,6 @@ export function Settings() {
     const [sysName, setSysName] = useState('');
     const [thresholds, setThresholds] = useState({ good: 50, critical: 200 });
     const [networkDefaults, setNetworkDefaults] = useState({ ssh_user: '', ssh_password: '', snmp_community: '' });
-    const [schedules, setSchedules] = useState({
-        ping_interval: 30,
-        snmp_interval: 10,
-        agent_interval: 300,
-        topology_interval: 1800,
-        daily_report_hour: 8,
-        security_audit_days: 7,
-        capacity_planning_days: 7
-    });
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
@@ -24,7 +15,6 @@ export function Settings() {
         getSystemName().then(res => setSysName(res.name)).catch(console.error);
         getLatencyConfig().then(setThresholds).catch(console.error);
         getNetworkDefaults().then(setNetworkDefaults).catch(console.error);
-        getMonitoringSchedules().then(setSchedules).catch(console.error);
     }, []);
 
     async function handleSave(e: React.FormEvent) {
@@ -34,7 +24,6 @@ export function Settings() {
             await updateSystemName(sysName);
             await updateLatencyConfig(thresholds);
             await updateNetworkDefaults(networkDefaults);
-            await updateMonitoringSchedules(schedules);
 
             await refreshSystemName();
             setMsg('Configurações salvas com sucesso!');
@@ -146,69 +135,6 @@ export function Settings() {
                         </button>
                     </div>
                 </form>
-
-                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden mt-6">
-                    <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-                        <div className="p-2 bg-blue-500/10 rounded-lg">
-                            <Activity className="text-blue-400" size={24} />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-white">Cronogramas de Monitoramento</h3>
-                            <p className="text-sm text-slate-400">Intervalos de execução dos serviços automáticos.</p>
-                        </div>
-                    </div>
-                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Intervalo de Ping (segundos)</label>
-                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.ping_interval} onChange={e => setSchedules({ ...schedules, ping_interval: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 30s (Contínuo)</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Intervalo SNMP (segundos)</label>
-                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.snmp_interval} onChange={e => setSchedules({ ...schedules, snmp_interval: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 10s (Tráfego/Sinal)</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Agente IA (segundos)</label>
-                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.agent_interval} onChange={e => setSchedules({ ...schedules, agent_interval: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 300s (5 minutos)</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Topologia (segundos)</label>
-                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.topology_interval} onChange={e => setSchedules({ ...schedules, topology_interval: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 1800s (30 minutos)</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Relatório Diário (hora)</label>
-                            <input type="number" min="0" max="23" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.daily_report_hour} onChange={e => setSchedules({ ...schedules, daily_report_hour: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 8h (Piores sinais)</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Auditoria Segurança (dias)</label>
-                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.security_audit_days} onChange={e => setSchedules({ ...schedules, security_audit_days: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 7 dias (Semanal)</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Análise Capacidade (dias)</label>
-                            <input type="number" className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-blue-500 focus:outline-none"
-                                value={schedules.capacity_planning_days} onChange={e => setSchedules({ ...schedules, capacity_planning_days: parseInt(e.target.value) })} />
-                            <p className="mt-1 text-xs text-slate-500">Padrão: 7 dias (Semanal)</p>
-                        </div>
-                    </div>
-                    <div className="p-6 pt-0">
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                            <p className="text-sm text-amber-400">
-                                ⚠️ <strong>Atenção:</strong> Alterações nos cronogramas exigem reinicialização do Collector para ter efeito.
-                            </p>
-                        </div>
-                    </div>
-                </div>
 
                 <div className="mt-8 bg-slate-900 rounded-xl border border-slate-800 p-6 opacity-75">
                     <div className="flex items-center gap-3 mb-4">
