@@ -21,18 +21,21 @@ interface Equipment {
     snmp_community?: string; snmp_version?: number; snmp_port?: number; snmp_interface_index?: number;
     snmp_traffic_interface_index?: number;
     is_mikrotik?: boolean; mikrotik_interface?: string; api_port?: number;
+    is_priority?: boolean;
 }
 interface FormData {
     name: string; ip: string; tower_id: string; parent_id: string; ssh_user: string; ssh_password: string;
     ssh_port: number; snmp_community: string; snmp_version: number; snmp_port: number; snmp_interface_index: number;
     snmp_traffic_interface_index: number | null;
     brand: string; equipment_type: string; is_mikrotik: boolean; mikrotik_interface: string; api_port: number;
+    is_priority: boolean;
 }
 
 const INITIAL_FORM_STATE: FormData = {
     name: '', ip: '', tower_id: '', parent_id: '', ssh_user: 'admin', ssh_password: '', ssh_port: 22,
     snmp_community: 'public', snmp_version: 1, snmp_port: 161, snmp_interface_index: 1, snmp_traffic_interface_index: null, brand: 'generic',
-    equipment_type: 'station', is_mikrotik: false, mikrotik_interface: '', api_port: 8728
+    equipment_type: 'station', is_mikrotik: false, mikrotik_interface: '', api_port: 8728,
+    is_priority: false
 };
 
 // --- Custom Hooks ---
@@ -81,6 +84,7 @@ const EquipmentRow = ({ index, data }: any) => {
             {/* Nome & Torre */}
             <div className="flex-1 px-4 min-w-0">
                 <div className="font-medium text-white flex items-center gap-2 truncate">
+                    {eq.is_priority && <div title="Monitoramento Prioritário"><Zap size={14} className="text-yellow-500 fill-yellow-500 shrink-0" /></div>}
                     {eq.brand === 'mikrotik' ? <Activity size={16} className="text-blue-400 shrink-0" /> :
                         eq.brand === 'ubiquiti' ? <Wifi size={16} className="text-sky-400 shrink-0" /> :
                             eq.brand === 'intelbras' ? <Wifi size={16} className="text-green-400 shrink-0" /> :
@@ -655,7 +659,8 @@ export function Equipments() {
             snmp_version: eq.snmp_version || 1, snmp_port: eq.snmp_port || 161, snmp_interface_index: eq.snmp_interface_index || 1,
             snmp_traffic_interface_index: eq.snmp_traffic_interface_index || null,
             brand: eq.brand || 'generic', equipment_type: eq.equipment_type || 'station', is_mikrotik: eq.is_mikrotik || false,
-            mikrotik_interface: eq.mikrotik_interface || '', api_port: eq.api_port || 8728
+            mikrotik_interface: eq.mikrotik_interface || '', api_port: eq.api_port || 8728,
+            is_priority: eq.is_priority || false
         });
         setShowModal(true);
     }, []);
@@ -1122,6 +1127,21 @@ export function Equipments() {
                                     <option value="mimosa">Mimosa</option>
                                     <option value="intelbras">Intelbras</option>
                                 </select>
+                            </div>
+
+                            <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.is_priority}
+                                        onChange={e => setFormData({ ...formData, is_priority: e.target.checked })}
+                                        className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-yellow-500 focus:ring-yellow-500"
+                                    />
+                                    <div>
+                                        <span className="text-white text-sm font-bold">Monitoramento Prioritário ⭐</span>
+                                        <p className="text-[10px] text-slate-400 italic">Habilita Auditoria de Segurança e Análise de Capacidade para este rádio.</p>
+                                    </div>
+                                </label>
                             </div>
 
                             <div className="bg-slate-800/50 p-3 rounded border border-slate-700">

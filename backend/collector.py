@@ -16,8 +16,9 @@ from backend.app.services.synthetic_agent import synthetic_agent_job
 from backend.app.services.maintenance import cleanup_job
 from backend.app.services.topology import run_topology_discovery
 from backend.app.services.security_audit import security_audit_job
-from backend.app.services.daily_report import daily_report_job
 from backend.app.services.capacity_planning import capacity_planning_job
+from backend.app.database import AsyncSessionLocal
+from backend.app.models import Parameters
 
 # Configure Loguru
 logger.add("collector_supervisor.log", rotation="1 MB", retention="5 days", level="INFO")
@@ -35,10 +36,7 @@ async def topology_loop():
         except Exception as e:
             logger.error(f"[ERROR] Falha na descoberta de topologia: {e}")
         
-        # Read interval from database (with fallback to 30 min)
         try:
-            from backend.app.database import AsyncSessionLocal
-            from backend.app.models import Parameters
             async with AsyncSessionLocal() as session:
                 res = await session.execute(select(Parameters).where(Parameters.key == "topology_interval"))
                 param = res.scalar_one_or_none()
@@ -80,6 +78,10 @@ async def maintenance_loop():
         try:
             await asyncio.sleep(60) # Espera sistema estabilizar na primeira vez
             await cleanup_job()
+            
+            # Rollup de estatísticas horárias
+            from backend.app.services.maintenance import rollup_hourly_stats_job
+            await rollup_hourly_stats_job()
         except asyncio.CancelledError:
             logger.info("[MAINTENANCE] Loop cancelado.")
             break

@@ -29,6 +29,7 @@ const RequestsPage = lazy(() => import('./pages/RequestsPage'));
 const MobileApp = lazy(() => import('./pages/MobileApp').then(m => ({ default: m.MobileApp })));
 const Reports = lazy(() => import('./pages/Reports'));
 const Schedules = lazy(() => import('./pages/Schedules').then(m => ({ default: m.Schedules })));
+const Priority = lazy(() => import('./pages/Priority').then(m => ({ default: m.Priority })));
 
 // Loading Component
 const PageLoader = () => (
@@ -70,6 +71,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="map" element={<NetMap />} />
                   <Route path="towers" element={<Towers />} />
                   <Route path="equipments" element={<Equipments />} />
+                  <Route path="priority" element={<Priority />} />
                   <Route path="alerts" element={<Alerts />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="agent" element={<Agent />} />

@@ -18,12 +18,13 @@ async def analyze_capacity_trends():
     warnings = []
     
     async with AsyncSessionLocal() as session:
-        # Get equipment with significant traffic (> 10 Mbps average)
+        # Get equipment with significant traffic (> 10 Mbps average) AND marked as priority
         result = await session.execute(
             select(Equipment.id, Equipment.name, Equipment.ip, Equipment.last_traffic_in, Equipment.last_traffic_out)
             .where(
                 and_(
                     Equipment.is_online == True,
+                    Equipment.is_priority == True,  # Only analyze priority equipment
                     Equipment.last_traffic_in > 10  # Only analyze links with real usage
                 )
             )
@@ -83,13 +84,17 @@ async def analyze_capacity_trends():
             # Try to detect from current peak
             current_peak = max(current_in, current_out)
             
-            # Estimate capacity based on current usage
-            if current_peak < 50:
+            # Estimate capacity based on current usage with more common link steps
+            if current_peak < 85:
                 estimated_capacity = 100  # 100 Mbps link
-            elif current_peak < 150:
+            elif current_peak < 180:
                 estimated_capacity = 200  # 200 Mbps link
-            elif current_peak < 400:
+            elif current_peak < 270:
+                estimated_capacity = 300  # 300 Mbps link
+            elif current_peak < 420:
                 estimated_capacity = 500  # 500 Mbps link
+            elif current_peak < 750:
+                estimated_capacity = 800  # 800 Mbps link
             else:
                 estimated_capacity = 1000  # 1 Gbps link
             
@@ -180,22 +185,49 @@ async def capacity_planning_job():
     """Background job that runs capacity analysis at configured interval"""
     while True:
         try:
-            await analyze_capacity_trends()
+            # Check last run
+            now = datetime.now()
+            should_run = False
+            
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(
+                    select(Parameters).where(Parameters.key == "capacity_planning_last_run")
+                )
+                last_run_param = res.scalar_one_or_none()
+                
+                res_days = await session.execute(
+                    select(Parameters).where(Parameters.key == "capacity_planning_days")
+                )
+                days_param = res_days.scalar_one_or_none()
+                days = int(days_param.value) if days_param else 7
+
+                if not last_run_param:
+                    should_run = True
+                else:
+                    last_run = datetime.fromisoformat(last_run_param.value)
+                    if (now - last_run).total_seconds() >= days * 86400:
+                        should_run = True
+
+            if should_run:
+                await analyze_capacity_trends()
+                async with AsyncSessionLocal() as session:
+                    # Update last run
+                    res = await session.execute(
+                        select(Parameters).where(Parameters.key == "capacity_planning_last_run")
+                    )
+                    param = res.scalar_one_or_none()
+                    if not param:
+                        session.add(Parameters(key="capacity_planning_last_run", value=now.isoformat()))
+                    else:
+                        param.value = now.isoformat()
+                    await session.commit()
+            else:
+                logger.info("[CAPACITY] Analysis skipped (already ran recently).")
+
         except Exception as e:
             logger.error(f"[CAPACITY PLANNING] Error: {e}")
         
-        # Read interval from database (default 7 days)
-        try:
-            async with AsyncSessionLocal() as session:
-                res = await session.execute(
-                    select(Parameters).where(Parameters.key == "capacity_planning_days")
-                )
-                param = res.scalar_one_or_none()
-                days = int(param.value) if param else 7
-        except:
-            days = 7
-        
-        await asyncio.sleep(days * 86400)  # Convert days to seconds
+        await asyncio.sleep(3600)  # Check every hour
 
 if __name__ == "__main__":
     asyncio.run(analyze_capacity_trends())

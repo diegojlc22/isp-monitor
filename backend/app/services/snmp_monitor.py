@@ -5,7 +5,8 @@ from backend.app.database import AsyncSessionLocal
 from backend.app.models import Equipment, TrafficLog
 from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
-from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats
+from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats, get_connected_clients_count
+from loguru import logger
 
 # Config
 SNMP_INTERVAL = 10 # Check SNMP every 10s (Balanced for CPU/Responsiveness)
@@ -20,7 +21,7 @@ async def snmp_monitor_job():
     Parallelized for high performance (Semaphore limited).
     """
     import time
-    print("[INFO] Traffic/Wireless Monitor started (Interval: 10s)...")
+    logger.info("[TRAFFIC] Traffic/Wireless Monitor started (Interval: 10s)...")
     
     # Limit Concurrency to avoid network flood and CPU spikes
     sem = asyncio.Semaphore(25) # Reduced from 100 to 25 
@@ -56,7 +57,6 @@ async def snmp_monitor_job():
                             result["updates"]["ccq"] = w_stats['ccq']
                         
                         if eq_data.get("equipment_type") == 'transmitter': 
-                            from backend.app.services.wireless_snmp import get_connected_clients_count
                             clients = await get_connected_clients_count(ip, brand, community, port)
                             if clients is not None:
                                  result["updates"]["connected_clients"] = clients

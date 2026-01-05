@@ -11,7 +11,6 @@ async def detect_equipment_type(ip, brand, community, port=161):
         # If has clients > 0, it's a Transmitter (AP)
         # If has signal data but no clients, it's a Station
         
-        from backend.app.services.wireless_snmp import get_connected_clients_count, get_wireless_stats
         
         # Try to get connected clients count
         clients = await get_connected_clients_count(ip, brand, community, port)

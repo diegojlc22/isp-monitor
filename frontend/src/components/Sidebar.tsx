@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User, Bell, Menu, X, Activity, Smartphone, FileText, Clock } from 'lucide-react';
+import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User, Bell, Menu, X, Activity, Smartphone, FileText, Clock, Zap } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
@@ -57,6 +57,9 @@ export function Sidebar() {
                     </NavLink>
                     <NavLink to="/equipments" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
                         <Server className="w-5 h-5" /> <span className="font-medium">Equipamentos</span>
+                    </NavLink>
+                    <NavLink to="/priority" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-yellow-600 text-white shadow-md shadow-yellow-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                        <Zap className="w-5 h-5 flex-shrink-0" /> <span className="font-medium">Prioritários</span>
                     </NavLink>
                     <NavLink to="/alerts" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
                         <Bell className="w-5 h-5" /> <span className="font-medium">Alertas</span>

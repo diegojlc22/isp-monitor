@@ -5,7 +5,7 @@ from backend.app.database import AsyncSessionLocal
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from loguru import logger
-from backend.app.services.wireless_snmp import get_snmp_value, get_snmp_walk_first, detect_equipment_name
+from backend.app.services.wireless_snmp import get_snmp_value, get_snmp_walk_first, detect_equipment_name, get_neighbors_data
 import math
 
 class TopologyBuilder:
@@ -77,9 +77,7 @@ class TopologyBuilder:
                 logger.info("[TOPOLOGY] Nenhum link LLDP encontrado.")
 
         except Exception as e:
-            logger.error(f"[TOPOLOGY] Erro fatal: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("[TOPOLOGY] Erro fatal na construção da topologia")
         finally:
             await self.db.close()
 
@@ -90,8 +88,6 @@ class TopologyBuilder:
         """
         neighbors_data = []
         try:
-            from backend.app.services.wireless_snmp import get_neighbors_data
-            
             raw_data = await get_neighbors_data(eq.ip, eq.brand, eq.snmp_community, eq.snmp_port)
             neighbors_data = [n['ip'] for n in raw_data if n.get('ip')]
             

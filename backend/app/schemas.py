@@ -49,6 +49,7 @@ class EquipmentBase(BaseModel):
     disk_usage: Optional[int] = None
     temperature: Optional[float] = None
     voltage: Optional[float] = None
+    is_priority: bool = False  # Mark for priority monitoring
     whatsapp_groups: Optional[List[str]] = []
 
     @validator('whatsapp_groups', pre=True)
@@ -86,6 +87,7 @@ class EquipmentUpdate(BaseModel):
     signal_dbm: Optional[float] = None
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
+    is_priority: Optional[bool] = None  # Priority monitoring flag
     whatsapp_groups: Optional[List[str]] = None
 
 class Equipment(EquipmentBase):

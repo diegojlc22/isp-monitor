@@ -438,7 +438,7 @@ async def synthetic_agent_job():
         # Sleep logic
         try:
              async with AsyncSessionLocal() as session:
-                interval_res = await session.execute(select(Parameters).where(Parameters.key == "agent_check_interval"))
+                interval_res = await session.execute(select(Parameters).where(Parameters.key == "agent_interval"))
                 row = interval_res.scalar_one_or_none()
                 sleep_sec = int(row.value) if row else DEFAULT_INTERVAL
         except:

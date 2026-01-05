@@ -63,6 +63,9 @@ class Equipment(Base):
     # Maintenance Mode
     maintenance_until = Column(DateTime, nullable=True)
     
+    # Priority Monitoring (for advanced features like capacity planning, security audit)
+    is_priority = Column(Boolean, default=False)
+    
     # SSH Credentials
     ssh_user = Column(String, nullable=True, default="admin")
     ssh_password = Column(String, nullable=True)

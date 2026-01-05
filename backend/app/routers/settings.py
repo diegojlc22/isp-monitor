@@ -83,8 +83,6 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     await upsert("telegram_enabled", "true" if config.telegram_enabled else "false")
     await upsert("whatsapp_enabled", "true" if config.whatsapp_enabled else "false")
     
-    print(f"[DEBUG SAVE] whatsapp_target = '{config.whatsapp_target}'")
-    print(f"[DEBUG SAVE] whatsapp_target_group = '{config.whatsapp_target_group}'")
     
     await upsert("whatsapp_target", config.whatsapp_target)
     await upsert("whatsapp_target_group", config.whatsapp_target_group)

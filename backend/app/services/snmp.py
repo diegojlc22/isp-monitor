@@ -11,7 +11,7 @@ def get_shared_engine():
         _snmp_engine = SnmpEngine()
     return _snmp_engine
 
-async def _snmp_get(ip, community, oids, port=161, timeout=2.0):
+async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
     """Internal helper to try SNMP get with v2c then v1"""
     # Try SNMPv2c first
     try:
@@ -19,7 +19,7 @@ async def _snmp_get(ip, community, oids, port=161, timeout=2.0):
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             engine,
             CommunityData(community, mpModel=1), # v2c
-            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=0),
             ContextData(),
             *[ObjectType(ObjectIdentity(oid)) for oid in oids]
         )
@@ -34,7 +34,7 @@ async def _snmp_get(ip, community, oids, port=161, timeout=2.0):
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             engine,
             CommunityData(community, mpModel=0), # v1
-            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=0),
             ContextData(),
             *[ObjectType(ObjectIdentity(oid)) for oid in oids]
         )
@@ -45,7 +45,7 @@ async def _snmp_get(ip, community, oids, port=161, timeout=2.0):
     
     return None
 
-async def _snmp_next(ip, community, root_oid, port=161, timeout=2.0):
+async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
     """Internal helper to try SNMP walk/next with v2c then v1"""
     # Try SNMPv2c
     try:
@@ -53,7 +53,7 @@ async def _snmp_next(ip, community, root_oid, port=161, timeout=2.0):
         errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
             engine,
             CommunityData(community, mpModel=1),
-            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=0),
             ContextData(),
             ObjectType(ObjectIdentity(root_oid)),
             lexicographicMode=False
@@ -69,7 +69,7 @@ async def _snmp_next(ip, community, root_oid, port=161, timeout=2.0):
         errorIndication, errorStatus, errorIndex, varBinds = await nextCmd(
             engine,
             CommunityData(community, mpModel=0),
-            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+            UdpTransportTarget((ip, port), timeout=timeout, retries=0),
             ContextData(),
             ObjectType(ObjectIdentity(root_oid)),
             lexicographicMode=False
@@ -386,7 +386,6 @@ async def detect_best_interface(ip: str, community: str = "public", port: int = 
         return None
 
     # Determine Brand
-    from backend.app.services.wireless_snmp import detect_brand
     brand = await detect_brand(ip, community, port)
     
     results = await measure_interfaces_traffic(ip, community, port, interfaces, brand=brand)

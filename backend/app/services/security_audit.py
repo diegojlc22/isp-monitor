@@ -91,10 +91,10 @@ async def run_security_audit():
     vulnerabilities = []
     
     async with AsyncSessionLocal() as session:
-        # Get all online equipment
+        # Get all online priority equipment
         result = await session.execute(
             select(Equipment.ip, Equipment.name, Equipment.ssh_port, Equipment.brand)
-            .where(Equipment.is_online == True)
+            .where(Equipment.is_online == True, Equipment.is_priority == True)  # Only priority equipment
         )
         devices = result.all()
         
@@ -166,22 +166,49 @@ async def security_audit_job():
     """Background job that runs security audit at configured interval"""
     while True:
         try:
-            await run_security_audit()
+            # Check last run
+            now = datetime.now()
+            should_run = False
+            
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(
+                    select(Parameters).where(Parameters.key == "security_audit_last_run")
+                )
+                last_run_param = res.scalar_one_or_none()
+                
+                res_days = await session.execute(
+                    select(Parameters).where(Parameters.key == "security_audit_days")
+                )
+                days_param = res_days.scalar_one_or_none()
+                days = int(days_param.value) if days_param else 7
+
+                if not last_run_param:
+                    should_run = True
+                else:
+                    last_run = datetime.fromisoformat(last_run_param.value)
+                    if (now - last_run).total_seconds() >= days * 86400:
+                        should_run = True
+
+            if should_run:
+                await run_security_audit()
+                async with AsyncSessionLocal() as session:
+                    # Update last run
+                    res = await session.execute(
+                        select(Parameters).where(Parameters.key == "security_audit_last_run")
+                    )
+                    param = res.scalar_one_or_none()
+                    if not param:
+                        session.add(Parameters(key="security_audit_last_run", value=now.isoformat()))
+                    else:
+                        param.value = now.isoformat()
+                    await session.commit()
+            else:
+                logger.info("[SECURITY] Audit skipped (already ran recently).")
+
         except Exception as e:
             logger.error(f"[SECURITY AUDIT] Error: {e}")
         
-        # Read interval from database (default 7 days)
-        try:
-            async with AsyncSessionLocal() as session:
-                res = await session.execute(
-                    select(Parameters).where(Parameters.key == "security_audit_days")
-                )
-                param = res.scalar_one_or_none()
-                days = int(param.value) if param else 7
-        except:
-            days = 7
-        
-        await asyncio.sleep(days * 86400)  # Convert days to seconds
+        await asyncio.sleep(3600)  # Check every hour
 
 if __name__ == "__main__":
     asyncio.run(run_security_audit())
