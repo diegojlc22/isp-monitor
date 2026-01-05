@@ -17,6 +17,7 @@ from backend.app.services.maintenance import cleanup_job
 from backend.app.services.topology import run_topology_discovery
 from backend.app.services.security_audit import security_audit_job
 from backend.app.services.capacity_planning import capacity_planning_job
+from backend.app.services.backup_service import backup_scheduler_loop
 from backend.app.database import AsyncSessionLocal
 from backend.app.models import Parameters
 
@@ -150,6 +151,7 @@ async def main():
     start_task("Heartbeat", heartbeat_loop())
     start_task("Security Audit", security_audit_job())
     start_task("Capacity Planning", capacity_planning_job())
+    start_task("Backup Service", backup_scheduler_loop())
     
     logger.info(f"[SUPERVISOR] {len(active_tasks)} tarefas iniciais disparadas.")
 
