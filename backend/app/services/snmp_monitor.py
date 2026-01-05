@@ -6,6 +6,7 @@ from backend.app.models import Equipment, TrafficLog
 from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
 from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats, get_connected_clients_count
+from backend.app.services.notifier import send_notification
 from loguru import logger
 
 # Config
@@ -139,23 +140,39 @@ async def snmp_monitor_job():
 
     while True:
         try:
-            # 1. Fetch Candidates from DB
+            # 1. Fetch Candidates and Notif Config
             equipments_data = [] # List of dicts
             async with AsyncSessionLocal() as session:
+                from backend.app.models import Parameters
+                # Notification Config
+                params_res = await session.execute(
+                    select(Parameters).where(Parameters.key.in_([
+                        'telegram_token', 'telegram_chat_id', 'telegram_enabled',
+                        'whatsapp_enabled', 'whatsapp_target', 'whatsapp_target_group',
+                        'telegram_template_traffic'
+                    ]))
+                )
+                notif_config = {p.key: p.value for p in params_res.scalars().all()}
+
+                # Equipments
                 res = await session.execute(select(Equipment).where(Equipment.is_online == True))
                 equipments = res.scalars().all()
                 for eq in equipments:
                     if not eq.ip: continue
                     # Copy data to dict to avoid session detach issues during async gather
                     equipments_data.append({
-                        "id": eq.id, "ip": eq.ip, "brand": eq.brand, 
+                        "id": eq.id, "name": eq.name, "ip": eq.ip, "brand": eq.brand, 
                         "snmp_community": eq.snmp_community, "snmp_port": eq.snmp_port,
                         "ssh_user": eq.ssh_user, "ssh_password": eq.ssh_password,
                         "is_mikrotik": eq.is_mikrotik, "mikrotik_interface": eq.mikrotik_interface,
                         "api_port": eq.api_port, 
                         "snmp_interface_index": eq.snmp_interface_index,
                         "snmp_traffic_interface_index": eq.snmp_traffic_interface_index,
-                        "equipment_type": eq.equipment_type
+                        "equipment_type": eq.equipment_type,
+                        "max_traffic_in": eq.max_traffic_in,
+                        "max_traffic_out": eq.max_traffic_out,
+                        "traffic_alert_interval": eq.traffic_alert_interval,
+                        "last_traffic_alert_sent": eq.last_traffic_alert_sent
                     })
             
             if not equipments_data:
@@ -269,6 +286,64 @@ async def snmp_monitor_job():
                                 "time": current_time,
                                 "signal": res["updates"].get("signal_dbm")
                             }
+
+
+                        # ✅ ALERTAS DE TRÁFEGO
+                        # Find equipment data from original list
+                        eq_data = next((e for e in equipments_data if e["id"] == eq_id), None)
+                        if not eq_data:
+                            continue
+                            
+                        max_in = eq_data.get("max_traffic_in")
+                        max_out = eq_data.get("max_traffic_out")
+                        
+                        if (max_in or max_out):
+                            is_over = False
+                            alert_lines = []
+                            
+                            if max_in and in_mbps > max_in:
+                                is_over = True
+                                alert_lines.append(f"⬇️ Download: *{in_mbps}* Mbps (Limite: {max_in} Mbps)")
+                            if max_out and out_mbps > max_out:
+                                is_over = True
+                                alert_lines.append(f"⬆️ Upload: *{out_mbps}* Mbps (Limite: {max_out} Mbps)")
+                                
+                            if is_over:
+                                # Cooldown check (Dynamic per equipment, default 6h)
+                                last_alert = eq_data.get("last_traffic_alert_sent")
+                                interval_min = eq_data.get("traffic_alert_interval") or 360
+                                can_send = False
+                                
+                                if not last_alert:
+                                    can_send = True
+                                else:
+                                    # Ensure last_alert is naive for comparison with datetime.now()
+                                    if last_alert.tzinfo:
+                                        last_alert = last_alert.replace(tzinfo=None)
+                                    
+                                    if (datetime.now() - last_alert).total_seconds() > (interval_min * 60):
+                                        can_send = True
+                                
+                                if can_send:
+                                    template = notif_config.get('telegram_template_traffic')
+                                    if template:
+                                        alert_msg = template.replace("[Device.Name]", eq_data['name']).replace("[Device.IP]", eq_data['ip']).replace("[Alert.Lines]", "\n".join(alert_lines))
+                                    else:
+                                        alert_msg = f"🚨 *TRÁFEGO INTENSO DETECTADO*\n\n📟 *{eq_data['name']}*\n🌐 IP: {eq_data['ip']}\n\n" + "\n".join(alert_lines) + "\n\n🔔 Verifique a carga do link."
+                                    
+                                    # Enviar notificação (background task para não travar loop)
+                                    asyncio.create_task(send_notification(
+                                        message=alert_msg,
+                                        telegram_token=notif_config.get('telegram_token'),
+                                        telegram_chat_id=notif_config.get('telegram_chat_id'),
+                                        telegram_enabled=notif_config.get('telegram_enabled', 'true').lower() == 'true',
+                                        whatsapp_enabled=notif_config.get('whatsapp_enabled', 'false').lower() == 'true',
+                                        whatsapp_target=notif_config.get('whatsapp_target'),
+                                        whatsapp_target_group=notif_config.get('whatsapp_target_group')
+                                    ))
+                                    
+                                    # Atualizar no DB via buffer
+                                    upd_data["last_traffic_alert_sent"] = datetime.now()
                 
                 # Execute Batch Operations
                 if updates_buffer:
@@ -280,8 +355,7 @@ async def snmp_monitor_job():
                 
                 await session.commit()
                 if updates_count > 0:
-                    import logging
-                    logging.info(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
+                    logger.info(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
 
             if updates_count > 0 or traffic_logs_buffer:
                 # Basic GC for memory cache (Run every 10 cycles roughly, or just here)

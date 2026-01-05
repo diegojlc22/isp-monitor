@@ -69,3 +69,59 @@ def generate_sla_pdf(data: list, period_str: str):
     doc.build(elements)
     buffer.seek(0)
     return buffer
+
+def generate_incidents_pdf(data: list, period_str: str):
+    """
+    Gera um relatório PDF de Incidentes (Quedas e Alertas).
+    data: List de dicts ou objetos com {timestamp, device_name, message}
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = styles['Heading1']
+    title_style.alignment = 1 
+    
+    # Title
+    elements.append(Paragraph(f"Relatório de Incidentes e Quedas", title_style))
+    elements.append(Paragraph(f"Período: {period_str}", styles['Normal']))
+    elements.append(Paragraph(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
+    elements.append(Spacer(1, 0.5 * inch))
+    
+    # Table Header
+    table_data = [['Data/Hora', 'Equipamento', 'Evento / Mensagem']]
+    
+    for item in data:
+        row = [
+            item.get('timestamp', 'N/A'),
+            item.get('device_name', 'N/A'),
+            item.get('message', 'N/A')
+        ]
+        table_data.append(row)
+
+    # Create Table
+    # A4 width is ~8.27 inch. Let's use proportional widths.
+    t = Table(table_data, colWidths=[1.5*inch, 2.0*inch, 4.0*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#991b1b')), # Red header for incidents
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.beige])
+    ]))
+    
+    elements.append(t)
+    elements.append(Spacer(1, 0.5 * inch))
+    
+    # Summary
+    summary_text = f"<b>Resumo:</b> Total de {len(data)} incidentes registrados no período."
+    elements.append(Paragraph(summary_text, styles['Normal']))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer

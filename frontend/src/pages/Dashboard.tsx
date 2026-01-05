@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getTowers, getEquipments, getLatencyConfig, getLatencyHistory } from '../services/api';
+import api, { getTowers, getEquipments, getLatencyConfig, getLatencyHistory } from '../services/api';
 import { Activity, ShieldCheck, AlertTriangle, Radio } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import clsx from 'clsx';
 
 export function Dashboard() {
-    const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0 });
+    const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0 });
     // Widget State
     const [devices, setDevices] = useState<any[]>([]);
     const [selectedDevice, setSelectedDevice] = useState<any>(null);
@@ -14,13 +15,18 @@ export function Dashboard() {
     useEffect(() => {
         async function load() {
             try {
-                const [towers, equips, latConfig] = await Promise.all([getTowers(), getEquipments(), getLatencyConfig()]);
+                const [towers, equips, latConfig, insightData] = await Promise.all([
+                    getTowers(),
+                    getEquipments(),
+                    getLatencyConfig(),
+                    api.get('/insights/').then(r => r.data).catch(() => [])
+                ]);
                 const allDevices = [...towers, ...equips];
                 // Only count real devices with IP addresses for monitoring stats
                 const monitoredDevices = allDevices.filter((d: any) => d.ip && d.ip.trim() !== '');
 
                 if (monitoredDevices.length === 0) {
-                    setStats({ towers: 0, equipments: 0, online: 0, offline: 0 });
+                    setStats({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0 });
                 } else {
                     const online = monitoredDevices.filter((x: any) => x.is_online).length;
                     const offline = monitoredDevices.length - online;
@@ -28,7 +34,8 @@ export function Dashboard() {
                         towers: towers.length,
                         equipments: equips.length,
                         online: online,
-                        offline: offline
+                        offline: offline,
+                        insights: insightData.length
                     });
                 }
 
@@ -97,14 +104,16 @@ export function Dashboard() {
                 </div>
 
                 <div
-                    onClick={() => window.location.href = '/equipments'}
+                    onClick={() => window.location.href = '/intelligence'}
                     className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-purple-500/50 transition-colors cursor-pointer"
                 >
                     <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <ShieldCheck size={48} className="text-purple-500" />
+                        <ShieldCheck size={48} className={stats.insights > 0 ? "text-amber-500" : "text-purple-500"} />
                     </div>
-                    <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Equipamentos</h3>
-                    <p className="text-3xl font-bold text-purple-400 mt-2">{stats.equipments}</p>
+                    <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">IA Insights</h3>
+                    <p className={clsx("text-3xl font-bold mt-2", stats.insights > 0 ? "text-amber-400" : "text-purple-400")}>
+                        {stats.insights} {stats.insights === 1 ? 'Análise' : 'Análises'}
+                    </p>
                 </div>
             </div>
 

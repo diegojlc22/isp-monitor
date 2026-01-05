@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy import select, and_, func
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import Equipment, TrafficLog, Parameters
+from backend.app.models import Equipment, TrafficLog, Parameters, Insight
 from backend.app.services.notifier import send_notification
 from loguru import logger
 
@@ -118,6 +118,7 @@ async def analyze_capacity_trends():
                 # Warn if will reach capacity in next 60 days
                 if days_until_full < 60:
                     warnings.append({
+                        "id": eq_id,
                         "name": name,
                         "ip": ip,
                         "current": round(current_peak, 1),
@@ -125,6 +126,19 @@ async def analyze_capacity_trends():
                         "days_until_full": int(days_until_full),
                         "growth_rate": round(slope, 2)
                     })
+                    
+                    # Salvar no banco como Insight
+                    severity = 'critical' if days_until_full < 10 else 'warning'
+                    session.add(Insight(
+                        insight_type='capacity',
+                        severity=severity,
+                        equipment_id=eq_id,
+                        title=f"Saturação de link em {name}",
+                        message=f"Uso atual: {round(current_peak, 1)} Mbps. Capacidade estimada: {estimated_capacity} Mbps. Crescimento: +{round(slope, 2)} Mbps/dia.",
+                        recommendation=f"Estimado {int(days_until_full)} dias para atingir 90% da capacidade. Planeje upgrade."
+                    ))
+        
+        await session.commit()
     
     # Send report if warnings found
     if warnings:
@@ -163,7 +177,7 @@ async def analyze_capacity_trends():
             params_res = await session.execute(
                 select(Parameters).where(Parameters.key.in_([
                     'telegram_token', 'telegram_chat_id', 'telegram_enabled',
-                    'whatsapp_enabled', 'whatsapp_target'
+                    'whatsapp_enabled', 'whatsapp_target', 'whatsapp_target_group'
                 ]))
             )
             config = {p.key: p.value for p in params_res.scalars().all()}
@@ -174,7 +188,8 @@ async def analyze_capacity_trends():
             telegram_chat_id=config.get('telegram_chat_id'),
             telegram_enabled=config.get('telegram_enabled', 'true').lower() == 'true',
             whatsapp_enabled=config.get('whatsapp_enabled', 'false').lower() == 'true',
-            whatsapp_target=config.get('whatsapp_target')
+            whatsapp_target=config.get('whatsapp_target'),
+            whatsapp_target_group=config.get('whatsapp_target_group')
         )
         
         logger.info(f"[CAPACITY PLANNING] Sent alert for {len(warnings)} links")

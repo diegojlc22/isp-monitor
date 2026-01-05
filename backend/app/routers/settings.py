@@ -45,6 +45,7 @@ async def get_telegram_config(db: AsyncSession = Depends(get_db)):
         backup_chat_id=await get_val("telegram_backup_chat_id") or "",
         template_down=await get_val("telegram_template_down"),
         template_up=await get_val("telegram_template_up"),
+        template_traffic=await get_val("telegram_template_traffic"),
         # Multi-Channel
         telegram_enabled=(await get_val("telegram_enabled") != "false"), # Default True
         whatsapp_enabled=(await get_val("whatsapp_enabled") == "true"),  # Default False
@@ -78,6 +79,7 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     await upsert("telegram_backup_chat_id", config.backup_chat_id)
     await upsert("telegram_template_down", config.template_down)
     await upsert("telegram_template_up", config.template_up)
+    await upsert("telegram_template_traffic", config.template_traffic)
     
     # Novos Campos
     await upsert("telegram_enabled", "true" if config.telegram_enabled else "false")

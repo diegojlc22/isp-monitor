@@ -22,6 +22,9 @@ interface Equipment {
     snmp_traffic_interface_index?: number;
     is_mikrotik?: boolean; mikrotik_interface?: string; api_port?: number;
     is_priority?: boolean;
+    max_traffic_in?: number;
+    max_traffic_out?: number;
+    traffic_alert_interval?: number;
 }
 interface FormData {
     name: string; ip: string; tower_id: string; parent_id: string; ssh_user: string; ssh_password: string;
@@ -29,13 +32,19 @@ interface FormData {
     snmp_traffic_interface_index: number | null;
     brand: string; equipment_type: string; is_mikrotik: boolean; mikrotik_interface: string; api_port: number;
     is_priority: boolean;
+    max_traffic_in: number | null;
+    max_traffic_out: number | null;
+    traffic_alert_interval: number;
 }
 
 const INITIAL_FORM_STATE: FormData = {
     name: '', ip: '', tower_id: '', parent_id: '', ssh_user: 'admin', ssh_password: '', ssh_port: 22,
     snmp_community: 'public', snmp_version: 1, snmp_port: 161, snmp_interface_index: 1, snmp_traffic_interface_index: null, brand: 'generic',
     equipment_type: 'station', is_mikrotik: false, mikrotik_interface: '', api_port: 8728,
-    is_priority: false
+    is_priority: false,
+    max_traffic_in: null,
+    max_traffic_out: null,
+    traffic_alert_interval: 360
 };
 
 // --- Custom Hooks ---
@@ -660,7 +669,10 @@ export function Equipments() {
             snmp_traffic_interface_index: eq.snmp_traffic_interface_index || null,
             brand: eq.brand || 'generic', equipment_type: eq.equipment_type || 'station', is_mikrotik: eq.is_mikrotik || false,
             mikrotik_interface: eq.mikrotik_interface || '', api_port: eq.api_port || 8728,
-            is_priority: eq.is_priority || false
+            is_priority: eq.is_priority || false,
+            max_traffic_in: eq.max_traffic_in || null,
+            max_traffic_out: eq.max_traffic_out || null,
+            traffic_alert_interval: eq.traffic_alert_interval || 360
         });
         setShowModal(true);
     }, []);

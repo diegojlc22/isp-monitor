@@ -127,7 +127,13 @@ class TopologyBuilder:
                 
             # Criar novo Link
             logger.success(f"[TOPOLOGY] DETECTADO NOVO LINK: Torre {t1_id} <-> Torre {t2_id} (Via {e1.name} e {e2.name})")
-            new_link = NetworkLink(source_tower_id=t1_id, target_tower_id=t2_id, type="wireless")
+            new_link = NetworkLink(
+                source_tower_id=t1_id, 
+                target_tower_id=t2_id, 
+                source_equipment_id=e1.id,
+                target_equipment_id=e2.id,
+                type="wireless"
+            )
             self.db.add(new_link)
             await self.db.commit()
             

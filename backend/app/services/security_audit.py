@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from sqlalchemy import select
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import Equipment, Parameters
+from backend.app.models import Equipment, Parameters, Insight
 from backend.app.services.snmp import _snmp_get
 from backend.app.services.notifier import send_notification
 from loguru import logger
@@ -93,12 +93,12 @@ async def run_security_audit():
     async with AsyncSessionLocal() as session:
         # Get all online priority equipment
         result = await session.execute(
-            select(Equipment.ip, Equipment.name, Equipment.ssh_port, Equipment.brand)
+            select(Equipment.id, Equipment.ip, Equipment.name, Equipment.ssh_port, Equipment.brand)
             .where(Equipment.is_online == True, Equipment.is_priority == True)  # Only priority equipment
         )
         devices = result.all()
         
-        for ip, name, ssh_port, brand in devices:
+        for eq_id, ip, name, ssh_port, brand in devices:
             device_issues = []
             
             # 1. Check default SSH passwords
@@ -121,6 +121,17 @@ async def run_security_audit():
                     "ip": ip,
                     "issues": device_issues
                 })
+                # Salvar no banco como Insight
+                session.add(Insight(
+                    insight_type='security',
+                    severity='warning',
+                    equipment_id=eq_id,
+                    title=f"Vulnerabilidades em {name}",
+                    message=" \n".join(device_issues),
+                    recommendation="Recomendamos alterar senhas padrões e fechar portas não utilizadas."
+                ))
+        
+        await session.commit()
     
     # Send report if vulnerabilities found
     if vulnerabilities:
@@ -144,7 +155,7 @@ async def run_security_audit():
             params_res = await session.execute(
                 select(Parameters).where(Parameters.key.in_([
                     'telegram_token', 'telegram_chat_id', 'telegram_enabled',
-                    'whatsapp_enabled', 'whatsapp_target'
+                    'whatsapp_enabled', 'whatsapp_target', 'whatsapp_target_group'
                 ]))
             )
             config = {p.key: p.value for p in params_res.scalars().all()}
@@ -155,7 +166,8 @@ async def run_security_audit():
             telegram_chat_id=config.get('telegram_chat_id'),
             telegram_enabled=config.get('telegram_enabled', 'true').lower() == 'true',
             whatsapp_enabled=config.get('whatsapp_enabled', 'false').lower() == 'true',
-            whatsapp_target=config.get('whatsapp_target')
+            whatsapp_target=config.get('whatsapp_target'),
+            whatsapp_target_group=config.get('whatsapp_target_group')
         )
         
         logger.info(f"[SECURITY AUDIT] Report sent: {len(vulnerabilities)} vulnerable devices")

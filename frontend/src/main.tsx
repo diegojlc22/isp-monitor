@@ -30,6 +30,7 @@ const MobileApp = lazy(() => import('./pages/MobileApp').then(m => ({ default: m
 const Reports = lazy(() => import('./pages/Reports'));
 const Schedules = lazy(() => import('./pages/Schedules').then(m => ({ default: m.Schedules })));
 const Priority = lazy(() => import('./pages/Priority').then(m => ({ default: m.Priority })));
+const Intelligence = lazy(() => import('./pages/Intelligence'));
 
 // Loading Component
 const PageLoader = () => (
@@ -72,6 +73,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="towers" element={<Towers />} />
                   <Route path="equipments" element={<Equipments />} />
                   <Route path="priority" element={<Priority />} />
+                  <Route path="intelligence" element={<Intelligence />} />
                   <Route path="alerts" element={<Alerts />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="agent" element={<Agent />} />

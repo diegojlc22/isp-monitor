@@ -50,6 +50,11 @@ class EquipmentBase(BaseModel):
     temperature: Optional[float] = None
     voltage: Optional[float] = None
     is_priority: bool = False  # Mark for priority monitoring
+    last_traffic_in: Optional[float] = None
+    last_traffic_out: Optional[float] = None
+    max_traffic_in: Optional[float] = None
+    max_traffic_out: Optional[float] = None
+    traffic_alert_interval: int = 360
     whatsapp_groups: Optional[List[str]] = []
 
     @validator('whatsapp_groups', pre=True)
@@ -88,6 +93,9 @@ class EquipmentUpdate(BaseModel):
     ccq: Optional[int] = None
     connected_clients: Optional[int] = None
     is_priority: Optional[bool] = None  # Priority monitoring flag
+    max_traffic_in: Optional[float] = None
+    max_traffic_out: Optional[float] = None
+    traffic_alert_interval: Optional[int] = None
     whatsapp_groups: Optional[List[str]] = None
 
 class Equipment(EquipmentBase):
@@ -105,7 +113,8 @@ class TelegramConfig(BaseModel):
     backup_chat_id: Optional[str] = None
     template_down: Optional[str] = None
     template_up: Optional[str] = None
-    
+    template_traffic: Optional[str] = None
+    # No more legacy fields
     # Config Multi-Canal
     telegram_enabled: Optional[bool] = True
     whatsapp_enabled: Optional[bool] = False
@@ -164,6 +173,8 @@ class LatencyThresholds(BaseModel):
 class NetworkLinkBase(BaseModel):
     source_tower_id: int
     target_tower_id: int
+    source_equipment_id: Optional[int] = None
+    target_equipment_id: Optional[int] = None
     type: str = "wireless"
 
 class NetworkLinkCreate(NetworkLinkBase):
@@ -171,6 +182,8 @@ class NetworkLinkCreate(NetworkLinkBase):
 
 class NetworkLink(NetworkLinkBase):
     id: int
+    source_equipment_name: Optional[str] = None
+    target_equipment_name: Optional[str] = None
     
     class Config:
         from_attributes = True

@@ -3,10 +3,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from backend.app.database import get_db
-from backend.app.models import Equipment, PingStatsHourly
-from backend.app.services.reports import generate_sla_pdf
+from backend.app.models import Equipment, PingStatsHourly, Alert
+from backend.app.services.reports import generate_sla_pdf, generate_incidents_pdf
 from backend.app.dependencies import get_current_user
 from datetime import datetime, timedelta, timezone
+from backend.app.config import logger
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -79,3 +80,51 @@ async def get_sla_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db),
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro ao gerar relatório PDF")
+
+@router.get("/incidents/pdf")
+async def get_incidents_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Gera um PDF com o relatório de Incidentes dos últimos X dias.
+    """
+    try:
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+        start_date = start_date.replace(tzinfo=None)
+        
+        # Buscar Alertas do período
+        stmt = select(Alert).where(Alert.timestamp >= start_date).order_by(Alert.timestamp.desc())
+        result = await db.execute(stmt)
+        alerts = result.scalars().all()
+        
+        report_data = []
+        for alert in alerts:
+            report_data.append({
+                "timestamp": alert.timestamp.strftime('%d/%m/%Y %H:%M'),
+                "device_name": alert.device_name,
+                "message": alert.message
+            })
+            
+        period_str = f"{start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}"
+        pdf_buffer = generate_incidents_pdf(report_data, period_str)
+        
+        headers = {
+            'Content-Disposition': f'attachment; filename="Relatorio_Incidentes_{datetime.now().strftime("%Y%m%d")}.pdf"'
+        }
+        
+        return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de incidentes: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Erro interno ao gerar PDF")
+
+@router.get("/incidents/recent")
+async def get_recent_incidents(limit: int = 50, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Retorna os últimos incidentes registrados.
+    """
+    stmt = select(Alert).order_by(Alert.timestamp.desc()).limit(limit)
+    result = await db.execute(stmt)
+    alerts = result.scalars().all()
+    return alerts

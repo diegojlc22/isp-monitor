@@ -198,8 +198,28 @@ async def import_towers_csv_route(file: UploadFile = File(...), db: AsyncSession
 
 @router.get("/links", response_model=List[NetworkLinkSchema])
 async def read_links(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(NetworkLink))
-    return result.scalars().all()
+    from backend.app.models import Equipment
+    from sqlalchemy.orm import aliased
+    
+    E1 = aliased(Equipment)
+    E2 = aliased(Equipment)
+    
+    stmt = select(
+        NetworkLink, 
+        E1.name.label("source_equipment_name"),
+        E2.name.label("target_equipment_name")
+    ).outerjoin(E1, NetworkLink.source_equipment_id == E1.id)\
+     .outerjoin(E2, NetworkLink.target_equipment_id == E2.id)
+    
+    result = await db.execute(stmt)
+    links = []
+    for row in result.all():
+        link_obj = row[0]
+        link_obj.source_equipment_name = row[1]
+        link_obj.target_equipment_name = row[2]
+        links.append(link_obj)
+    
+    return links
 
 @router.post("/links", response_model=NetworkLinkSchema)
 async def create_link(link: NetworkLinkCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):

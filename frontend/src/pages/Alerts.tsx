@@ -30,6 +30,7 @@ export function Alerts() {
     // Templates
     const [templateDown, setTemplateDown] = useState('🔴 [Device.Name] caiu! IP=[Device.IP]');
     const [templateUp, setTemplateUp] = useState('🟢 [Device.Name] voltou! IP=[Device.IP]');
+    const [templateTraffic, setTemplateTraffic] = useState('🚨 *TRÁFEGO INTENSO*\n📟 *[Device.Name]*\n[Alert.Lines]');
 
     // Group Modal State
     const [showGroupModal, setShowGroupModal] = useState(false);
@@ -83,6 +84,7 @@ export function Alerts() {
                 });
                 if (res.template_down) setTemplateDown(res.template_down);
                 if (res.template_up) setTemplateUp(res.template_up);
+                if (res.template_traffic) setTemplateTraffic(res.template_traffic);
             }).catch(console.error);
         }
     }, [user]);
@@ -125,7 +127,8 @@ export function Alerts() {
             await updateTelegramConfig({
                 ...config,
                 template_down: templateDown,
-                template_up: templateUp
+                template_up: templateUp,
+                template_traffic: templateTraffic
             });
             setMsg('✅ Configuração salva com sucesso!');
             setTimeout(() => setMsg(''), 3000);
@@ -504,6 +507,14 @@ export function Alerts() {
                             <label className="block text-xs font-medium text-slate-400 mb-1">Alertar Retorno (Up)</label>
                             <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-4 py-2 text-white font-mono text-sm border-l-4 border-l-emerald-500"
                                 value={templateUp} onChange={e => setTemplateUp(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Tráfego Intenso (SNMP)</label>
+                            <textarea rows={3} className="w-full bg-slate-950 border border-slate-700 rounded px-4 py-2 text-white font-mono text-sm border-l-4 border-l-amber-500"
+                                value={templateTraffic} onChange={e => setTemplateTraffic(e.target.value)}
+                                placeholder="Use [Alert.Lines] para ver download/upload..."
+                            />
+                            <p className="text-[10px] text-slate-500 mt-1 italic">Dica: Use [Alert.Lines] para listar os detalhes do tráfego.</p>
                         </div>
                     </div>
                 </div>

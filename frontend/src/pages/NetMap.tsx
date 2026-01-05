@@ -270,8 +270,40 @@ export function NetMap() {
                                         [source.latitude, source.longitude],
                                         [target.latitude, target.longitude]
                                     ]}
-                                    pathOptions={{ color: isLinkDown ? '#f43f5e' : '#22c55e', weight: 4, opacity: 0.7 }}
-                                />
+                                    pathOptions={{
+                                        color: isLinkDown ? '#f43f5e' : (link.type === 'fiber' ? '#3b82f6' : '#22c55e'),
+                                        weight: 4,
+                                        opacity: 0.7,
+                                        dashArray: link.type === 'wireless' ? '10, 10' : undefined
+                                    }}
+                                >
+                                    <Popup>
+                                        <div className="p-1">
+                                            <div className="font-bold text-slate-900 border-b pb-1 mb-1 flex items-center gap-2">
+                                                <Network size={14} className="text-blue-500" />
+                                                Enlace {link.type === 'wireless' ? 'Rádio' : 'Fibra'}
+                                            </div>
+                                            <div className="text-xs space-y-1">
+                                                <div className="flex justify-between gap-4">
+                                                    <span className="text-slate-500 font-medium">Origem:</span>
+                                                    <span className="text-slate-800 font-bold">{source.name}</span>
+                                                </div>
+                                                <div className="flex justify-between gap-4">
+                                                    <span className="text-slate-500 font-medium">Destino:</span>
+                                                    <span className="text-slate-800 font-bold">{target.name}</span>
+                                                </div>
+                                                {(link.source_equipment_name || link.target_equipment_name) && (
+                                                    <div className="bg-slate-50 p-1.5 rounded mt-2 border border-slate-200">
+                                                        <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Equipamentos Detectados</div>
+                                                        <div className="text-slate-700 font-medium truncate">
+                                                            {link.source_equipment_name || '...'} <span className="text-slate-300">↔</span> {link.target_equipment_name || '...'}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                </Polyline>
                             );
                         }
                         return null;

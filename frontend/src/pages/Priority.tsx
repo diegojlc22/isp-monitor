@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getEquipments, updateEquipment } from '../services/api';
-import { Zap, Server, Search, Wifi, Trash2, Plus, ArrowRight } from 'lucide-react';
+import { Zap, Server, Search, Wifi, Trash2, Plus, ArrowRight, Settings2, Save, X } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -13,7 +13,26 @@ interface Equipment {
     is_priority: boolean;
     last_traffic_in?: number;
     last_traffic_out?: number;
+    max_traffic_in?: number;
+    max_traffic_out?: number;
     brand?: string;
+}
+
+// --- Custom Hooks ---
+function usePoll(callback: () => Promise<void> | void, intervalMs: number) {
+    useEffect(() => {
+        const initial = async () => {
+            try { await callback(); } catch (e) { /* Silent */ }
+        };
+        initial();
+
+        const interval = setInterval(async () => {
+            if (!document.hidden) {
+                try { await callback(); } catch (e) { /* Silent */ }
+            }
+        }, intervalMs);
+        return () => clearInterval(interval);
+    }, [callback, intervalMs]);
 }
 
 export function Priority() {
@@ -23,6 +42,8 @@ export function Priority() {
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [searchAdd, setSearchAdd] = useState('');
+    const [editingLimits, setEditingLimits] = useState<Equipment | null>(null);
+    const [tempLimits, setTempLimits] = useState({ max_traffic_in: 0, max_traffic_out: 0 });
 
     const load = useCallback(async () => {
         try {
@@ -30,15 +51,14 @@ export function Priority() {
             setAllEquipments(data);
             setEquipments(data.filter((e: Equipment) => e.is_priority));
         } catch (e) {
-            toast.error('Erro ao carregar equipamentos.');
+            console.error('Erro ao carregar equipamentos:', e);
         } finally {
             setLoading(false);
         }
     }, []);
 
-    useEffect(() => {
-        load();
-    }, [load]);
+    // Atualiza a cada 10 segundos para o tráfego ficar real
+    usePoll(load, 10000);
 
     const handleTogglePriority = async (eq: Equipment) => {
         try {
@@ -67,7 +87,11 @@ export function Priority() {
     const metrics = useMemo(() => {
         const total = equipments.length;
         const online = equipments.filter(e => e.is_online).length;
-        const heavyTraffic = equipments.filter(e => (e.last_traffic_in || 0) > 50).length;
+        const heavyTraffic = equipments.filter(e => {
+            const limitIn = e.max_traffic_in || 50;
+            const limitOut = e.max_traffic_out || 50;
+            return (e.last_traffic_in || 0) > limitIn || (e.last_traffic_out || 0) > limitOut;
+        }).length;
         return { total, online, heavyTraffic };
     }, [equipments]);
 
@@ -115,7 +139,7 @@ export function Priority() {
                     title="Tráfego Intenso"
                     value={metrics.heavyTraffic}
                     icon={Server}
-                    description="Links com uso acima de 50 Mbps"
+                    description="Links operando acima do limite definido"
                 />
             </div>
 
@@ -159,12 +183,36 @@ export function Priority() {
                                     <div className="flex items-center gap-6">
                                         <div className="text-right hidden sm:block">
                                             <p className="text-[10px] uppercase font-bold text-slate-600 mb-0.5 tracking-wider">Último Tráfego</p>
-                                            <p className="text-xs text-blue-400 font-mono">
-                                                ↓ {eq.last_traffic_in ? (eq.last_traffic_in).toFixed(1) : 0} Mbps
-                                                <span className="text-slate-700 mx-1">/</span>
-                                                ↑ {eq.last_traffic_out ? (eq.last_traffic_out).toFixed(1) : 0} Mbps
+                                            <p className={clsx(
+                                                "text-xs font-mono",
+                                                (eq.last_traffic_in || 0) > (eq.max_traffic_in || 50) || (eq.last_traffic_out || 0) > (eq.max_traffic_out || 50)
+                                                    ? "text-rose-500 animate-pulse font-bold"
+                                                    : "text-blue-400"
+                                            )}>
+                                                ↓ {eq.last_traffic_in ? (eq.last_traffic_in).toFixed(1) : 0}
+                                                <span className="text-[10px] opacity-50 ml-0.5">
+                                                    ({eq.max_traffic_in || 50})
+                                                </span>
+                                                <span className="mx-1">/</span>
+                                                ↑ {eq.last_traffic_out ? (eq.last_traffic_out).toFixed(1) : 0}
+                                                <span className="text-[10px] opacity-50 ml-0.5">
+                                                    ({eq.max_traffic_out || 50})
+                                                </span>
                                             </p>
                                         </div>
+                                        <button
+                                            onClick={() => {
+                                                setEditingLimits(eq);
+                                                setTempLimits({
+                                                    max_traffic_in: eq.max_traffic_in || 0,
+                                                    max_traffic_out: eq.max_traffic_out || 0
+                                                });
+                                            }}
+                                            className="p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all"
+                                            title="Editar limites de tráfego"
+                                        >
+                                            <Settings2 size={18} />
+                                        </button>
                                         <button
                                             onClick={() => handleTogglePriority(eq)}
                                             className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
@@ -225,6 +273,106 @@ export function Priority() {
                                     </div>
                                 ))
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Edição de Limites */}
+            {editingLimits && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 fade-in duration-200">
+                        <header className="p-6 border-b border-slate-800 bg-gradient-to-r from-blue-500/10 to-transparent">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                        <Settings2 className="text-blue-400" size={20} />
+                                        Limites de Tráfego
+                                    </h3>
+                                    <p className="text-sm text-slate-400 mt-1">{editingLimits.name}</p>
+                                    <p className="text-xs text-slate-500 font-mono">{editingLimits.ip}</p>
+                                </div>
+                                <button
+                                    onClick={() => setEditingLimits(null)}
+                                    className="text-slate-500 hover:text-white transition-colors p-2 hover:bg-slate-800 rounded-lg"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        </header>
+
+                        <div className="p-6 space-y-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+                                        <svg className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                        </svg>
+                                        Limite Download (Mbps)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white font-mono text-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                        placeholder="Ex: 60"
+                                        value={tempLimits.max_traffic_in || ''}
+                                        onChange={e => setTempLimits({ ...tempLimits, max_traffic_in: parseFloat(e.target.value) || 0 })}
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">Atual: {editingLimits.last_traffic_in?.toFixed(1) || '0'} Mbps</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+                                        <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                        </svg>
+                                        Limite Upload (Mbps)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white font-mono text-lg focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                                        placeholder="Ex: 30"
+                                        value={tempLimits.max_traffic_out || ''}
+                                        onChange={e => setTempLimits({ ...tempLimits, max_traffic_out: parseFloat(e.target.value) || 0 })}
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">Atual: {editingLimits.last_traffic_out?.toFixed(1) || '0'} Mbps</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                                <p className="text-xs text-amber-400 font-medium">
+                                    ⚠️ O sistema enviará alertas quando o tráfego ultrapassar estes limites.
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setEditingLimits(null)}
+                                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-4 rounded-lg transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await updateEquipment(editingLimits.id, {
+                                                max_traffic_in: tempLimits.max_traffic_in,
+                                                max_traffic_out: tempLimits.max_traffic_out
+                                            });
+                                            toast.success('Limites atualizados com sucesso!');
+                                            setEditingLimits(null);
+                                            load();
+                                        } catch (e) {
+                                            toast.error('Erro ao atualizar limites');
+                                        }
+                                    }}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                                >
+                                    <Save size={18} />
+                                    Salvar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

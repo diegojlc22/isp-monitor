@@ -93,6 +93,10 @@ class Equipment(Base):
 
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps
+    max_traffic_in = Column(Float, nullable=True) # Mbps Threshold for alert
+    max_traffic_out = Column(Float, nullable=True) # Mbps Threshold for alert
+    traffic_alert_interval = Column(Integer, default=360) # Minutes between alerts
+    last_traffic_alert_sent = Column(DateTime, nullable=True)
 
     # Health Metrics (Mikrotik/Health)
     cpu_usage = Column(Integer, nullable=True)
@@ -175,6 +179,8 @@ class NetworkLink(Base):
     id = Column(Integer, primary_key=True, index=True)
     source_tower_id = Column(Integer, ForeignKey("towers.id"))
     target_tower_id = Column(Integer, ForeignKey("towers.id"))
+    source_equipment_id = Column(Integer, ForeignKey("equipments.id"), nullable=True)
+    target_equipment_id = Column(Integer, ForeignKey("equipments.id"), nullable=True)
     type = Column(String, default="wireless") # wireless, fiber
 
 class Alert(Base):
@@ -253,3 +259,21 @@ class MonitorTarget(Base):
     target = Column(String, unique=True, index=True) # IP or Domain (e.g. "8.8.8.8")
     type = Column(String) # "icmp" (ping), "http", "dns"
     enabled = Column(Boolean, default=True)
+
+class Insight(Base):
+    """
+    Automated observations and recommendations from AI services (Security, Capacity, etc).
+    """
+    __tablename__ = "insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    insight_type = Column(String) # 'security', 'capacity', 'performance'
+    severity = Column(String) # 'info', 'warning', 'critical'
+    equipment_id = Column(Integer, ForeignKey("equipments.id", ondelete="CASCADE"), nullable=True)
+    title = Column(String)
+    message = Column(String)
+    recommendation = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    is_dismissed = Column(Boolean, default=False)
+
+    equipment = relationship("Equipment")
