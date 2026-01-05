@@ -522,3 +522,53 @@ async def update_dashboard_layout(
         
     await db.commit()
     return {"message": "Layout salvo no servidor"}
+
+class MonitoringSchedules(BaseModel):
+    ping_interval: int = 30
+    snmp_interval: int = 10
+    agent_interval: int = 300
+    topology_interval: int = 1800
+    daily_report_hour: int = 8
+    security_audit_days: int = 7
+    capacity_planning_days: int = 7
+
+@router.get("/monitoring-schedules", response_model=MonitoringSchedules)
+async def get_monitoring_schedules(db: AsyncSession = Depends(get_db)):
+    async def get_val(key, default):
+        res = await db.execute(select(Parameters).where(Parameters.key == key))
+        obj = res.scalar_one_or_none()
+        return int(obj.value) if obj else default
+
+    return MonitoringSchedules(
+        ping_interval=await get_val("ping_interval", 30),
+        snmp_interval=await get_val("snmp_interval", 10),
+        agent_interval=await get_val("agent_check_interval", 300),
+        topology_interval=await get_val("topology_interval", 1800),
+        daily_report_hour=await get_val("daily_report_hour", 8),
+        security_audit_days=await get_val("security_audit_days", 7),
+        capacity_planning_days=await get_val("capacity_planning_days", 7)
+    )
+
+@router.post("/monitoring-schedules")
+async def update_monitoring_schedules(
+    config: MonitoringSchedules, 
+    db: AsyncSession = Depends(get_db), 
+    current_user = Depends(get_current_admin_user)
+):
+    async def upsert(key, value):
+        obj = (await db.execute(select(Parameters).where(Parameters.key == key))).scalar_one_or_none()
+        if not obj:
+            db.add(Parameters(key=key, value=str(value)))
+        else:
+            obj.value = str(value)
+
+    await upsert("ping_interval", config.ping_interval)
+    await upsert("snmp_interval", config.snmp_interval)
+    await upsert("agent_check_interval", config.agent_interval)
+    await upsert("topology_interval", config.topology_interval)
+    await upsert("daily_report_hour", config.daily_report_hour)
+    await upsert("security_audit_days", config.security_audit_days)
+    await upsert("capacity_planning_days", config.capacity_planning_days)
+    
+    await db.commit()
+    return {"message": "Cronogramas atualizados. Reinicie o Collector para aplicar."}

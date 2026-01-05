@@ -155,3 +155,7 @@ export const getMobileStatus = () => api.get('/mobile/status').then(res => res.d
 export const getLiveStatus = (ids: number[]) => api.post('/equipments/live-status', { ids }).then(res => res.data);
 export const getDashboardLayout = () => api.get('/settings/dashboard-layout').then(res => res.data);
 export const saveDashboardLayout = (layout: any[]) => api.post('/settings/dashboard-layout', layout).then(res => res.data);
+
+// Monitoring Schedules
+export const getMonitoringSchedules = () => api.get('/settings/monitoring-schedules').then(res => res.data);
+export const updateMonitoringSchedules = (data: any) => api.post('/settings/monitoring-schedules', data).then(res => res.data);
