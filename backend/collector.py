@@ -146,7 +146,7 @@ async def main():
     start_task("Maintenance", maintenance_loop())
     start_task("Heartbeat", heartbeat_loop())
     start_task("Security Audit", security_audit_job())
-    start_task("Daily Report", daily_report_job())
+    # start_task("Daily Report", daily_report_job())  # DESABILITADO - Não cadastra clientes finais
     start_task("Capacity Planning", capacity_planning_job())
     
     logger.info(f"[SUPERVISOR] {len(active_tasks)} tarefas iniciais disparadas.")
@@ -184,7 +184,7 @@ async def main():
                     elif name == "Maintenance": new_coro = maintenance_loop()
                     elif name == "Heartbeat": new_coro = heartbeat_loop()
                     elif name == "Security Audit": new_coro = security_audit_job()
-                    elif name == "Daily Report": new_coro = daily_report_job()
+                    # elif name == "Daily Report": new_coro = daily_report_job()  # DESABILITADO
                     elif name == "Capacity Planning": new_coro = capacity_planning_job()
                     
                     if new_coro:
