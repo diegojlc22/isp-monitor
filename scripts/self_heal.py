@@ -1,3 +1,10 @@
+import os
+import sys
+import time
+import subprocess
+import psutil
+from datetime import datetime
+
 # ==========================================================
 # DOCTOR V4.0 - O GUARDIÃO SUPREMO (AUTÔNOMO)
 # ==========================================================
