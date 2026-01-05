@@ -291,9 +291,20 @@ async def snmp_monitor_job():
                     del snmp_last_logged[k]
 
         except Exception as e:
-            print(f"Errors in SNMP loop: {e}")
+            import logging
+            logging.error(f"[SNMP] Batch update error: {e}")
         
-        await asyncio.sleep(SNMP_INTERVAL)
+        # Read interval from database (with fallback)
+        try:
+            async with AsyncSessionLocal() as session:
+                from backend.app.models import Parameters
+                res = await session.execute(select(Parameters).where(Parameters.key == "snmp_interval"))
+                param = res.scalar_one_or_none()
+                interval = int(param.value) if param else SNMP_INTERVAL
+        except:
+            interval = SNMP_INTERVAL
+        
+        await asyncio.sleep(interval)
 
 if __name__ == "__main__":
     try:

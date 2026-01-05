@@ -3,6 +3,7 @@ import sys
 import os
 import signal
 import traceback
+from sqlalchemy import select
 from loguru import logger
 
 # Adicionar o diretório raiz ao PYTHONPATH para imports funcionarem
@@ -33,8 +34,19 @@ async def topology_loop():
             break
         except Exception as e:
             logger.error(f"[ERROR] Falha na descoberta de topologia: {e}")
+        
+        # Read interval from database (with fallback to 30 min)
+        try:
+            from backend.app.database import AsyncSessionLocal
+            from backend.app.models import Parameters
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(select(Parameters).where(Parameters.key == "topology_interval"))
+                param = res.scalar_one_or_none()
+                interval = int(param.value) if param else 1800
+        except:
+            interval = 1800
             
-        await asyncio.sleep(1800) # 30 min
+        await asyncio.sleep(interval) # Configurable interval
 
 async def heartbeat_loop():
     """Atualiza o timestamp de 'last seen' no banco a cada 10 segundos"""

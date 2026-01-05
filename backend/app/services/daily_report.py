@@ -103,15 +103,28 @@ async def generate_daily_signal_report():
         logger.info(f"[DAILY REPORT] Sent report with {len(worst_signal)} bad signals and {len(worst_ccq)} bad CCQs")
 
 async def daily_report_job():
-    """Background job that sends daily signal report at 8 AM"""
+    """Background job that sends daily signal report at configured hour"""
     while True:
         try:
-            # Calculate time until next 8 AM
-            now = datetime.now()
-            next_run = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            # Read configured hour from database
+            report_hour = 8  # Default
+            try:
+                async with AsyncSessionLocal() as session:
+                    res = await session.execute(
+                        select(Parameters).where(Parameters.key == "daily_report_hour")
+                    )
+                    param = res.scalar_one_or_none()
+                    if param:
+                        report_hour = int(param.value)
+            except:
+                pass
             
-            # If already past 8 AM today, schedule for tomorrow
-            if now.hour >= 8:
+            # Calculate time until next configured hour
+            now = datetime.now()
+            next_run = now.replace(hour=report_hour, minute=0, second=0, microsecond=0)
+            
+            # If already past configured hour today, schedule for tomorrow
+            if now.hour >= report_hour:
                 next_run += timedelta(days=1)
             
             wait_seconds = (next_run - now).total_seconds()

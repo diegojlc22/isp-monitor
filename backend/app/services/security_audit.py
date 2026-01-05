@@ -163,15 +163,25 @@ async def run_security_audit():
         logger.info("[SECURITY AUDIT] No vulnerabilities found!")
 
 async def security_audit_job():
-    """Background job that runs security audit weekly"""
+    """Background job that runs security audit at configured interval"""
     while True:
         try:
             await run_security_audit()
         except Exception as e:
             logger.error(f"[SECURITY AUDIT] Error: {e}")
         
-        # Wait 7 days (604800 seconds)
-        await asyncio.sleep(604800)
+        # Read interval from database (default 7 days)
+        try:
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(
+                    select(Parameters).where(Parameters.key == "security_audit_days")
+                )
+                param = res.scalar_one_or_none()
+                days = int(param.value) if param else 7
+        except:
+            days = 7
+        
+        await asyncio.sleep(days * 86400)  # Convert days to seconds
 
 if __name__ == "__main__":
     asyncio.run(run_security_audit())

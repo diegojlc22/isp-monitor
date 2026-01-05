@@ -169,7 +169,18 @@ class PingerService:
 
             # Accurate Interval Control
             elapsed = time.time() - cycle_start
-            sleep_time = max(0.5, PING_INTERVAL - elapsed) # Respect configured interval
+            
+            # Read interval from database (with fallback to settings)
+            try:
+                async with async_session_factory() as session:
+                    from backend.app.models import Parameters
+                    res = await session.execute(select(Parameters).where(Parameters.key == "ping_interval"))
+                    param = res.scalar_one_or_none()
+                    interval = int(param.value) if param else PING_INTERVAL
+            except:
+                interval = PING_INTERVAL
+            
+            sleep_time = max(0.5, interval - elapsed) # Respect configured interval
             
             # logger.debug(f"Ping Cycle: {len(all_targets)} hosts in {elapsed:.2f}s. Sleeping {sleep_time:.2f}s")
             await asyncio.sleep(sleep_time)

@@ -177,15 +177,25 @@ async def analyze_capacity_trends():
         logger.info("[CAPACITY PLANNING] All links have healthy capacity")
 
 async def capacity_planning_job():
-    """Background job that runs capacity analysis weekly"""
+    """Background job that runs capacity analysis at configured interval"""
     while True:
         try:
             await analyze_capacity_trends()
         except Exception as e:
             logger.error(f"[CAPACITY PLANNING] Error: {e}")
         
-        # Run weekly (7 days)
-        await asyncio.sleep(604800)
+        # Read interval from database (default 7 days)
+        try:
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(
+                    select(Parameters).where(Parameters.key == "capacity_planning_days")
+                )
+                param = res.scalar_one_or_none()
+                days = int(param.value) if param else 7
+        except:
+            days = 7
+        
+        await asyncio.sleep(days * 86400)  # Convert days to seconds
 
 if __name__ == "__main__":
     asyncio.run(analyze_capacity_trends())
