@@ -133,7 +133,8 @@ async def snmp_monitor_job():
                 return result
 
             except Exception as e:
-                # print(f"Error fetching {eq_data['ip']}: {e}")
+                import logging
+                logging.warning(f"[SNMP] Error fetching {eq_data['ip']}: {e}")
                 return None
 
     while True:
@@ -161,8 +162,20 @@ async def snmp_monitor_job():
                 await asyncio.sleep(5)
                 continue
 
-            # 2. Run Parallel Fetching
-            tasks = [fetch_device_data(eq) for eq in equipments_data]
+            # 2. Run Parallel Fetching (With 15s timeout per device)
+            async def fetch_with_timeout(eq_dict):
+                try:
+                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=15.0)
+                except asyncio.TimeoutError:
+                    import logging
+                    logging.warning(f"[SNMP] Timeout polling {eq_dict['ip']} (exceeded 15s)")
+                    return None
+                except Exception as e:
+                    import logging
+                    logging.error(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
+                    return None
+
+            tasks = [fetch_with_timeout(eq) for eq in equipments_data]
             results = await asyncio.gather(*tasks)
             
             # 3. Batch Update DB (Optimized)
@@ -266,7 +279,9 @@ async def snmp_monitor_job():
                     await session.execute(insert(TrafficLog), traffic_logs_buffer)
                 
                 await session.commit()
-                # print(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
+                if updates_count > 0:
+                    import logging
+                    logging.info(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
 
             if updates_count > 0 or traffic_logs_buffer:
                 # Basic GC for memory cache (Run every 10 cycles roughly, or just here)

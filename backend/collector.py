@@ -14,6 +14,9 @@ from backend.app.services.snmp_monitor import snmp_monitor_job
 from backend.app.services.synthetic_agent import synthetic_agent_job
 from backend.app.services.maintenance import cleanup_job
 from backend.app.services.topology import run_topology_discovery
+from backend.app.services.security_audit import security_audit_job
+from backend.app.services.daily_report import daily_report_job
+from backend.app.services.capacity_planning import capacity_planning_job
 
 # Configure Loguru
 logger.add("collector_supervisor.log", rotation="1 MB", retention="5 days", level="INFO")
@@ -130,6 +133,9 @@ async def main():
     start_task("Topology", topology_loop())
     start_task("Maintenance", maintenance_loop())
     start_task("Heartbeat", heartbeat_loop())
+    start_task("Security Audit", security_audit_job())
+    start_task("Daily Report", daily_report_job())
+    start_task("Capacity Planning", capacity_planning_job())
     
     logger.info(f"[SUPERVISOR] {len(active_tasks)} tarefas iniciais disparadas.")
 
@@ -165,6 +171,9 @@ async def main():
                     elif name == "Topology": new_coro = topology_loop()
                     elif name == "Maintenance": new_coro = maintenance_loop()
                     elif name == "Heartbeat": new_coro = heartbeat_loop()
+                    elif name == "Security Audit": new_coro = security_audit_job()
+                    elif name == "Daily Report": new_coro = daily_report_job()
+                    elif name == "Capacity Planning": new_coro = capacity_planning_job()
                     
                     if new_coro:
                          # Launch restart delay as a separate task? 

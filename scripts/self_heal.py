@@ -226,10 +226,12 @@ def run_doctor():
     first_run = True
 
     while True:
-        if PARENT_PID and not psutil.pid_exists(PARENT_PID):
-            log("👋 Launcher fechado. Executando limpeza total...", "WARN")
-            cleanup_all()
-            sys.exit(0)
+        # Só fecha se o launcher que o iniciou (PARENT_PID) realmente existiu e agora sumiu
+        if PARENT_PID is not None and PARENT_PID > 0:
+            if not psutil.pid_exists(PARENT_PID):
+                log(f"👋 Launcher (PID {PARENT_PID}) fechado. Executando limpeza total...", "WARN")
+                cleanup_all()
+                sys.exit(0)
 
         # 1. Integridade de Config (Evita 403)
         check_config_integrity()

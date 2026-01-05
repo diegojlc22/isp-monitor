@@ -112,9 +112,9 @@ OIDS = {
     }
 }
 
-async def get_snmp_value(ip, community, oid, port=161):
+async def get_snmp_value(ip, community, oid, port=161, timeout=2.0):
     # Try v2c first
-    varBinds = await _snmp_get(ip, community, [oid], port)
+    varBinds = await _snmp_get(ip, community, [oid], port, timeout=timeout)
     
     # If no result, specifically for UBNT legacy, try forcing v1 separately if helper didn't
     # (The helper _snmp_get already tries both, but let's ensure we are robust)
@@ -129,8 +129,8 @@ async def get_snmp_value(ip, community, oid, port=161):
     except: 
         return str(val)
 
-async def get_snmp_walk_first(ip, community, root_oid, port=161):
-    varBinds = await _snmp_next(ip, community, root_oid, port)
+async def get_snmp_walk_first(ip, community, root_oid, port=161, timeout=2.0):
+    varBinds = await _snmp_next(ip, community, root_oid, port, timeout=timeout)
     if not varBinds:
         return None
     # varBinds usually contains the first row of the walk
@@ -167,11 +167,20 @@ async def snmp_walk_list(ip, community, root_oid, port=161):
         auth = CommunityData(community, mpModel=1)
         
         curr_oid = ObjectIdentity(root_oid)
-        while True:
-            errorIndication, errorStatus, errorIndex, varBindTable = await nextCmd(
-                engine, auth, UdpTransportTarget((ip, port), timeout=1.0, retries=1),
-                ContextData(), ObjectType(curr_oid), lexicographicMode=False
-            )
+        safety_counter = 0
+        while safety_counter < 1000: # Max 1000 rows
+            safety_counter += 1
+            try:
+                # Use a very short timeout for each step of the walk
+                errorIndication, errorStatus, errorIndex, varBindTable = await asyncio.wait_for(
+                    nextCmd(
+                        engine, auth, UdpTransportTarget((ip, port), timeout=timeout, retries=1),
+                        ContextData(), ObjectType(curr_oid), lexicographicMode=False
+                    ),
+                    timeout=timeout + 1.0 # Buffer for asyncio overhead
+                )
+            except asyncio.TimeoutError:
+                break
             
             if errorIndication or errorStatus or not varBindTable:
                 break
@@ -183,6 +192,8 @@ async def snmp_walk_list(ip, community, root_oid, port=161):
                         return results
                     results.append(str(val))
                     curr_oid = oid
+            
+            if not varBindTable: break
             
     except Exception as e:
         # print(f"Walk Error: {e}")
@@ -274,8 +285,12 @@ async def get_wireless_stats(ip, brand, community, port=161, interface_index=Non
             
             if any(oid.startswith(root) for root in walk_roots) or len(oid.split('.')) < 12:
                 sig = await get_snmp_walk_first(ip, community, oid, port)
+                if sig is None: # Retry with higher timeout if signal is sensitive
+                    sig = await get_snmp_walk_first(ip, community, oid, port, timeout=5.0)
             else:
                 sig = await get_snmp_value(ip, community, oid, port)
+                if sig is None:
+                    sig = await get_snmp_value(ip, community, oid, port, timeout=5.0)
                 
             if sig is not None:
                  if isinstance(sig, int):
@@ -298,8 +313,12 @@ async def get_wireless_stats(ip, brand, community, port=161, interface_index=Non
             ]
             if any(oid.startswith(root) for root in walk_roots) or len(oid.split('.')) < 12:
                 ccq = await get_snmp_walk_first(ip, community, oid, port)
+                if ccq is None:
+                    ccq = await get_snmp_walk_first(ip, community, oid, port, timeout=5.0)
             else:
                 ccq = await get_snmp_value(ip, community, oid, port)
+                if ccq is None:
+                    ccq = await get_snmp_value(ip, community, oid, port, timeout=5.0)
                 
             if ccq is not None and isinstance(ccq, int):
                 stats['ccq'] = ccq
@@ -348,6 +367,8 @@ async def get_connected_clients_count(ip, brand, community, port=161):
         # Standard OID Get
         try:
             count = await get_snmp_value(ip, community, oid, port)
+            if count is None: # Retry for weak signals
+                count = await get_snmp_value(ip, community, oid, port, timeout=5.0)
             if count is not None and isinstance(count, int):
                 return count
         except: continue

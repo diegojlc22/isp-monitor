@@ -25,38 +25,57 @@ class PingerService:
         self.targets: Dict[str, Dict] = {} # IP -> {id, name, status, fail_count}
         self.config: Dict[str, str] = {}
         self.results_queue = asyncio.Queue()
+        self.id_to_ip = {}
         self.running = True
 
     async def load_targets(self):
         while self.running:
             try:
                 new_targets = {}
+                id_to_ip = {} # Maps (type, id) -> ip for lookups
+                
                 async with async_session_factory() as session:
                     # Carregar Equipamentos
-                    res_eq = await session.execute(select(Equipment.ip, Equipment.id, Equipment.name, Equipment.is_online).where(Equipment.ip != None))
+                    res_eq = await session.execute(
+                        select(Equipment.ip, Equipment.id, Equipment.name, Equipment.is_online, Equipment.parent_id, Equipment.tower_id)
+                        .where(Equipment.ip != None)
+                    )
                     eqs = res_eq.all()
                     for row in eqs:
-                        prev = self.targets.get(row[0], {})
-                        new_targets[row[0]] = {
-                            "id": row[1], 
-                            "name": row[2], 
-                            "status": row[3],
-                            "fail_count": prev.get("fail_count", 0) 
+                        ip, eid, name, is_online, parent_id, tower_id = row
+                        prev = self.targets.get(ip, {})
+                        new_targets[ip] = {
+                            "type": "equipment",
+                            "id": eid, 
+                            "name": name, 
+                            "status": is_online,
+                            "fail_count": prev.get("fail_count", 0),
+                            "parent_id": parent_id,
+                            "tower_id": tower_id
                         }
+                        id_to_ip[("equipment", eid)] = ip
                     
                     # Carregar Torres
-                    res_tw = await session.execute(select(Tower.ip, Tower.id, Tower.name, Tower.is_online).where(Tower.ip != None))
+                    res_tw = await session.execute(
+                        select(Tower.ip, Tower.id, Tower.name, Tower.is_online, Tower.parent_id)
+                        .where(Tower.ip != None)
+                    )
                     tws = res_tw.all()
                     for row in tws:
-                        prev = self.targets.get(row[0], {})
-                        new_targets[row[0]] = {
-                            "id": row[1], 
-                            "name": row[2], 
-                            "status": row[3],
-                            "fail_count": prev.get("fail_count", 0)
+                        ip, tid, name, is_online, parent_id = row
+                        prev = self.targets.get(ip, {})
+                        new_targets[ip] = {
+                            "type": "tower",
+                            "id": tid, 
+                            "name": name, 
+                            "status": is_online,
+                            "fail_count": prev.get("fail_count", 0),
+                            "parent_id": parent_id
                         }
+                        id_to_ip[("tower", tid)] = ip
 
                 self.targets = new_targets # Swap (Atomic)
+                self.id_to_ip = id_to_ip
                 logger.debug(f"Targets synchronized: {len(eqs)} equipments, {len(tws)} towers.")
             except Exception as e:
                 if "no such table" in str(e).lower():
@@ -254,20 +273,48 @@ class PingerService:
                         
                         logger.info(f"STATUS CHANGE: {item['ip']} is now {msg_type}. Message: {message}")
                         
-                        alerts_to_send.append({
-                            "device_type": "equipment",
-                            "device_name": device_name,
-                            "device_ip": item['ip'],
-                            "message": message
-                        })
+                        # --- TOPOLOGY SUPPRESSION ---
+                        is_suppressed = False
+                        if not new_status: # Only suppress OFFLINE alerts
+                            # 1. Check Parent Equipment
+                            pid = target_info.get("parent_id")
+                            if pid:
+                                parent_ip = self.id_to_ip.get(("equipment", pid))
+                                if parent_ip and not self.targets.get(parent_ip, {}).get("status", True):
+                                    is_suppressed = True
+                                    logger.info(f"[SUPPRESSION] Silent alert for {device_name} ({item['ip']}) - Parent Equipment {parent_ip} is down.")
+
+                            # 2. Check Tower
+                            tid = target_info.get("tower_id")
+                            if tid and not is_suppressed:
+                                tower_ip = self.id_to_ip.get(("tower", tid))
+                                if tower_ip and not self.targets.get(tower_ip, {}).get("status", True):
+                                    is_suppressed = True
+                                    logger.info(f"[SUPPRESSION] Silent alert for {device_name} ({item['ip']}) - Tower {tower_ip} is down.")
+                            
+                            # 3. Check Tower Parent (Backbone)
+                            if target_info["type"] == "tower" and target_info.get("parent_id") and not is_suppressed:
+                                t_pid = target_info["parent_id"]
+                                t_parent_ip = self.id_to_ip.get(("tower", t_pid))
+                                if t_parent_ip and not self.targets.get(t_parent_ip, {}).get("status", True):
+                                    is_suppressed = True
+                                    logger.info(f"[SUPPRESSION] Silent alert for Tower {device_name} - Backbone Tower {t_parent_ip} is down.")
+
+                        if not is_suppressed:
+                            alerts_to_send.append({
+                                "device_type": "equipment",
+                                "device_name": device_name,
+                                "device_ip": item['ip'],
+                                "message": message
+                            })
                         
-                        # Add to DB Alert table
+                        # Add to DB Alert table (Always log to DB for history, but maybe mark as suppressed?)
                         await session.execute(
                             insert(Alert).values(
-                                device_type="equipment",
+                                device_type=target_info["type"],
                                 device_name=device_name,
                                 device_ip=item['ip'],
-                                message=message,
+                                message=message + (" (Silenciado por topologia)" if is_suppressed else ""),
                                 timestamp=datetime.utcnow()
                             )
                         )
