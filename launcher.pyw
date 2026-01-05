@@ -796,12 +796,12 @@ class ModernLauncher:
             self.info_label.config(text="Iniciando... (Aguarde 5-10s)")
             self.status_badge.config(text=" ● INICIANDO ", fg=COLORS['warning'])
 
-            # Lançar Doctor V3.6 (O Mestre de Cerimônias)
+            # Lançar Doctor V4.0 (O Mestre de Cerimônias)
             my_pid = os.getpid()
             python_exe = sys.executable
             doctor_cmd = [python_exe, "scripts/self_heal.py", str(my_pid)]
             subprocess.Popen(doctor_cmd, creationflags=0x08000000)
-            print(f"[LAUNCHER] Doctor V3.6 iniciado (Monitorando PID {my_pid}).")
+            print(f"[LAUNCHER] Doctor V4.0 Guardião Supremo iniciado (Monitorando PID {my_pid}).")
             
             # Pequeno delay para os arquivos de log serem liberados pelo OS
             time.sleep(1)
@@ -1023,7 +1023,7 @@ class ModernLauncher:
         
     def wait_for_start(self):
         """Aguarda inicialização verificando logs"""
-        for _ in range(15):
+        for _ in range(60): # Aumentado para 60s para dar tempo ao Doctor V4.0
             self.refresh_logs()
             self.check_status()
             if self.is_running:
@@ -1033,7 +1033,7 @@ class ModernLauncher:
             self.root.update()
             time.sleep(1)
         
-        messagebox.showwarning("Timeout", "O sistema demorou a responder.\nVerifique a aba de LOGS para detalhes.")
+        messagebox.showwarning("Timeout", "O sistema demorou a responder.\nIsso é comum se o banco de dados estiver iniciando ou o Doctor estiver limpando processos zumbis.\n\nVerifique a aba de LOGS para acompanhar a evolução.")
 
     def stop_system(self):
         """Mata API, Coletor e processos relacionados"""
