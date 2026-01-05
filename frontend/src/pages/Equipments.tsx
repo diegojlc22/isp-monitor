@@ -1142,21 +1142,6 @@ export function Equipments() {
                             </div>
 
                             <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.is_priority}
-                                        onChange={e => setFormData({ ...formData, is_priority: e.target.checked })}
-                                        className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-yellow-500 focus:ring-yellow-500"
-                                    />
-                                    <div>
-                                        <span className="text-white text-sm font-bold">Monitoramento Prioritário ⭐</span>
-                                        <p className="text-[10px] text-slate-400 italic">Habilita Auditoria de Segurança e Análise de Capacidade para este rádio.</p>
-                                    </div>
-                                </label>
-                            </div>
-
-                            <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
                                 <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Tipo de Equipamento</label>
                                 <div className="flex gap-4">
                                     <label className="flex items-center gap-2 cursor-pointer">
