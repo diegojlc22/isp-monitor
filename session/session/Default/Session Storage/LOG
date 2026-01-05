@@ -1,3 +1,2 @@
-2025/12/28-16:59:40.383 2828 Reusing MANIFEST C:\Users\DiegoLima\.gemini\antigravity\scratch\isp_monitor\session\session\Default\Session Storage/MANIFEST-000001
-2025/12/28-16:59:40.384 2828 Recovering log #3
-2025/12/28-16:59:40.387 2828 Reusing old log C:\Users\DiegoLima\.gemini\antigravity\scratch\isp_monitor\session\session\Default\Session Storage/000003.log 
+2026/01/05-08:38:33.513 4628 Creating DB C:\diegolima\isp-monitor\session\session\Default\Session Storage since it was missing.
+2026/01/05-08:38:33.680 4628 Reusing MANIFEST C:\diegolima\isp-monitor\session\session\Default\Session Storage/MANIFEST-000001

@@ -97,8 +97,9 @@ async def send_whatsapp(message: str, target: str):
         "message": message
     }
     try:
-        logger.info(f"Enviando WhatsApp para {target}: {message[:50]}...")
-        headers = {"x-api-key": settings.msg_secret}
+        token = settings.msg_secret
+        logger.info(f"Enviando WhatsApp para {target} usando token (prefixo): {token[:5]}...")
+        headers = {"x-api-key": token}
         await _post_with_retry(WHATSAPP_API_URL, payload, headers=headers)
         logger.info(f"WhatsApp enviado com sucesso para {target}")
     except Exception as e:

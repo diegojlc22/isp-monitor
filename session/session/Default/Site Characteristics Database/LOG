@@ -1,3 +1,2 @@
-2025/12/28-16:59:38.880 2dcc Reusing MANIFEST C:\Users\DiegoLima\.gemini\antigravity\scratch\isp_monitor\session\session\Default\Site Characteristics Database/MANIFEST-000001
-2025/12/28-16:59:38.881 2dcc Recovering log #3
-2025/12/28-16:59:38.881 2dcc Reusing old log C:\Users\DiegoLima\.gemini\antigravity\scratch\isp_monitor\session\session\Default\Site Characteristics Database/000003.log 
+2026/01/05-08:38:31.874 2f9c Creating DB C:\diegolima\isp-monitor\session\session\Default\Site Characteristics Database since it was missing.
+2026/01/05-08:38:32.029 2f9c Reusing MANIFEST C:\diegolima\isp-monitor\session\session\Default\Site Characteristics Database/MANIFEST-000001

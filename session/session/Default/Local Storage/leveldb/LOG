@@ -1,5 +1,2 @@
-2025/12/28-16:59:38.908 2828 Reusing MANIFEST C:\Users\DiegoLima\.gemini\antigravity\scratch\isp_monitor\session\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/12/28-16:59:38.915 2828 Recovering log #3
-2025/12/28-16:59:38.915 2828 Level-0 table #3: started
-2025/12/28-16:59:38.920 2828 Level-0 table #3: 19381 bytes OK
-2025/12/28-16:59:38.924 2828 Delete type=0 #3
+2026/01/05-08:38:31.413 4628 Creating DB C:\diegolima\isp-monitor\session\session\Default\Local Storage\leveldb since it was missing.
+2026/01/05-08:38:31.553 4628 Reusing MANIFEST C:\diegolima\isp-monitor\session\session\Default\Local Storage\leveldb/MANIFEST-000001

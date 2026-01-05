@@ -24,6 +24,7 @@ const authMiddleware = (req, res, next) => {
 
     const token = req.headers['x-api-key'];
     if (token !== MSG_SECRET) {
+        console.warn(`[AUTH] Acesso negado: Token recebido '${token}' não coincide com o esperado.`);
         return res.status(403).json({ error: 'Acesso negado: API Key inválida' });
     }
     next();
