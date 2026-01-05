@@ -30,13 +30,14 @@ class PingerService:
     async def load_targets(self):
         while self.running:
             try:
+                new_targets = {}
                 async with async_session_factory() as session:
                     # Carregar Equipamentos
                     res_eq = await session.execute(select(Equipment.ip, Equipment.id, Equipment.name, Equipment.is_online).where(Equipment.ip != None))
                     eqs = res_eq.all()
                     for row in eqs:
                         prev = self.targets.get(row[0], {})
-                        self.targets[row[0]] = {
+                        new_targets[row[0]] = {
                             "id": row[1], 
                             "name": row[2], 
                             "status": row[3],
@@ -48,13 +49,14 @@ class PingerService:
                     tws = res_tw.all()
                     for row in tws:
                         prev = self.targets.get(row[0], {})
-                        self.targets[row[0]] = {
+                        new_targets[row[0]] = {
                             "id": row[1], 
                             "name": row[2], 
                             "status": row[3],
                             "fail_count": prev.get("fail_count", 0)
                         }
 
+                self.targets = new_targets # Swap (Atomic)
                 logger.debug(f"Targets synchronized: {len(eqs)} equipments, {len(tws)} towers.")
             except Exception as e:
                 if "no such table" in str(e).lower():
@@ -292,8 +294,13 @@ class PingerService:
                         update_list
                     )
                 if latency_inserts:
+                     # 🛡️ PROTEÇÃO CONTRA FOREIGN KEY VIOLATION: Só insere se o equipamento ainda existir no banco
                      await session.execute(
-                        text("INSERT INTO latency_history (equipment_id, latency, packet_loss, timestamp) VALUES (:eid, :lat, :loss, :ts)"),
+                        text("""
+                            INSERT INTO latency_history (equipment_id, latency, packet_loss, timestamp) 
+                            SELECT :eid, :lat, :loss, :ts
+                            WHERE EXISTS (SELECT 1 FROM equipments WHERE id = :eid)
+                        """),
                         latency_inserts
                     )
                 
