@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import api, { getTowers, getEquipments, getLatencyConfig, getLatencyHistory } from '../services/api';
-import { Activity, ShieldCheck, AlertTriangle, Radio } from 'lucide-react';
+import { Activity, ShieldCheck, AlertTriangle, Radio, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
 export function Dashboard() {
+    const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0 });
     // Widget State
     const [devices, setDevices] = useState<any[]>([]);
@@ -15,6 +16,9 @@ export function Dashboard() {
     useEffect(() => {
         async function load() {
             try {
+                // Don't set loading true on interval updates to avoid flicker
+                // Only on mount (initial load)
+
                 const [towers, equips, latConfig, insightData] = await Promise.all([
                     getTowers(),
                     getEquipments(),
@@ -22,7 +26,6 @@ export function Dashboard() {
                     api.get('/insights/').then(r => r.data).catch(() => [])
                 ]);
                 const allDevices = [...towers, ...equips];
-                // Only count real devices with IP addresses for monitoring stats
                 const monitoredDevices = allDevices.filter((d: any) => d.ip && d.ip.trim() !== '');
 
                 if (monitoredDevices.length === 0) {
@@ -39,7 +42,6 @@ export function Dashboard() {
                     });
                 }
 
-                // Only equipments for now for chart
                 setDevices(equips);
                 setHistoryConfig(latConfig);
 
@@ -49,10 +51,12 @@ export function Dashboard() {
 
             } catch (e) {
                 console.error(e);
+            } finally {
+                setLoading(false);
             }
         }
         load();
-        const interval = setInterval(load, 5000);
+        const interval = setInterval(load, 10000); // Increased interval to reduce load
         return () => clearInterval(interval);
     }, []);
 
@@ -78,7 +82,9 @@ export function Dashboard() {
                         <Radio size={48} className="text-blue-500" />
                     </div>
                     <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Total Torres</h3>
-                    <p className="text-3xl font-bold text-white mt-2">{stats.towers}</p>
+                    <p className="text-3xl font-bold text-white mt-2">
+                        {loading ? <Loader2 className="animate-spin h-8 w-8 text-blue-500" /> : stats.towers}
+                    </p>
                 </div>
 
                 <div
@@ -89,7 +95,9 @@ export function Dashboard() {
                         <Activity size={48} className="text-emerald-500" />
                     </div>
                     <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Online</h3>
-                    <p className="text-3xl font-bold text-emerald-400 mt-2">{stats.online}</p>
+                    <p className="text-3xl font-bold text-emerald-400 mt-2">
+                        {loading ? <Loader2 className="animate-spin h-8 w-8 text-emerald-500" /> : stats.online}
+                    </p>
                 </div>
 
                 <div
@@ -100,7 +108,9 @@ export function Dashboard() {
                         <AlertTriangle size={48} className="text-rose-500" />
                     </div>
                     <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Offline/Crítico</h3>
-                    <p className="text-3xl font-bold text-rose-500 mt-2">{stats.offline}</p>
+                    <p className="text-3xl font-bold text-rose-500 mt-2">
+                        {loading ? <Loader2 className="animate-spin h-8 w-8 text-rose-500" /> : stats.offline}
+                    </p>
                 </div>
 
                 <div
@@ -112,7 +122,9 @@ export function Dashboard() {
                     </div>
                     <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">IA Insights</h3>
                     <p className={clsx("text-3xl font-bold mt-2", stats.insights > 0 ? "text-amber-400" : "text-purple-400")}>
-                        {stats.insights} {stats.insights === 1 ? 'Análise' : 'Análises'}
+                        {loading ? <Loader2 className="animate-spin h-8 w-8 text-purple-500" /> :
+                            `${stats.insights} ${stats.insights === 1 ? 'Análise' : 'Análises'}`
+                        }
                     </p>
                 </div>
             </div>

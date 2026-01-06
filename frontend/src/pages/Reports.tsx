@@ -1,330 +1,299 @@
 import React, { useState, useEffect } from 'react';
-import { CloudDownload, FileText, Loader2, AlertTriangle, RefreshCw, Clock, Activity } from 'lucide-react';
+import {
+    CloudDownload, FileText, Loader2, AlertTriangle, RefreshCw,
+    Globe, ArrowDown, Server, CheckCircle, AlertCircle, Activity
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import clsx from 'clsx';
 
 const Reports: React.FC = () => {
-    const [period, setPeriod] = useState("30");
-    const [loading, setLoading] = useState(false);
-    const [incidentsPeriod, setIncidentsPeriod] = useState("30");
-    const [incidentsLoading, setIncidentsLoading] = useState(false);
-    const [recentIncidents, setRecentIncidents] = useState<any[]>([]);
-    const [loadingList, setLoadingList] = useState(true);
-    const [showIncidents, setShowIncidents] = useState(true);
+    const [period, setPeriod] = useState("7"); // Padrão 7 dias
+    const [loadingSLA, setLoadingSLA] = useState(false);
+    const [loadingIncidents, setLoadingIncidents] = useState(false);
+
+    // Estados para Estatísticas
+    const [incidentsStats, setIncidentsStats] = useState<any>(null);
+    const [slaStats, setSlaStats] = useState<any>(null);
+    const [loadingStats, setLoadingStats] = useState(true);
 
     useEffect(() => {
-        loadRecentIncidents();
-    }, []);
+        loadDashboardStats();
+    }, [period]);
 
-    const loadRecentIncidents = async () => {
+    const loadDashboardStats = async () => {
+        setLoadingStats(true);
         try {
-            setLoadingList(true);
-            const response = await api.get('/reports/incidents/recent?limit=10');
-            setRecentIncidents(response.data);
-        } catch (e) {
-            console.error("Erro ao carregar incidentes", e);
+            const [incidentsRes, slaRes] = await Promise.all([
+                api.get(`/reports/incidents/stats?days=${period}`),
+                api.get(`/reports/sla/stats?days=${period}`)
+            ]);
+            setIncidentsStats(incidentsRes.data);
+            setSlaStats(slaRes.data);
+        } catch (error) {
+            console.error("Erro ao carregar estatísticas:", error);
+            toast.error("Erro ao atualizar dashboard.");
         } finally {
-            setLoadingList(false);
+            setLoadingStats(false);
         }
     };
 
-    const handleSlaDownload = async () => {
+    const handleDownload = async (type: 'sla' | 'incidents') => {
+        const isSLA = type === 'sla';
+        const setLoading = isSLA ? setLoadingSLA : setLoadingIncidents;
+        const endpoint = isSLA ? '/reports/sla/pdf' : '/reports/incidents/pdf';
+        const prefix = isSLA ? 'Relatorio_SLA' : 'Relatorio_Executivo';
+
         setLoading(true);
         try {
-            const response = await api.get(`/reports/sla/pdf?days=${period}`, {
-                responseType: 'blob'
-            });
-
+            const response = await api.get(`${endpoint}?days=${period}`, { responseType: 'blob' });
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-
             const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-            link.setAttribute('download', `SLA_Report_${period}d_isp_${date}.pdf`);
-
+            link.setAttribute('download', `${prefix}_${period}dias_${date}.pdf`);
             document.body.appendChild(link);
             link.click();
             link.remove();
-
-            toast.success("Relatório gerado com sucesso!");
+            toast.success("Relatório baixado com sucesso!");
         } catch (error) {
             console.error("Erro no download:", error);
-            toast.error("Erro ao gerar relatório.");
+            toast.error("Falha ao gerar o arquivo.");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleIncidentsDownload = async () => {
-        setIncidentsLoading(true);
-        try {
-            const response = await api.get(`/reports/incidents/pdf?days=${incidentsPeriod}`, {
-                responseType: 'blob'
-            });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-
-            const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-            link.setAttribute('download', `Relatorio_Incidentes_${incidentsPeriod}d_${date}.pdf`);
-
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-
-            toast.success("Relatório de incidentes gerado com sucesso!");
-        } catch (error) {
-            console.error("Erro no download de incidentes:", error);
-            toast.error("Erro ao gerar relatório de incidentes.");
-        } finally {
-            setIncidentsLoading(false);
-        }
-    };
-
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-white">Relatórios Gerenciais</h2>
-            </div>
-
-            {/* Cards de Download */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* CARD SLA */}
-                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden hover:border-blue-500/50 transition-all group">
-                    <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-blue-500/10 to-transparent">
-                        <div className="flex items-center gap-3">
-                            <div className="p-3 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30 transition-colors">
-                                <FileText className="h-6 w-6 text-blue-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-white">Disponibilidade (SLA)</h3>
-                                <p className="text-sm text-slate-400">Uptime e latência média</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-6 space-y-4">
-                        <p className="text-sm text-slate-400">
-                            Gera um arquivo PDF contendo o resumo de disponibilidade (uptime) e latência média de todos os equipamentos monitorados.
-                        </p>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    <Clock className="inline h-4 w-4 mr-1" />
-                                    Período
-                                </label>
-                                <select
-                                    value={period}
-                                    onChange={(e) => setPeriod(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                >
-                                    <option value="7">Últimos 7 dias</option>
-                                    <option value="15">Últimos 15 dias</option>
-                                    <option value="30">Últimos 30 dias</option>
-                                    <option value="90">Últimos 3 Meses</option>
-                                </select>
-                            </div>
-
-                            <button
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
-                                onClick={handleSlaDownload}
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Gerando PDF...
-                                    </>
-                                ) : (
-                                    <>
-                                        <CloudDownload className="h-4 w-4" />
-                                        Baixar PDF SLA
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Cabeçalho */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                        Monitoramento Executivo
+                    </h1>
+                    <p className="text-gray-400 mt-1">Análise de performance e estabilidade da rede em tempo real.</p>
                 </div>
 
-                {/* CARD INCIDENTES */}
-                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden hover:border-red-500/50 transition-all group">
-                    <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-red-500/10 to-transparent">
-                        <div className="flex items-center gap-3">
-                            <div className="p-3 bg-red-500/20 rounded-lg group-hover:bg-red-500/30 transition-colors">
-                                <AlertTriangle className="h-6 w-6 text-red-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-white">Incidentes e Quedas</h3>
-                                <p className="text-sm text-slate-400">Histórico de alertas</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-6 space-y-4">
-                        <p className="text-sm text-slate-400">
-                            Gera um PDF detalhado com o histórico de quedas e alertas disparados pelo sistema.
-                        </p>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">
-                                    <Clock className="inline h-4 w-4 mr-1" />
-                                    Período
-                                </label>
-                                <select
-                                    value={incidentsPeriod}
-                                    onChange={(e) => setIncidentsPeriod(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all"
-                                >
-                                    <option value="7">Últimos 7 dias</option>
-                                    <option value="15">Últimos 15 dias</option>
-                                    <option value="30">Últimos 30 dias</option>
-                                    <option value="90">Últimos 3 Meses</option>
-                                </select>
-                            </div>
-
-                            <button
-                                className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-500/20 hover:shadow-red-500/40"
-                                onClick={handleIncidentsDownload}
-                                disabled={incidentsLoading}
-                            >
-                                {incidentsLoading ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Gerando PDF...
-                                    </>
-                                ) : (
-                                    <>
-                                        <CloudDownload className="h-4 w-4" />
-                                        Baixar PDF Incidentes
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Lista de Incidentes Recentes */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-gradient-to-r from-amber-500/10 to-transparent">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-amber-500/20 rounded-lg">
-                            <Activity className="text-amber-400" size={20} />
-                        </div>
-                        <h3 className="font-bold text-white text-lg">Últimos 10 Incidentes</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-slate-800/50 p-1 rounded-lg border border-slate-700/50">
+                    {['7', '15', '30'].map((d) => (
                         <button
-                            onClick={loadRecentIncidents}
-                            className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-all"
-                            disabled={loadingList}
-                        >
-                            <RefreshCw className={clsx("h-4 w-4", loadingList && "animate-spin")} />
-                            <span className="hidden sm:inline">Atualizar</span>
-                        </button>
-                        <button
-                            onClick={() => setShowIncidents(!showIncidents)}
-                            className="text-sm text-slate-400 hover:text-white flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-all"
-                        >
-                            {showIncidents ? (
-                                <>
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                    <span className="hidden sm:inline">Ocultar</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                    <span className="hidden sm:inline">Mostrar</span>
-                                </>
+                            key={d}
+                            onClick={() => setPeriod(d)}
+                            className={clsx(
+                                "px-4 py-1.5 rounded-md text-sm font-medium transition-all",
+                                period === d
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                                    : "text-gray-400 hover:text-white hover:bg-slate-700"
                             )}
+                        >
+                            {d} dias
+                        </button>
+                    ))}
+                    <button
+                        onClick={loadDashboardStats}
+                        className="p-1.5 text-gray-400 hover:text-white hover:bg-slate-700 rounded-md ml-1"
+                        title="Atualizar Dados"
+                    >
+                        <RefreshCw size={18} className={clsx(loadingStats && "animate-spin")} />
+                    </button>
+                </div>
+            </div>
+
+            {loadingStats ? (
+                <div className="h-96 flex items-center justify-center">
+                    <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
+                </div>
+            ) : (
+                <>
+                    {/* TOP KPIs */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {/* SLA GLOBAL DA REDE */}
+                        <div className="bg-slate-900/80 backdrop-blur rounded-xl p-6 border border-slate-700/50 relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <Globe size={80} className="text-emerald-500" />
+                            </div>
+                            <p className="text-gray-400 text-sm font-medium">SLA Global da Rede</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className={clsx("text-4xl font-bold", (slaStats?.global_uptime || 0) >= 99 ? "text-emerald-400" : "text-amber-400")}>
+                                    {slaStats?.global_uptime || "0.00"}%
+                                </span>
+                            </div>
+                            <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                Meta SLA: 99.00%
+                            </div>
+                        </div>
+
+                        {/* QUEDAS NO PERÍODO */}
+                        <div className="bg-slate-900/80 backdrop-blur rounded-xl p-6 border border-slate-700/50 relative overflow-hidden group hover:border-red-500/30 transition-colors">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <ArrowDown size={80} className="text-red-500" />
+                            </div>
+                            <p className="text-gray-400 text-sm font-medium">Quedas no Período</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-4xl font-bold text-red-400">
+                                    {incidentsStats?.total_drops || 0}
+                                </span>
+                                <span className="text-sm text-gray-500">eventos</span>
+                            </div>
+                            <div className="mt-2 text-xs text-green-500 flex items-center gap-1">
+                                <RefreshCw size={12} />
+                                {incidentsStats?.total_recoveries || 0} recuperações automáticas
+                            </div>
+                        </div>
+
+                        {/* DISPOSITIVOS CRÍTICOS */}
+                        <div className={clsx("backdrop-blur rounded-xl p-6 border relative overflow-hidden group transition-all",
+                            (slaStats?.critical_devices_count || 0) > 0
+                                ? "bg-amber-950/20 border-amber-500/30"
+                                : "bg-slate-900/80 border-slate-700/50 hover:border-amber-500/30"
+                        )}>
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <AlertTriangle size={80} className="text-amber-500" />
+                            </div>
+                            <p className="text-gray-400 text-sm font-medium">Dispositivos Críticos</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-4xl font-bold text-amber-400">
+                                    {slaStats?.critical_devices_count || 0}
+                                </span>
+                            </div>
+                            <div className="mt-2 text-xs text-amber-500/80">
+                                SLA abaixo de 99.0%
+                            </div>
+                        </div>
+
+                        {/* ATIVOS MONITORADOS */}
+                        <div className="bg-slate-900/80 backdrop-blur rounded-xl p-6 border border-slate-700/50 relative overflow-hidden group hover:border-blue-500/30 transition-colors">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <Server size={80} className="text-blue-500" />
+                            </div>
+                            <p className="text-gray-400 text-sm font-medium">Ativos Monitorados</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-4xl font-bold text-blue-400">
+                                    {slaStats?.monitored_devices || 0}
+                                </span>
+                            </div>
+                            <div className="mt-2 text-xs text-blue-500/80">
+                                Total de infraestrutura
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Middle Section */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                        {/* LEFT: AI ANALYSIS */}
+                        <div className="lg:col-span-1 bg-gradient-to-br from-slate-900 to-slate-950 rounded-xl p-6 border border-slate-700/50 flex flex-col justify-between relative overflow-hidden group hover:border-purple-500/30 transition-colors">
+                            {/* Glow Effect */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500"></div>
+
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+                                    <Activity className="text-purple-400" />
+                                    Análise Inteligente de Rede
+                                </h3>
+
+                                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+                                    <div className="flex items-start gap-3">
+                                        {(incidentsStats?.total_drops || 0) === 0 ? (
+                                            <CheckCircle className="text-emerald-400 shrink-0 mt-1" />
+                                        ) : (
+                                            <AlertCircle className="text-amber-400 shrink-0 mt-1" />
+                                        )}
+                                        <p className="text-sm text-gray-300 leading-relaxed"
+                                            dangerouslySetInnerHTML={{ __html: incidentsStats?.conclusion || "Analisando dados da rede..." }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 pt-6 border-t border-slate-800">
+                                <button
+                                    onClick={() => handleDownload('incidents')}
+                                    disabled={loadingIncidents}
+                                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-red-900/20 group"
+                                >
+                                    {loadingIncidents ? <Loader2 className="animate-spin" /> : <FileText className="group-hover:scale-110 transition-transform" />}
+                                    Baixar Relatório Executivo
+                                </button>
+                                <p className="text-center text-xs text-gray-500 mt-2">Inclui ranking de quedas e análise detalhada</p>
+                            </div>
+                        </div>
+
+                        {/* RIGHT: TOP OFFENDERS TABLE */}
+                        <div className="lg:col-span-2 bg-slate-900/80 rounded-xl border border-slate-700/50 overflow-hidden flex flex-col">
+                            <div className="p-4 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
+                                <h3 className="font-bold text-white flex items-center gap-2">
+                                    <ArrowDown className="text-red-400" size={18} />
+                                    Top 5 - Maiores Instabilidades
+                                </h3>
+                                <span className="text-xs px-2 py-1 bg-slate-700 rounded text-gray-300">
+                                    Ranking de Quedas
+                                </span>
+                            </div>
+
+                            <div className="flex-1 overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="text-xs text-gray-400 uppercase bg-slate-800/30">
+                                        <tr>
+                                            <th className="px-6 py-3">Dispositivo</th>
+                                            <th className="px-6 py-3">Diagnóstico</th>
+                                            <th className="px-6 py-3 text-right">Quedas (Offline)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-700/50">
+                                        {incidentsStats?.top_problematic?.length > 0 ? (
+                                            incidentsStats.top_problematic.map((device: any, idx: number) => (
+                                                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+                                                    <td className="px-6 py-4 font-medium text-white">
+                                                        {device.name}
+                                                        <div className="text-xs text-gray-500 font-normal">{device.ip || 'IP não identificado'}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={clsx(
+                                                            "px-2 py-1 rounded text-xs font-bold",
+                                                            device.drops > 10 ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"
+                                                        )}>
+                                                            {device.drops > 10 ? "CRÍTICO" : "ATENÇÃO"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <span className="text-red-400 font-bold">{device.drops}</span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                                                    <CheckCircle size={32} className="mx-auto mb-2 text-emerald-500/50" />
+                                                    Nenhum dispositivo com instabilidade relevante no período.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Bottom Action */}
+                    <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-800 flex justify-between items-center group hover:border-blue-500/30 transition-colors">
+                        <div>
+                            <h3 className="font-bold text-white">Documentação de Conformidade (SLA)</h3>
+                            <p className="text-gray-400 text-sm">Gere o documento oficial com o cálculo exato de disponibilidade para auditoria.</p>
+                        </div>
+                        <button
+                            onClick={() => handleDownload('sla')}
+                            disabled={loadingSLA}
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg hover:shadow-blue-900/20"
+                        >
+                            {loadingSLA ? <Loader2 className="animate-spin" /> : <CloudDownload />}
+                            Baixar Relatório SLA Completo
                         </button>
                     </div>
-                </div>
-
-                {showIncidents && (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-950/50 border-b border-slate-800">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                        Data/Hora
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                        Dispositivo
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                        Evento
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {loadingList ? (
-                                    <tr>
-                                        <td colSpan={3} className="px-6 py-12 text-center">
-                                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-slate-600 mb-3" />
-                                            <p className="text-slate-500 text-sm">Carregando incidentes...</p>
-                                        </td>
-                                    </tr>
-                                ) : recentIncidents.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={3} className="px-6 py-12 text-center">
-                                            <Activity className="mx-auto h-12 w-12 text-slate-700 mb-3" />
-                                            <p className="text-slate-500 text-sm">Nenhum incidente registrado recentemente.</p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    recentIncidents.map((inc, i) => (
-                                        <tr key={i} className="hover:bg-slate-800/50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <Clock className="h-4 w-4 text-slate-500" />
-                                                    <span className="text-sm text-slate-400 font-mono">
-                                                        {new Date(inc.timestamp).toLocaleString('pt-BR', {
-                                                            day: '2-digit',
-                                                            month: '2-digit',
-                                                            year: 'numeric',
-                                                            hour: '2-digit',
-                                                            minute: '2-digit'
-                                                        })}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="font-semibold text-white">
-                                                    {inc.device_name}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={clsx(
-                                                    "inline-flex items-center px-3 py-1 rounded-full text-xs font-bold",
-                                                    inc.message.includes("ONLINE") || inc.message.includes("🟢") || inc.message.includes("voltou")
-                                                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                                        : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                                                )}>
-                                                    {inc.message.includes("ONLINE") || inc.message.includes("🟢") || inc.message.includes("voltou") ? (
-                                                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-2 animate-pulse"></span>
-                                                    ) : (
-                                                        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full mr-2 animate-pulse"></span>
-                                                    )}
-                                                    {inc.message}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+                </>
+            )}
         </div>
     );
 };

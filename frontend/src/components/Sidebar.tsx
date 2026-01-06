@@ -1,5 +1,6 @@
 import { LayoutDashboard, Map, Radio, Server, Settings, Users, LogOut, User, Bell, Menu, X, Activity, Smartphone, FileText, Clock, Zap, BrainCircuit } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { PrefetchNavLink } from './PrefetchNavLink';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
@@ -12,6 +13,10 @@ export function Sidebar() {
     const initial = user?.name ? user.name[0].toUpperCase() : 'U';
 
     const toggle = () => setIsOpen(!isOpen);
+
+    const baseLinkClass = ({ isActive }: { isActive: boolean }) =>
+        clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
+            isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white");
 
     return (
         <>
@@ -40,59 +45,59 @@ export function Sidebar() {
                 </div>
 
                 <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-                    <NavLink to="/" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    <PrefetchNavLink to="/" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/Dashboard')}>
                         <LayoutDashboard className="w-5 h-5" /> <span className="font-medium">Dashboard</span>
-                    </NavLink>
-                    <NavLink to="/live" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/live" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/LiveMonitor')}>
                         <Activity className="w-5 h-5" /> <span className="font-medium">Monitor Live</span>
-                    </NavLink>
-                    <NavLink to="/health" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/health" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")} prefetchPage={() => import('../pages/Health')}>
                         <Server className="w-5 h-5" /> <span className="font-medium">Saúde do Sistema</span>
-                    </NavLink>
-                    <NavLink to="/map" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/map" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/NetMap')}>
                         <Map className="w-5 h-5" /> <span className="font-medium">Mapa</span>
-                    </NavLink>
-                    <NavLink to="/towers" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/towers" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/Towers')}>
                         <Radio className="w-5 h-5" /> <span className="font-medium">Torres</span>
-                    </NavLink>
-                    <NavLink to="/equipments" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/equipments" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/Equipments')}>
                         <Server className="w-5 h-5" /> <span className="font-medium">Equipamentos</span>
-                    </NavLink>
-                    <NavLink to="/priority" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-yellow-600 text-white shadow-md shadow-yellow-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/priority" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-yellow-600 text-white shadow-md shadow-yellow-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")} prefetchPage={() => import('../pages/Priority')}>
                         <Zap className="w-5 h-5 flex-shrink-0" /> <span className="font-medium">Prioritários</span>
-                    </NavLink>
-                    <NavLink to="/alerts" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/alerts" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/Alerts')}>
                         <Bell className="w-5 h-5" /> <span className="font-medium">Alertas</span>
-                    </NavLink>
-                    <NavLink to="/agent" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/agent" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")} prefetchPage={() => import('../pages/Agent')}>
                         <Activity className="w-5 h-5" /> <span className="font-medium">Agente IA</span>
-                    </NavLink>
-                    <NavLink to="/intelligence" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/intelligence" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")} prefetchPage={() => import('../pages/Intelligence')}>
                         <BrainCircuit className="w-5 h-5" /> <span className="font-medium">Inteligência</span>
-                    </NavLink>
-                    <NavLink to="/reports" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-amber-600 text-white shadow-md shadow-amber-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                    </PrefetchNavLink>
+                    <PrefetchNavLink to="/reports" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-amber-600 text-white shadow-md shadow-amber-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")} prefetchPage={() => import('../pages/Reports')}>
                         <FileText className="w-5 h-5" /> <span className="font-medium">Relatórios</span>
-                    </NavLink>
+                    </PrefetchNavLink>
 
                     {user?.role === 'admin' && (
                         <>
                             <div className="my-4 border-t border-slate-800 mx-4 opacity-50" />
                             <div className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Administração</div>
-                            <NavLink to="/users" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                            <PrefetchNavLink to="/users" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/ManageUsers')}>
                                 <Users className="w-5 h-5" /> <span className="font-medium">Usuários</span>
-                            </NavLink>
-                            <NavLink to="/mobile" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                            </PrefetchNavLink>
+                            <PrefetchNavLink to="/mobile" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-purple-600 text-white shadow-md shadow-purple-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")} prefetchPage={() => import('../pages/MobileApp')}>
                                 <Smartphone className="w-5 h-5" /> <span className="font-medium">App Mobile (Expo)</span>
-                            </NavLink>
-                            <NavLink to="/requests" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                            </PrefetchNavLink>
+                            <PrefetchNavLink to="/requests" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/RequestsPage')}>
                                 <Smartphone className="w-5 h-5" /> <span className="font-medium">Solicitações (App)</span>
-                            </NavLink>
-                            <NavLink to="/settings" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                            </PrefetchNavLink>
+                            <PrefetchNavLink to="/settings" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/Settings')}>
                                 <Settings className="w-5 h-5" /> <span className="font-medium">Configurações</span>
-                            </NavLink>
-                            <NavLink to="/schedules" onClick={() => setIsOpen(false)} className={({ isActive }) => clsx("flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200", isActive ? "bg-blue-600 text-white shadow-md shadow-blue-900/20" : "hover:bg-slate-800 text-slate-400 hover:text-white")}>
+                            </PrefetchNavLink>
+                            <PrefetchNavLink to="/schedules" onClick={() => setIsOpen(false)} className={baseLinkClass} prefetchPage={() => import('../pages/Schedules')}>
                                 <Clock className="w-5 h-5" /> <span className="font-medium">Cronogramas</span>
-                            </NavLink>
+                            </PrefetchNavLink>
                         </>
                     )}
                 </nav>

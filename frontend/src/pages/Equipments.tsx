@@ -315,6 +315,7 @@ export function Equipments() {
     const [networkDefaults, setNetworkDefaults] = useState<any>({});
     const [showMetrics, setShowMetrics] = useState(true);
     const [showList, setShowList] = useState(true);
+    const [visibleCount, setVisibleCount] = useState(50);
 
 
 
@@ -419,6 +420,17 @@ export function Equipments() {
 
         return result;
     }, [equipments, debouncedFilterText, filterStatus, filterTower, filterType, sortConfig]);
+
+    useEffect(() => {
+        setVisibleCount(50);
+    }, [debouncedFilterText, filterStatus, filterTower, filterType, sortConfig]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight + 300) {
+            setVisibleCount(prev => prev + 50);
+        }
+    };
 
     const handleSort = (key: string) => {
         setSortConfig(current => {
@@ -933,15 +945,15 @@ export function Equipments() {
                         </div>
 
                         {/* Scrollable List */}
-                        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar" onScroll={handleScroll}>
                             {filteredEquipments.length === 0 ? (
                                 <div className="flex flex-col justify-center items-center h-full text-slate-500 italic">
                                     <Search size={48} className="mb-4 opacity-20" />
                                     Nenhum equipamento encontrado.
                                 </div>
                             ) : (
-                                <div className="w-full">
-                                    {filteredEquipments.map((eq, index) => (
+                                <div className="w-full pb-4">
+                                    {filteredEquipments.slice(0, visibleCount).map((eq, index) => (
                                         <EquipmentRow
                                             key={eq.id}
                                             index={index}
@@ -959,6 +971,11 @@ export function Equipments() {
                                             }}
                                         />
                                     ))}
+                                    {visibleCount < filteredEquipments.length && (
+                                        <div className="py-4 text-center text-xs text-slate-500 italic">
+                                            Role para ver mais...
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
