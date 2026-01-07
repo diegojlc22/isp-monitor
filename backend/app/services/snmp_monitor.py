@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 from sqlalchemy import select
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import Equipment, TrafficLog
+from backend.app.models import Equipment, TrafficLog, Tower
 from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
 from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats, get_connected_clients_count
@@ -156,8 +156,8 @@ async def snmp_monitor_job():
 
                 # Equipments with Tower names
                 res = await session.execute(
-                    select(Equipment, models.Tower.name.label("tower_name"))
-                    .outerjoin(models.Tower, Equipment.tower_id == models.Tower.id)
+                    select(Equipment, Tower.name.label("tower_name"))
+                    .outerjoin(Tower, Equipment.tower_id == Tower.id)
                     .where(Equipment.is_online == True)
                 )
                 rows = res.all()
