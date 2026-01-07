@@ -102,6 +102,22 @@ async def get_system_health(db: AsyncSession = Depends(get_db)):
     total_equipments = await db.scalar(select(func.count(Equipment.id)))
     online_equipments = await db.scalar(select(func.count(Equipment.id)).where(Equipment.is_online == True))
     
+    # Check SNMP Heartbeat
+    snmp_status = "unknown"
+    res_snmp = await db.execute(select(Parameters).where(Parameters.key == "snmp_monitor_last_run"))
+    snmp_last_val = res_snmp.scalar_one_or_none()
+    
+    snmp_last_run_iso = None
+    if snmp_last_val:
+        try:
+            snmp_last_run_iso = snmp_last_val.value
+            last_run = datetime.fromisoformat(snmp_last_run_iso)
+            # SNMP runs every 10s. If > 120s (2 mins), it's stalled.
+            if datetime.now() - last_run < timedelta(seconds=120):
+                snmp_status = "active"
+            else:
+                snmp_status = "stalled"
+        except: pass
     # 3. Database Stats
     start_time = time.time()
     await db.execute(select(func.now()))
@@ -121,6 +137,8 @@ async def get_system_health(db: AsyncSession = Depends(get_db)):
             "last_seen": last_seen_val
         },
         "snmp": {
+            "status": snmp_status,
+            "last_run": snmp_last_run_iso,
             "total": total_equipments,
             "online": online_equipments,
             "offline": total_equipments - online_equipments

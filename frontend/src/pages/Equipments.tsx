@@ -25,6 +25,11 @@ interface Equipment {
     max_traffic_in?: number;
     max_traffic_out?: number;
     traffic_alert_interval?: number;
+    voltage?: number;
+    temperature?: number;
+    cpu_usage?: number;
+    min_voltage_threshold?: number;
+    voltage_alert_interval?: number;
 }
 interface FormData {
     name: string; ip: string; tower_id: string; parent_id: string; ssh_user: string; ssh_password: string;
@@ -35,6 +40,8 @@ interface FormData {
     max_traffic_in: number | null;
     max_traffic_out: number | null;
     traffic_alert_interval: number;
+    min_voltage_threshold: number | null;
+    voltage_alert_interval: number;
 }
 
 const INITIAL_FORM_STATE: FormData = {
@@ -44,7 +51,9 @@ const INITIAL_FORM_STATE: FormData = {
     is_priority: false,
     max_traffic_in: null,
     max_traffic_out: null,
-    traffic_alert_interval: 360
+    traffic_alert_interval: 360,
+    min_voltage_threshold: 16.0,
+    voltage_alert_interval: 360
 };
 
 // --- Custom Hooks ---
@@ -99,6 +108,16 @@ const EquipmentRow = ({ index, data }: any) => {
                             eq.brand === 'intelbras' ? <Wifi size={16} className="text-green-400 shrink-0" /> :
                                 <Server size={16} className="text-slate-500 shrink-0" />}
                     <span className="truncate" title={eq.name}>{eq.name}</span>
+                    {eq.voltage && (
+                        <div className={clsx(
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap transition-all",
+                            (eq.min_voltage_threshold && eq.voltage <= eq.min_voltage_threshold)
+                                ? "bg-rose-500/20 text-rose-500 border-rose-500/30 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                                : "bg-cyan-500/10 text-cyan-400 border-cyan-500/20"
+                        )} title={eq.voltage <= (eq.min_voltage_threshold || 16.0) ? "VOLTAGEM CRÍTICA!" : "Voltagem Atual"}>
+                            <Zap size={10} className={eq.voltage <= (eq.min_voltage_threshold || 16.0) ? "fill-rose-500" : ""} /> {eq.voltage.toFixed(1)}V
+                        </div>
+                    )}
                 </div>
                 {tower && <div className="text-xs text-slate-500 ml-6 truncate">📍 {tower.name}</div>}
             </div>
@@ -315,6 +334,7 @@ export function Equipments() {
     const [networkDefaults, setNetworkDefaults] = useState<any>({});
     const [showMetrics, setShowMetrics] = useState(true);
     const [showList, setShowList] = useState(true);
+    const [activeTab, setActiveTab] = useState(0); // 0=Básico, 1=Avançado, 2=Alertas
     const [visibleCount, setVisibleCount] = useState(50);
 
 
@@ -672,6 +692,7 @@ export function Equipments() {
 
     const handleEdit = useCallback((eq: Equipment) => {
         setEditingEquipment(eq);
+        setActiveTab(0); // Sempre começa na aba Básico
         setInterfaceList([]); // Reset list on open
         setFormData({
             name: eq.name, ip: eq.ip, tower_id: eq.tower_id ? String(eq.tower_id) : '',
@@ -684,7 +705,9 @@ export function Equipments() {
             is_priority: eq.is_priority || false,
             max_traffic_in: eq.max_traffic_in || null,
             max_traffic_out: eq.max_traffic_out || null,
-            traffic_alert_interval: eq.traffic_alert_interval || 360
+            traffic_alert_interval: eq.traffic_alert_interval || 360,
+            min_voltage_threshold: eq.min_voltage_threshold || 16.0,
+            voltage_alert_interval: eq.voltage_alert_interval || 360
         });
         setShowModal(true);
     }, []);
@@ -721,7 +744,9 @@ export function Equipments() {
                 parent_id: formData.parent_id ? parseInt(formData.parent_id) : null,
                 ssh_port: Number(formData.ssh_port), snmp_version: Number(formData.snmp_version),
                 snmp_port: Number(formData.snmp_port), snmp_interface_index: Number(formData.snmp_interface_index),
-                api_port: Number(formData.api_port)
+                api_port: Number(formData.api_port),
+                min_voltage_threshold: formData.min_voltage_threshold ? Number(formData.min_voltage_threshold) : null,
+                voltage_alert_interval: Number(formData.voltage_alert_interval)
             };
             if (!formData.ssh_password) delete payload.ssh_password;
             editingEquipment ? await updateEquipment(editingEquipment.id, payload) : await createEquipment(payload);
@@ -1104,133 +1129,296 @@ export function Equipments() {
 
             {showModal && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-bold text-white mb-4">{editingEquipment ? 'Editar' : 'Novo'} Equipamento</h3>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="Nome" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-                            <div className="space-y-2">
-                                <input className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="IP" value={formData.ip} onChange={e => setFormData({ ...formData, ip: e.target.value })} required />
-                                <div className="grid grid-cols-1 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleAutoDetectAll}
-                                        disabled={isDetectingAll || !formData.ip}
-                                        className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] border border-white/10"
-                                    >
-                                        {isDetectingAll ? (
-                                            <>
-                                                <div className="animate-spin h-5 w-5 border-3 border-white border-t-transparent rounded-full"></div>
-                                                <span className="animate-pulse">Analisando Equipamento... (Aguarde)</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Zap size={20} className="text-yellow-400 fill-yellow-400" />
-                                                <span>� AUTO-DETECTAR TUDO</span>
-                                            </>
-                                        )}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleAutoDetect}
-                                        disabled={isDetectingForm || isDetectingAll || !formData.ip}
-                                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-2 border border-slate-700"
-                                    >
-                                        {isDetectingForm ? (
-                                            <div className="animate-spin h-3 w-3 border-2 border-slate-400 border-t-transparent rounded-full"></div>
-                                        ) : (
-                                            <Search size={14} />
-                                        )}
-                                        Detectar apenas Marca e Tipo
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
-                                    <option value="">Sem Torre</option>
-                                    {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </select>
-                                <select className="bg-slate-950 border border-slate-700 rounded p-2 text-white" value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}>
-                                    <option value="generic">Genérico</option>
-                                    <option value="ubiquiti">Ubiquiti</option>
-                                    <option value="mikrotik">Mikrotik</option>
-                                    <option value="mimosa">Mimosa</option>
-                                    <option value="intelbras">Intelbras</option>
-                                </select>
-                            </div>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                        {/* Header */}
+                        <div className="p-6 border-b border-slate-800">
+                            <h3 className="text-xl font-bold text-white">{editingEquipment ? 'Editar' : 'Novo'} Equipamento</h3>
+                        </div>
 
-                            <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Tipo de Equipamento</label>
-                                <div className="flex gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="eqType" checked={formData.equipment_type === 'station'} onChange={() => setFormData({ ...formData, equipment_type: 'station' })} className="accent-blue-500" />
-                                        <span className="text-white">Station (Cliente/Ponto)</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="eqType" checked={formData.equipment_type === 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'transmitter' })} className="accent-purple-500" />
-                                        <span className="text-white">Transmissor (AP)</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="eqType" checked={formData.equipment_type !== 'station' && formData.equipment_type !== 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'other' })} className="accent-slate-500" />
-                                        <span className="text-white">Nenhum</span>
-                                    </label>
-                                </div>
-                            </div>
+                        {/* Tabs */}
+                        <div className="flex border-b border-slate-800 px-6">
+                            {['Básico', 'Avançado', 'Alertas'].map((tab, idx) => (
+                                <button
+                                    key={tab}
+                                    type="button"
+                                    onClick={() => setActiveTab(idx)}
+                                    className={clsx(
+                                        "px-4 py-3 text-sm font-medium border-b-2 transition-colors",
+                                        activeTab === idx
+                                            ? "border-blue-500 text-blue-400"
+                                            : "border-transparent text-slate-500 hover:text-slate-300"
+                                    )}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
 
-                            {['mikrotik', 'ubiquiti', 'mimosa', 'intelbras'].includes(formData.brand) && (
-                                <div className="space-y-3">
-                                    <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
-                                        <div className="flex justify-between items-center">
-                                            <label className="text-xs text-slate-400 uppercase font-bold">Interface SFP / Wireless (Sinal)</label>
+                        {/* Content */}
+                        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+                            <div className="p-6 space-y-4">
+                                {/* TAB 0: BÁSICO */}
+                                {activeTab === 0 && (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Nome do Equipamento</label>
+                                            <input
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none transition-colors"
+                                                placeholder="Ex: RB TORRE JARAGUARI"
+                                                value={formData.name}
+                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Endereço IP</label>
+                                            <input
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none transition-colors"
+                                                placeholder="Ex: 10.200.200.2"
+                                                value={formData.ip}
+                                                onChange={e => setFormData({ ...formData, ip: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Auto-Detect */}
+                                        <div className="grid grid-cols-1 gap-2">
                                             <button
                                                 type="button"
-                                                onClick={handleLoadInterfaces}
-                                                disabled={isLoadingInterfaces}
-                                                className="bg-blue-600 hover:bg-blue-500 text-[10px] uppercase font-bold text-white px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                                                onClick={handleAutoDetectAll}
+                                                disabled={isDetectingAll || !formData.ip}
+                                                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 disabled:from-slate-700 disabled:to-slate-700 text-white px-4 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] border border-white/10"
                                             >
-                                                {isLoadingInterfaces ? '...' : 'Escanear Interfaces'}
+                                                {isDetectingAll ? (
+                                                    <>
+                                                        <div className="animate-spin h-5 w-5 border-3 border-white border-t-transparent rounded-full"></div>
+                                                        <span className="animate-pulse">Analisando... Aguarde</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Zap size={20} className="text-yellow-400 fill-yellow-400" />
+                                                        <span>⚡ AUTO-DETECTAR TUDO</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleAutoDetect}
+                                                disabled={isDetectingForm || isDetectingAll || !formData.ip}
+                                                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-slate-700"
+                                            >
+                                                {isDetectingForm ? (
+                                                    <div className="animate-spin h-3 w-3 border-2 border-slate-400 border-t-transparent rounded-full"></div>
+                                                ) : (
+                                                    <Search size={14} />
+                                                )}
+                                                Detectar apenas Marca e Tipo
                                             </button>
                                         </div>
-                                        <select
-                                            className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
-                                            value={formData.snmp_interface_index}
-                                            onChange={e => setFormData({ ...formData, snmp_interface_index: parseInt(e.target.value) })}
-                                        >
-                                            <option value={1}>Padrão (1)</option>
-                                            {interfaceList.map(iface => (
-                                                <option key={iface.index} value={iface.index}>{iface.index}: {iface.name}</option>
-                                            ))}
-                                            {interfaceList.length === 0 && <option value={formData.snmp_interface_index}>Atual (ID: {formData.snmp_interface_index})</option>}
-                                        </select>
-                                    </div>
 
-                                    <div className="bg-slate-800/50 p-3 rounded border border-slate-700 space-y-2">
-                                        <label className="block text-xs text-slate-400 uppercase font-bold">Interface de Tráfego (Uplink/LAN)</label>
-                                        <select
-                                            className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white text-sm"
-                                            value={formData.snmp_traffic_interface_index || ''}
-                                            onChange={e => setFormData({ ...formData, snmp_traffic_interface_index: e.target.value ? parseInt(e.target.value) : null })}
-                                        >
-                                            <option value="">Mesma da Interface de Sinal</option>
-                                            {interfaceList.map(iface => (
-                                                <option key={`traffic-${iface.index}`} value={iface.index}>{iface.index}: {iface.name}</option>
-                                            ))}
-                                            {interfaceList.length === 0 && formData.snmp_traffic_interface_index && (
-                                                <option value={formData.snmp_traffic_interface_index}>Atual (ID: {formData.snmp_traffic_interface_index})</option>
-                                            )}
-                                        </select>
-                                        <p className="text-[10px] text-slate-500 italic">Se vazio, usará a mesma interface configurada acima.</p>
-                                    </div>
-                                </div>
-                            )}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Torre</label>
+                                                <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none" value={formData.tower_id} onChange={e => setFormData({ ...formData, tower_id: e.target.value })}>
+                                                    <option value="">Sem Torre</option>
+                                                    {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Marca</label>
+                                                <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none" value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}>
+                                                    <option value="mikrotik">Mikrotik</option>
+                                                    <option value="ubiquiti">Ubiquiti</option>
+                                                    <option value="intelbras">Intelbras</option>
+                                                    <option value="mimosa">Mimosa</option>
+                                                    <option value="generic">Genérico</option>
+                                                </select>
+                                            </div>
+                                        </div>
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" placeholder="SSH User (admin)" value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
-                                <input className="bg-slate-950 border border-slate-700 rounded p-2 text-white" type="password" placeholder="SSH Password" value={formData.ssh_password} onChange={e => setFormData({ ...formData, ssh_password: e.target.value })} />
+                                        <div>
+                                            <label className="block text-xs text-slate-400 uppercase font-bold mb-2">Tipo de Equipamento</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <label className={clsx(
+                                                    "flex items-center justify-center gap-2 cursor-pointer p-3 rounded-lg border-2 transition-all",
+                                                    formData.equipment_type === 'station'
+                                                        ? "border-blue-500 bg-blue-500/10 text-blue-400"
+                                                        : "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600"
+                                                )}>
+                                                    <input type="radio" name="eqType" checked={formData.equipment_type === 'station'} onChange={() => setFormData({ ...formData, equipment_type: 'station' })} className="hidden" />
+                                                    <Users size={16} />
+                                                    <span className="text-sm font-medium">Station</span>
+                                                </label>
+                                                <label className={clsx(
+                                                    "flex items-center justify-center gap-2 cursor-pointer p-3 rounded-lg border-2 transition-all",
+                                                    formData.equipment_type === 'transmitter'
+                                                        ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                                                        : "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600"
+                                                )}>
+                                                    <input type="radio" name="eqType" checked={formData.equipment_type === 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'transmitter' })} className="hidden" />
+                                                    <Wifi size={16} />
+                                                    <span className="text-sm font-medium">AP</span>
+                                                </label>
+                                                <label className={clsx(
+                                                    "flex items-center justify-center gap-2 cursor-pointer p-3 rounded-lg border-2 transition-all",
+                                                    formData.equipment_type !== 'station' && formData.equipment_type !== 'transmitter'
+                                                        ? "border-slate-500 bg-slate-500/10 text-slate-400"
+                                                        : "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600"
+                                                )}>
+                                                    <input type="radio" name="eqType" checked={formData.equipment_type !== 'station' && formData.equipment_type !== 'transmitter'} onChange={() => setFormData({ ...formData, equipment_type: 'other' })} className="hidden" />
+                                                    <Server size={16} />
+                                                    <span className="text-sm font-medium">Outro</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* TAB 1: AVANÇADO */}
+                                {activeTab === 1 && (
+                                    <>
+                                        {['mikrotik', 'ubiquiti', 'mimosa', 'intelbras'].includes(formData.brand) && (
+                                            <>
+                                                <div className="bg-slate-800/30 p-4 rounded-lg border border-slate-700">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <label className="text-sm text-slate-300 font-bold">Interface SFP / Wireless (Sinal)</label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleLoadInterfaces}
+                                                            disabled={isLoadingInterfaces}
+                                                            className="bg-blue-600 hover:bg-blue-500 text-[10px] uppercase font-bold text-white px-3 py-1 rounded transition-colors disabled:opacity-50"
+                                                        >
+                                                            {isLoadingInterfaces ? 'Carregando...' : 'Escanear'}
+                                                        </button>
+                                                    </div>
+                                                    <select
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
+                                                        value={formData.snmp_interface_index}
+                                                        onChange={e => setFormData({ ...formData, snmp_interface_index: parseInt(e.target.value) })}
+                                                    >
+                                                        <option value={1}>Padrão (1)</option>
+                                                        {interfaceList.map(iface => (
+                                                            <option key={iface.index} value={iface.index}>{iface.index}: {iface.name}</option>
+                                                        ))}
+                                                        {interfaceList.length === 0 && <option value={formData.snmp_interface_index}>Atual (ID: {formData.snmp_interface_index})</option>}
+                                                    </select>
+                                                </div>
+
+                                                <div className="bg-slate-800/30 p-4 rounded-lg border border-slate-700">
+                                                    <label className="block text-sm text-slate-300 font-bold mb-3">Interface de Tráfego (Uplink/LAN)</label>
+                                                    <select
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none"
+                                                        value={formData.snmp_traffic_interface_index || ''}
+                                                        onChange={e => setFormData({ ...formData, snmp_traffic_interface_index: e.target.value ? parseInt(e.target.value) : null })}
+                                                    >
+                                                        <option value="">Mesma da Interface de Sinal</option>
+                                                        {interfaceList.map(iface => (
+                                                            <option key={`traffic-${iface.index}`} value={iface.index}>{iface.index}: {iface.name}</option>
+                                                        ))}
+                                                        {interfaceList.length === 0 && formData.snmp_traffic_interface_index && (
+                                                            <option value={formData.snmp_traffic_interface_index}>Atual (ID: {formData.snmp_traffic_interface_index})</option>
+                                                        )}
+                                                    </select>
+                                                    <p className="text-[10px] text-slate-500 italic mt-2">Se vazio, usará a mesma interface configurada acima.</p>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">SSH User</label>
+                                                <input className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="admin" value={formData.ssh_user} onChange={e => setFormData({ ...formData, ssh_user: e.target.value })} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-400 uppercase font-bold mb-2">SSH Password</label>
+                                                <input className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none" type="password" placeholder="••••••••" value={formData.ssh_password} onChange={e => setFormData({ ...formData, ssh_password: e.target.value })} />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* TAB 2: ALERTAS */}
+                                {activeTab === 2 && (
+                                    <>
+                                        <div className="bg-gradient-to-br from-rose-900/20 to-orange-900/20 p-4 rounded-lg border border-rose-500/30">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Zap className="text-rose-400" size={20} />
+                                                <label className="text-sm text-rose-300 font-bold">Alerta de Baixa Voltagem</label>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Limite Crítico (V)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        className="w-full bg-slate-950 border border-rose-500/50 rounded-lg p-3 text-white focus:border-rose-400 outline-none transition-colors"
+                                                        placeholder="16.0"
+                                                        value={formData.min_voltage_threshold || ''}
+                                                        onChange={e => setFormData({ ...formData, min_voltage_threshold: e.target.value ? parseFloat(e.target.value) : null })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Intervalo (min)</label>
+                                                    <input
+                                                        type="number"
+                                                        className="w-full bg-slate-950 border border-rose-500/50 rounded-lg p-3 text-white focus:border-rose-400 outline-none transition-colors"
+                                                        placeholder="360"
+                                                        value={formData.voltage_alert_interval}
+                                                        onChange={e => setFormData({ ...formData, voltage_alert_interval: parseInt(e.target.value) })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 italic mt-2">Dispara alerta quando a voltagem cair abaixo do limite. Use 0 para desativar.</p>
+                                        </div>
+
+                                        <div className="bg-gradient-to-br from-blue-900/20 to-cyan-900/20 p-4 rounded-lg border border-blue-500/30">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Activity className="text-blue-400" size={20} />
+                                                <label className="text-sm text-blue-300 font-bold">Alerta de Tráfego Intenso</label>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Download Máx (Mbps)</label>
+                                                    <input
+                                                        type="number"
+                                                        className="w-full bg-slate-950 border border-blue-500/50 rounded-lg p-3 text-white focus:border-blue-400 outline-none transition-colors"
+                                                        placeholder="100"
+                                                        value={formData.max_traffic_in || ''}
+                                                        onChange={e => setFormData({ ...formData, max_traffic_in: e.target.value ? parseFloat(e.target.value) : null })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Upload Máx (Mbps)</label>
+                                                    <input
+                                                        type="number"
+                                                        className="w-full bg-slate-950 border border-blue-500/50 rounded-lg p-3 text-white focus:border-blue-400 outline-none transition-colors"
+                                                        placeholder="50"
+                                                        value={formData.max_traffic_out || ''}
+                                                        onChange={e => setFormData({ ...formData, max_traffic_out: e.target.value ? parseFloat(e.target.value) : null })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="mt-3">
+                                                <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Intervalo entre Alertas (min)</label>
+                                                <input
+                                                    type="number"
+                                                    className="w-full bg-slate-950 border border-blue-500/50 rounded-lg p-3 text-white focus:border-blue-400 outline-none transition-colors"
+                                                    placeholder="360"
+                                                    value={formData.traffic_alert_interval}
+                                                    onChange={e => setFormData({ ...formData, traffic_alert_interval: parseInt(e.target.value) })}
+                                                />
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 italic mt-2">Dispara alerta quando o tráfego ultrapassar os limites. Deixe vazio para desativar.</p>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
-                            <div className="flex justify-end gap-2 mt-4">
-                                <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
-                                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Salvar</button>
+                            {/* Footer */}
+                            <div className="p-6 border-t border-slate-800 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                                <button type="submit" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors shadow-lg">Salvar</button>
                             </div>
                         </form>
                     </div>

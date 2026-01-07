@@ -217,11 +217,39 @@ async def get_connected_clients_count(ip, brand, community, port=161):
 
 async def get_health_stats(ip, brand, community, port=161):
     stats = {'cpu_usage': None, 'memory_usage': None, 'disk_usage': None, 'temperature': None, 'voltage': None}
-    if brand.lower() == 'mikrotik':
+    brand_key = brand.lower()
+    
+    if brand_key == 'mikrotik':
+        # CPU
         cpu = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.3.3.1.2.1', port)
-        if cpu: stats['cpu_usage'] = int(cpu)
+        if cpu is not None: stats['cpu_usage'] = int(cpu)
+        # Temp
         temp = await get_snmp_value(ip, community, '1.3.6.1.4.1.14988.1.1.3.11.0', port)
         if temp: stats['temperature'] = round(float(temp) / 10.0, 1)
+        # Voltage
         volt = await get_snmp_value(ip, community, '1.3.6.1.4.1.14988.1.1.3.8.0', port)
         if volt: stats['voltage'] = round(float(volt) / 10.0, 1)
+        
+    elif brand_key == 'ubiquiti':
+        # Voltage (Common in airMAX AC / LTU)
+        # OID .1.3.6.1.4.1.41112.1.4.1.1.11.1 usually gives voltage in mV or V*10 or V*100
+        volt_raw = await get_snmp_value(ip, community, '1.3.6.1.4.1.41112.1.4.1.1.11.1', port)
+        if not volt_raw:
+            volt_raw = await get_snmp_value(ip, community, '1.3.6.1.4.1.41112.1.4.1.1.11.0', port)
+            
+        if volt_raw is not None and isinstance(volt_raw, int):
+            # UBNT scales vary. Usually 1000 for mV, sometimes 10 for V*10
+            if volt_raw > 1000: # Probably mV
+                stats['voltage'] = round(float(volt_raw) / 1000.0, 1)
+            elif volt_raw > 100: # Probably V*10 or high voltage?
+                stats['voltage'] = round(float(volt_raw) / 10.0, 1)
+            else:
+                stats['voltage'] = float(volt_raw)
+
+    elif brand_key == 'intelbras':
+        # Voltage (APC Series)
+        volt_raw = await get_snmp_value(ip, community, '1.3.6.1.4.1.32761.3.1.1.1.2.0', port)
+        if volt_raw is not None and isinstance(volt_raw, int):
+             stats['voltage'] = round(float(volt_raw) / 10.0, 1) if volt_raw > 100 else float(volt_raw)
+
     return stats

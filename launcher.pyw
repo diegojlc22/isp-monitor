@@ -725,6 +725,32 @@ class ModernLauncher:
         self.should_be_running = True
         self.restart_attempts = 0 # Reset ao iniciar manual
         
+        # --- CLEANUP PREVENTIVO (Matar processos zumbis) ---
+        print("[LAUNCHER] Executando limpeza de processos órfãos...")
+        try:
+            my_pid = os.getpid()
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['pid'] == my_pid: continue # Não suicidar
+                    
+                    name = proc.info.get('name', '').lower()
+                    cmd = ' '.join(proc.info.get('cmdline') or []).lower()
+                    
+                    # Alvos: Collector, API, Self-Heal, ou Launchers antigos
+                    targets = ['collector.py', 'uvicorn', 'self_heal.py', 'launcher.py']
+                    
+                    if ('python' in name or 'pythonw' in name):
+                        for target in targets:
+                            if target in cmd:
+                                logger_instance.write(f"[CLEANUP] Matando processo zumbi {proc.info['pid']}: {target}\n")
+                                proc.kill()
+                                break
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+        except Exception as e:
+            print(f"[LAUNCHER] Erro no cleanup: {e}")
+        time.sleep(1) # Aguardar OS liberar recursos
+        
         # --- AUTO-FIX: GARANTIR ESTRUTURA DE LOGS ---
         log_dir = "logs"
         if not os.path.exists(log_dir):

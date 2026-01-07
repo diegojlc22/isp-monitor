@@ -15,6 +15,20 @@ api.interceptors.request.use(config => {
     return config;
 });
 
+api.interceptors.response.use(
+    response => response,
+    error => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            // Avoid infinite loops if we are already on login
+            if (!window.location.pathname.includes('/login')) {
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 export const getTowers = () => api.get('/towers/').then(res => res.data);
 export const createTower = (data: any) => api.post('/towers/', data).then(res => res.data);
 export const deleteTower = (id: number) => api.delete(`/towers/${id}`).then(res => res.data);

@@ -36,9 +36,12 @@ async def analyze_capacity_trends():
             # Get traffic history for last 30 days
             thirty_days_ago = datetime.utcnow() - timedelta(days=30)
             
+            # Define trunc expression to ensure consistency in GROUP BY
+            trunc_date = func.date_trunc('day', TrafficLog.timestamp)
+            
             history_result = await session.execute(
                 select(
-                    func.date_trunc('day', TrafficLog.timestamp).label('day'),
+                    trunc_date.label('day'),
                     func.max(TrafficLog.in_mbps).label('max_in'),
                     func.max(TrafficLog.out_mbps).label('max_out')
                 )
@@ -48,8 +51,8 @@ async def analyze_capacity_trends():
                         TrafficLog.timestamp >= thirty_days_ago
                     )
                 )
-                .group_by(func.date_trunc('day', TrafficLog.timestamp))
-                .order_by(func.date_trunc('day', TrafficLog.timestamp))
+                .group_by(trunc_date)
+                .order_by(trunc_date)
             )
             
             daily_peaks = history_result.all()

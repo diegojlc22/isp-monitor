@@ -72,6 +72,54 @@ async def heartbeat_loop():
         
         await asyncio.sleep(10)
 
+async def postgres_watchdog():
+    """🧠 Monitora a saúde do PostgreSQL e registra quedas/recuperações"""
+    import socket
+    from datetime import datetime
+    
+    def check_postgres_alive():
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex(('127.0.0.1', 5432))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
+    logger.info("[WATCHDOG] 🐕 PostgreSQL Watchdog iniciado (verifica a cada 30s)")
+    was_alive = True
+    downtime_start = None
+    
+    while True:
+        try:
+            is_alive = check_postgres_alive()
+            
+            if not is_alive and was_alive:
+                # PostgreSQL acabou de cair
+                downtime_start = datetime.now()
+                logger.error(f"[WATCHDOG] ❌ PostgreSQL OFFLINE detectado às {downtime_start.strftime('%H:%M:%S')}")
+                logger.warning("[WATCHDOG] ⏳ Os serviços tentarão reconectar automaticamente...")
+                
+            elif is_alive and not was_alive:
+                # PostgreSQL voltou!
+                uptime = datetime.now()
+                downtime_duration = (uptime - downtime_start).total_seconds() if downtime_start else 0
+                logger.info(f"[WATCHDOG] ✅ PostgreSQL ONLINE novamente às {uptime.strftime('%H:%M:%S')}")
+                logger.info(f"[WATCHDOG] 📊 Tempo de inatividade: {int(downtime_duration)}s")
+                logger.info("[WATCHDOG] 🔄 Os serviços devem reconectar automaticamente nos próximos segundos.")
+                downtime_start = None
+            
+            was_alive = is_alive
+            
+        except asyncio.CancelledError:
+            logger.info("[WATCHDOG] Loop cancelado.")
+            break
+        except Exception as e:
+            logger.warning(f"[WATCHDOG] Erro no watchdog: {e}")
+        
+        await asyncio.sleep(30)  # Verifica a cada 30 segundos
+
 async def maintenance_loop():
     """Roda tarefas de limpeza a cada 24 horas"""
     logger.info("[COLLECTOR] Agendador de limpeza iniciado (24h)")
@@ -97,28 +145,59 @@ async def main():
     logger.info("[COLLECTOR] Iniciando Processo de Coleta Independente (SUPERVISOR V2)...")
     logger.info("---------------------------------------------------------")
     
-    # Garantir que o banco existe (With Retries)
+    # 🧠 INTELIGÊNCIA: Garantir que o PostgreSQL está online e acessível
+    import socket
+    
+    def check_postgres_port():
+        """Verifica se o PostgreSQL está aceitando conexões na porta 5432"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex(('127.0.0.1', 5432))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
     db_ok = False
-    logger.info("[COLLECTOR] ⏳ Aguardando estabilização do PostgreSQL...")
-    for attempt in range(10): 
+    attempt = 0
+    logger.info("[COLLECTOR] 🧠 Verificando disponibilidade do PostgreSQL...")
+    
+    # 🎯 FASE 1: Aguardar PostgreSQL aceitar conexões (Indefinidamente com Backoff)
+    while not check_postgres_port():
+        wait_time = min(5 + (attempt * 2), 60)  # Backoff exponencial até 60s
+        logger.warning(f"[COLLECTOR] ⏳ PostgreSQL offline. Aguardando {wait_time}s (tentativa {attempt+1})...")
+        await asyncio.sleep(wait_time)
+        attempt += 1
+    
+    logger.info("[COLLECTOR] ✅ PostgreSQL está aceitando conexões na porta 5432!")
+    
+    # 🎯 FASE 2: Conectar ao banco e criar tabelas (Com Retry Inteligente)
+    logger.info("[COLLECTOR] 📡 Estabelecendo conexão com o banco de dados...")
+    for attempt in range(20):  # Aumentado de 10 para 20 tentativas
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            logger.info("[COLLECTOR] ✅ Conexão estabelecida e banco verificado.")
+            logger.info("[COLLECTOR] ✅ Conexão estabelecida e esquema do banco verificado.")
             db_ok = True
             break
         except Exception as e:
             error_str = str(e).lower()
-            if "connection was closed" in error_str or "connectiondoesnotexist" in error_str:
+            if "connection refused" in error_str or "connect call failed" in error_str:
+                wait_time = min(3 + attempt, 30)
+                logger.warning(f"[COLLECTOR] 🔄 Conexão recusada. Aguardando {wait_time}s ({attempt+1}/20)...")
+                await asyncio.sleep(wait_time)
+            elif "connection was closed" in error_str or "connectiondoesnotexist" in error_str:
                 wait_time = 2 + attempt
-                logger.warning(f"[COLLECTOR] 📡 Conexão instável. Aguardando {wait_time}s ({attempt+1}/10)...")
+                logger.warning(f"[COLLECTOR] 📡 Conexão instável. Aguardando {wait_time}s ({attempt+1}/20)...")
                 await asyncio.sleep(wait_time)
             else:
-                logger.error(f"[COLLECTOR] ⏳ Tentativa {attempt+1}/10 falhou: {e}")
-                await asyncio.sleep(2)
+                logger.error(f"[COLLECTOR] ⚠️ Tentativa {attempt+1}/20 falhou: {e}")
+                await asyncio.sleep(3)
     
     if not db_ok:
-        logger.critical("[CRITICAL] Falha total na conexão com o banco após 10 tentativas.")
+        logger.critical("[CRITICAL] ❌ Falha total na conexão com o banco após 20 tentativas.")
+        logger.critical("[CRITICAL] 🔧 Verifique se o PostgreSQL está rodando e acessível.")
         return
 
     # Aplicar otimizações avançadas
@@ -149,6 +228,7 @@ async def main():
     start_task("Topology", topology_loop())
     start_task("Maintenance", maintenance_loop())
     start_task("Heartbeat", heartbeat_loop())
+    start_task("PostgreSQL Watchdog", postgres_watchdog())  # 🐕 Monitor de saúde do PostgreSQL
     start_task("Security Audit", security_audit_job())
     start_task("Capacity Planning", capacity_planning_job())
     start_task("Backup Service", backup_scheduler_loop())
@@ -187,6 +267,7 @@ async def main():
                     elif name == "Topology": new_coro = topology_loop()
                     elif name == "Maintenance": new_coro = maintenance_loop()
                     elif name == "Heartbeat": new_coro = heartbeat_loop()
+                    elif name == "PostgreSQL Watchdog": new_coro = postgres_watchdog()
                     elif name == "Security Audit": new_coro = security_audit_job()
                     elif name == "Capacity Planning": new_coro = capacity_planning_job()
                     

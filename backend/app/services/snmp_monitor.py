@@ -63,7 +63,7 @@ async def snmp_monitor_job():
                                  result["updates"]["connected_clients"] = clients
                         
                         # --- HEALTH STATS (CPU, Temp, Voltage) ---
-                        if brand == 'mikrotik':
+                        if brand in ['mikrotik', 'ubiquiti', 'intelbras']:
                             try:
                                 h_stats = await get_health_stats(ip, brand, community, port)
                                 if h_stats['cpu_usage'] is not None:
@@ -154,10 +154,16 @@ async def snmp_monitor_job():
                 )
                 notif_config = {p.key: p.value for p in params_res.scalars().all()}
 
-                # Equipments
-                res = await session.execute(select(Equipment).where(Equipment.is_online == True))
-                equipments = res.scalars().all()
-                for eq in equipments:
+                # Equipments with Tower names
+                res = await session.execute(
+                    select(Equipment, models.Tower.name.label("tower_name"))
+                    .outerjoin(models.Tower, Equipment.tower_id == models.Tower.id)
+                    .where(Equipment.is_online == True)
+                )
+                rows = res.all()
+                for row in rows:
+                    eq = row.Equipment
+                    tower_name = row.tower_name or "Desconhecida"
                     if not eq.ip: continue
                     # Copy data to dict to avoid session detach issues during async gather
                     equipments_data.append({
@@ -172,12 +178,19 @@ async def snmp_monitor_job():
                         "max_traffic_in": eq.max_traffic_in,
                         "max_traffic_out": eq.max_traffic_out,
                         "traffic_alert_interval": eq.traffic_alert_interval,
-                        "last_traffic_alert_sent": eq.last_traffic_alert_sent
+                        "last_traffic_alert_sent": eq.last_traffic_alert_sent,
+                        "min_voltage_threshold": eq.min_voltage_threshold,
+                        "voltage_alert_interval": eq.voltage_alert_interval,
+                        "last_voltage_alert_sent": eq.last_voltage_alert_sent,
+                        "tower_name": tower_name
                     })
+            
             
             if not equipments_data:
                 await asyncio.sleep(5)
                 continue
+            
+            logger.info(f"[SNMP] 🔄 Processando {len(equipments_data)} equipamentos online...")
 
             # 2. Run Parallel Fetching (With 15s timeout per device)
             async def fetch_with_timeout(eq_dict):
@@ -193,7 +206,21 @@ async def snmp_monitor_job():
                     return None
 
             tasks = [fetch_with_timeout(eq) for eq in equipments_data]
-            results = await asyncio.gather(*tasks)
+            
+            # 🔥 WORKAROUND: Timeout global para evitar travamento
+            try:
+                results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=300.0)  # 5 min max
+                logger.info(f"[SNMP] ✅ Processamento concluído: {len([r for r in results if r])} sucessos de {len(equipments_data)}")
+            except asyncio.TimeoutError:
+                logger.error(f"[SNMP] ⏰ TIMEOUT GLOBAL! Processamento de {len(equipments_data)} equipamentos excedeu 5 minutos. Reiniciando loop...")
+                await asyncio.sleep(10)
+                continue
+            except Exception as e:
+                logger.error(f"[SNMP] 💥 ERRO CRÍTICO no gather: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                await asyncio.sleep(10)
+                continue
             
             # 3. Batch Update DB (Optimized)
             from sqlalchemy import update, insert
@@ -344,6 +371,41 @@ async def snmp_monitor_job():
                                     
                                     # Atualizar no DB via buffer
                                     upd_data["last_traffic_alert_sent"] = datetime.now()
+
+                        # ✅ ALERTAS DE VOLTAGEM
+                        cv = res["updates"].get("voltage")
+                        threshold = eq_data.get("min_voltage_threshold")
+                        
+                        if cv is not None and threshold is not None and cv <= threshold:
+                            # Cooldown check
+                            last_alert_v = eq_data.get("last_voltage_alert_sent")
+                            interval_v = eq_data.get("voltage_alert_interval") or 360
+                            can_send_v = False
+                            
+                            if not last_alert_v:
+                                can_send_v = True
+                            else:
+                                if last_alert_v.tzinfo:
+                                    last_alert_v = last_alert_v.replace(tzinfo=None)
+                                if (datetime.now() - last_alert_v).total_seconds() > (interval_v * 60):
+                                    can_send_v = True
+                                    
+                            if can_send_v:
+                                now_str = datetime.now().strftime("%H:%M do dia %d/%m/%Y")
+                                alert_msg = f"🪫 *ALERTA DE BAIXA VOLTAGEM*\n\n📍 *{eq_data['tower_name']}*\n📟 Rádio: {eq_data['name']}\n🌐 IP: {eq_data['ip']}\n\n⚠️ Voltagem Atual: *{cv}V*\n🛑 Limite Crítico: {threshold}V\n\n🕒 Horário: {now_str}\n\n🔔 *Ação Preventiva Necessária!*"
+                                
+                                asyncio.create_task(send_notification(
+                                    message=alert_msg,
+                                    telegram_token=notif_config.get('telegram_token'),
+                                    telegram_chat_id=notif_config.get('telegram_chat_id'),
+                                    telegram_enabled=notif_config.get('telegram_enabled', 'true').lower() == 'true',
+                                    whatsapp_enabled=notif_config.get('whatsapp_enabled', 'false').lower() == 'true',
+                                    whatsapp_target=notif_config.get('whatsapp_target'),
+                                    whatsapp_target_group=notif_config.get('whatsapp_target_group')
+                                ))
+                                
+                                # Atualizar no DB via buffer
+                                upd_data["last_voltage_alert_sent"] = datetime.now()
                 
                 # Execute Batch Operations
                 if updates_buffer:
@@ -353,6 +415,14 @@ async def snmp_monitor_job():
                 if traffic_logs_buffer:
                     await session.execute(insert(TrafficLog), traffic_logs_buffer)
                 
+                # --- UPDATE HEARTBEAT FOR HEALTH CHECK ---
+                from sqlalchemy import text
+                await session.execute(text("""
+                    INSERT INTO parameters (key, value) 
+                    VALUES ('snmp_monitor_last_run', :now) 
+                    ON CONFLICT (key) DO UPDATE SET value = :now
+                """), {"now": datetime.now().isoformat()})
+
                 await session.commit()
                 if updates_count > 0:
                     logger.info(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
