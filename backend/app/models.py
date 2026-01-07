@@ -104,6 +104,9 @@ class Equipment(Base):
     disk_usage = Column(Integer, nullable=True)
     temperature = Column(Float, nullable=True)
     voltage = Column(Float, nullable=True)
+    min_voltage_threshold = Column(Float, nullable=True, default=16.0)
+    last_voltage_alert_sent = Column(DateTime, nullable=True)
+    voltage_alert_interval = Column(Integer, default=360)
     
     tower = relationship("Tower", back_populates="equipments")
     # Removido relationships de logs para evitar erro de FK e overload de memória

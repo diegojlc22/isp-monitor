@@ -114,7 +114,7 @@ async def start_batch_detect(
     return {"message": "Detecção em lote iniciada em background."}
 
 @router.get("/batch-detect/status")
-async def get_batch_detect_status():
+async def get_batch_detect_status(current_user=Depends(get_current_user)):
     """Returns the current status of the background detection task"""
     return batch_detection_state
 
@@ -133,7 +133,8 @@ async def read_equipments(
     limit: int = 10000, 
     tower_id: Optional[int] = None,
     is_online: Optional[bool] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
     # Performance: Otimização de Cache + Eager Loading
     
@@ -262,7 +263,7 @@ class DetectBrandRequest(BaseModel):
     snmp_port: int = 161
 
 @router.post("/detect-brand")
-async def detect_equipment_brand(request: DetectBrandRequest):
+async def detect_equipment_brand(request: DetectBrandRequest, current_user=Depends(get_current_user)):
     """
     Auto-detects equipment brand, type, and name via SNMP.
     Returns detected brand (ubiquiti, mikrotik, mimosa, intelbras, generic),
@@ -315,7 +316,8 @@ async def scan_interfaces(
     ip: str = Query(...),
     community: Optional[str] = Query(None),
     port: int = Query(161),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
     from backend.app.services.snmp import get_snmp_interfaces
     from backend.app.models import Parameters
@@ -514,13 +516,14 @@ async def auto_detect_all(
     Retorna todos os dados para preencher o formulário automaticamente.
     """
     from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, get_wireless_stats
-    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic
+    from backend.app.services.snmp import get_snmp_interfaces, get_snmp_interface_traffic, detect_equipment_name
     from backend.app.models import Parameters
     import time
     
     result = {
         "success": False,
         "ip": ip,
+        "name": None,
         "brand": None,
         "equipment_type": None,
         "snmp_interface_index": None,
@@ -537,6 +540,11 @@ async def auto_detect_all(
             brand = await detect_brand(ip, community, port)
             result["brand"] = brand
             
+            # Detectar Nome (sysName)
+            sys_name = await detect_equipment_name(ip, community, port)
+            if sys_name:
+                result["name"] = sys_name
+
             if brand != "generic":
                 eq_type = await detect_equipment_type(ip, brand, community, port)
                 result["equipment_type"] = eq_type
@@ -548,6 +556,9 @@ async def auto_detect_all(
                     # In some brands, we might want to store which interface gave the signal
                     # But for now, we just indicate we found signal.
         except Exception as e:
+            logger.error(f"[AUTO-DETECT] Step 1 falhou para {ip}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             result["errors"].append(f"Erro ao detectar marca/tipo: {str(e)}")
         
         # STEP 2: Detectar interface de tráfego

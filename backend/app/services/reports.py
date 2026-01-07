@@ -7,19 +7,20 @@ from io import BytesIO
 from datetime import datetime
 from backend.app.models import Equipment, PingStatsHourly
 
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.linecharts import HorizontalLineChart
+from reportlab.graphics.charts.legends import Legend
+from reportlab.graphics.widgets.markers import makeMarker
+
 def generate_sla_pdf(data: list, period_str: str, stats: dict = None):
-    """
-    Gera um relatório PDF Executivo de SLA.
-    data: List de dicts {name, ip, availability_percent, avg_latency_ms}
-    stats: Dict {global_uptime, global_latency, critical_devices_count, conclusion}
-    """
+    # ... (código existente de setup) ...
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     elements = []
     
     styles = getSampleStyleSheet()
-    
-    # Custom Styles (Same as Incidents)
+    # ... styles ...
     title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#1e3a8a'), spaceAfter=20, alignment=1)
     sub_title_style = ParagraphStyle('CustomSubTitle', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#475569'), spaceAfter=15)
     normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#1f2937'), leading=14)
@@ -64,6 +65,95 @@ def generate_sla_pdf(data: list, period_str: str, stats: dict = None):
         ]))
         elements.append(kpi_table)
         elements.append(Spacer(1, 0.3 * inch))
+
+        # --- GRÁFICOS ---
+        # PIE CHART (Distribution)
+        if stats.get('pie_data') and sum(stats['pie_data']) > 0:
+            elements.append(Paragraph("Distribuição de Qualidade (Dispositivos)", normal_style))
+            elements.append(Spacer(1, 10))
+            
+            d = Drawing(450, 200)
+            pc = Pie()
+            pc.x = 100
+            pc.y = 20
+            pc.width = 150
+            pc.height = 150
+            pc.data = stats['pie_data']
+            # Labels only if val > 0
+            pc.labels = [str(v) if v > 0 else '' for v in pc.data]
+            
+            pc.slices.strokeWidth = 1
+            pc.slices.strokeColor = colors.white
+            pc.slices[0].fillColor = colors.HexColor('#166534') # Excellent (Dark Green)
+            pc.slices[1].fillColor = colors.HexColor('#22c55e') # Good (Green)
+            pc.slices[2].fillColor = colors.HexColor('#f59e0b') # Warning (Amber)
+            pc.slices[3].fillColor = colors.HexColor('#ef4444') # Critical (Red)
+            
+            d.add(pc)
+            
+            legend = Legend()
+            legend.x = 300
+            legend.y = 150
+            legend.dx = 10
+            legend.dy = 10
+            legend.fontName = 'Helvetica'
+            legend.fontSize = 10
+            legend.boxAnchor = 'nw'
+            legend.columnMaximum = 10
+            legend.strokeWidth = 0
+            legend.alignment = 'right'
+            legend.colorNamePairs = [
+                (colors.HexColor('#166534'), '> 99.9% (Excepcional)'),
+                (colors.HexColor('#22c55e'), '99.0% - 99.9% (Bom)'),
+                (colors.HexColor('#f59e0b'), '95.0% - 99.0% (Atenção)'),
+                (colors.HexColor('#ef4444'), '< 95.0% (Crítico)')
+            ]
+            d.add(legend)
+            elements.append(d)
+            elements.append(Spacer(1, 0.2 * inch))
+
+        # LINE CHART (Trends)
+        if stats.get('line_data') and len(stats['line_data']) > 1:
+            elements.append(Paragraph("Evolução Diária da Disponibilidade (%)", normal_style))
+            elements.append(Spacer(1, 10))
+            
+            d_line = Drawing(450, 180)
+            lc = HorizontalLineChart()
+            lc.x = 30
+            lc.y = 30
+            lc.height = 120
+            lc.width = 380
+            
+            line_raw_data = stats['line_data'] # [(date, val)]
+            # Limit to last 15 points to fit if too many
+            if len(line_raw_data) > 20:
+                 # Take every Nth point to fit? Or just last 15?
+                 # Let's take last 15 for clarity
+                 line_raw_data = line_raw_data[-15:]
+            
+            dates = [x[0] for x in line_raw_data]
+            vals = [x[1] for x in line_raw_data]
+            
+            lc.data = [vals]
+            lc.categoryAxis.categoryNames = dates
+            lc.categoryAxis.labels.boxAnchor = 'n'
+            lc.categoryAxis.labels.angle = 45
+            lc.categoryAxis.labels.dy = -10
+            lc.categoryAxis.labels.fontSize = 8
+            
+            min_val = min(vals)
+            lc.valueAxis.valueMin = max(0, min_val - 2) if min_val > 90 else 0
+            lc.valueAxis.valueMax = 100.5
+            
+            lc.lines[0].strokeColor = colors.HexColor('#2563eb')
+            lc.lines[0].symbol = makeMarker('Circle')
+            lc.lines[0].symbol.size = 4
+            lc.lines[0].symbol.fillColor = colors.white
+            lc.lines[0].symbol.strokeColor = colors.HexColor('#2563eb')
+            
+            d_line.add(lc)
+            elements.append(d_line)
+            elements.append(Spacer(1, 0.4 * inch))
 
     # --- 2. LISTAGEM DE DISPOSITIVOS ---
     elements.append(Paragraph("2. Detalhamento por Dispositivo", sub_title_style))

@@ -153,7 +153,7 @@ async def get_snmp_uptime(ip: str, community: str = "public", port: int = 161) -
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             engine,
             CommunityData(community, mpModel=0),  # v1
-            UdpTransportTarget((ip, port), timeout=1, retries=1),
+            UdpTransportTarget((ip, port), timeout=4, retries=2),
             ContextData(),
             ObjectType(ObjectIdentity('1.3.6.1.2.1.1.3.0')) # sysUpTime
         )
@@ -206,7 +206,7 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
                 errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
                     engine,
                     CommunityData(community, mpModel=1), # v2c preferred
-                    UdpTransportTarget((ip, port), timeout=1, retries=0),
+                    UdpTransportTarget((ip, port), timeout=3, retries=1),
                     ContextData(),
                     ObjectType(ObjectIdentity(oid_in)),
                     ObjectType(ObjectIdentity(oid_out))
@@ -234,7 +234,7 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
         errorIndication, errorStatus, errorIndex, varBinds = await getCmd(
             engine,
             CommunityData(community, mpModel=1), # v2c
-            UdpTransportTarget((ip, port), timeout=2, retries=1),
+            UdpTransportTarget((ip, port), timeout=4, retries=2),
             ContextData(),
             ObjectType(ObjectIdentity(oid_in_64)),
             ObjectType(ObjectIdentity(oid_out_64))
@@ -325,49 +325,62 @@ async def measure_interfaces_traffic(ip: str, community: str = "public", port: i
     if not interfaces:
         return []
 
-    # 1. First Measurement
-    counters_1 = {}
-    for iface in interfaces:
-        res = await get_snmp_interface_traffic(ip, community, port, iface['index'], brand=brand)
-        if res:
-            counters_1[iface['index']] = {'t': time.time(), 'in': res[0], 'out': res[1]}
+    sem = asyncio.Semaphore(15) # Limita concorrência
+
+    async def fetch(idx):
+        async with sem:
+            try:
+                res = await get_snmp_interface_traffic(ip, community, port, idx, brand=brand)
+                return idx, res
+            except:
+                return idx, None
+
+    # 1. First Measurement (Parallel)
+    tasks = [fetch(iface['index']) for iface in interfaces]
+    results_1 = await asyncio.gather(*tasks)
     
+    counters_1 = {}
+    timestamp_1 = time.time()
+    
+    for idx, res in results_1:
+        if res:
+            counters_1[idx] = {'in': res[0], 'out': res[1]}
+
     if not counters_1:
         return []
 
     # Wait
     await asyncio.sleep(sample_time)
     
-    # 2. Second Measurement & Delta
+    # 2. Second Measurement (Parallel)
+    # Re-use tasks list logic but create new tasks
+    tasks_2 = [fetch(idx) for idx in counters_1.keys()] # Only fetch those that worked first time
+    results_2 = await asyncio.gather(*tasks_2)
+    
     valid_results = []
-    
-    # Parallel processing for second sample would be faster, but let's keep it simple for now as per original logic
-    # Actually, the original router logic used a semaphore for everything.
-    # Let's stick to the reliable sequential polling for now to avoid overloading the device's CPU.
-    
-    for iface in interfaces:
-        idx = iface['index']
+    timestamp_2 = time.time()
+    dt_base = timestamp_2 - timestamp_1
+    if dt_base <= 0: dt_base = 0.001
+
+    for idx, res in results_2:
+        if not res: continue
         if idx not in counters_1: continue
         
         c1 = counters_1[idx]
-        res = await get_snmp_interface_traffic(ip, community, port, idx, brand=brand)
+        delta_in =  max(0, res[0] - c1['in'])
+        delta_out = max(0, res[1] - c1['out'])
         
-        if res:
-            dt = time.time() - c1['t']
-            if dt <= 0: dt = 0.001
-            
-            delta_in =  max(0, res[0] - c1['in'])
-            delta_out = max(0, res[1] - c1['out'])
-            
-            # Total Mbps
-            mbps_in = ((delta_in * 8) / (dt * 1_000_000))
-            mbps_out = ((delta_out * 8) / (dt * 1_000_000))
-            total_mbps = mbps_in + mbps_out
-            
-            if total_mbps > 0.01: # Threshold 0.01 Mbps to ignore noise
-                valid_results.append({
-                    'index': idx,
-                    'name': iface['name'],
+        # Total Mbps
+        mbps_in = ((delta_in * 8) / (dt_base * 1_000_000))
+        mbps_out = ((delta_out * 8) / (dt_base * 1_000_000))
+        total_mbps = mbps_in + mbps_out
+        
+        name = next((i['name'] for i in interfaces if i['index'] == idx), str(idx))
+
+        if total_mbps > 0.001: # Lower threshold to capture low traffic
+             valid_results.append({
+                'index': idx,
+                'name': name,
                     'in_mbps': round(mbps_in, 2),
                     'out_mbps': round(mbps_out, 2),
                     'total_mbps': round(total_mbps, 2)

@@ -93,11 +93,52 @@ async def get_sla_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db),
         else:
             conclusion = f"🚨 <b>Crítico.</b> A rede enfrentou severos problemas de disponibilidade ({global_uptime}%), impactando fortemente a operação. Ação imediata é recomendada nos {critical_devices_count} dispositivos críticos."
 
+        # Data for Pie Chart
+        count_exc = 0  # >= 99.9
+        count_good = 0 # 99.0 - 99.9
+        count_warn = 0 # 95.0 - 99.0
+        count_crit = 0 # < 95.0
+        
+        for item in report_data:
+            up = item['availability_percent']
+            if up >= 99.9: count_exc += 1
+            elif up >= 99.0: count_good += 1
+            elif up >= 95.0: count_warn += 1
+            else: count_crit += 1
+
+        # Query for Line Chart (Daily Evolution)
+        # Using date_trunc for Postgres
+        stmt_daily = select(
+            func.date_trunc('day', PingStatsHourly.timestamp).label('day'),
+            func.avg(PingStatsHourly.availability_percent).label('avg_upt')
+        ).where(
+            PingStatsHourly.timestamp >= start_date
+        ).group_by(
+            func.date_trunc('day', PingStatsHourly.timestamp)
+        ).order_by(
+            func.date_trunc('day', PingStatsHourly.timestamp)
+        )
+        
+        daily_res = await db.execute(stmt_daily)
+        daily_probs = daily_res.all()
+        
+        line_data = []
+        for row in daily_probs:
+            # Row day might be string or datetime dependent on driver, usually datetime
+            d = row.day
+            if hasattr(d, 'strftime'):
+                d_str = d.strftime('%d/%m')
+            else:
+                d_str = str(d)[:10] # Fallback
+            line_data.append((d_str, round(row.avg_upt, 2)))
+
         stats = {
             "global_uptime": global_uptime,
             "global_latency": global_latency,
             "critical_devices_count": critical_devices_count,
-            "conclusion": conclusion
+            "conclusion": conclusion,
+            "pie_data": [count_exc, count_good, count_warn, count_crit],
+            "line_data": line_data
         }
 
         # Gerar PDF

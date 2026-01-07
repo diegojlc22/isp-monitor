@@ -55,6 +55,8 @@ class EquipmentBase(BaseModel):
     max_traffic_in: Optional[float] = None
     max_traffic_out: Optional[float] = None
     traffic_alert_interval: int = 360
+    min_voltage_threshold: Optional[float] = 16.0
+    voltage_alert_interval: int = 360
     whatsapp_groups: Optional[List[str]] = []
 
     @validator('whatsapp_groups', pre=True)
@@ -96,6 +98,8 @@ class EquipmentUpdate(BaseModel):
     max_traffic_in: Optional[float] = None
     max_traffic_out: Optional[float] = None
     traffic_alert_interval: Optional[int] = None
+    min_voltage_threshold: Optional[float] = None
+    voltage_alert_interval: Optional[int] = None
     whatsapp_groups: Optional[List[str]] = None
 
 class Equipment(EquipmentBase):

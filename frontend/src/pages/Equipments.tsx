@@ -574,6 +574,7 @@ export function Equipments() {
             if (result.success) {
                 setFormData({
                     ...formData,
+                    name: result.name || formData.name,
                     brand: result.brand || formData.brand,
                     equipment_type: result.equipment_type || formData.equipment_type,
                     snmp_interface_index: result.snmp_interface_index || formData.snmp_interface_index,
@@ -581,6 +582,7 @@ export function Equipments() {
                 });
 
                 let msg = 'Detecção completa finalizada com sucesso!';
+                if (result.name) msg += `\n✅ Nome: ${result.name}`;
                 if (result.brand) msg += `\n✅ Marca: ${result.brand.toUpperCase()}`;
                 if (result.equipment_type) msg += `\n✅ Tipo: ${result.equipment_type}`;
                 if (result.snmp_interface_index) msg += `\n✅ Interface Sinal: ${result.snmp_interface_index}`;

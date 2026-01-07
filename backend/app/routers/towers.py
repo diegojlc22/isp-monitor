@@ -15,7 +15,7 @@ from backend.app.dependencies import get_current_user
 router = APIRouter(prefix="/towers", tags=["towers"])
 
 @router.get("/", response_model=List[TowerSchema])
-async def read_towers(skip: int = 0, limit: int = 1000, db: AsyncSession = Depends(get_db)):
+async def read_towers(skip: int = 0, limit: int = 1000, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     # Tenta buscar do cache
     cache_key = f"towers_list_{skip}_{limit}"
     cached = await cache.get(cache_key)
