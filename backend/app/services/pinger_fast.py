@@ -13,12 +13,13 @@ from backend.app.config import settings
 from backend.app.models import Equipment, Tower, Alert, Parameters
 from backend.app.services.notifier import send_notification
 
-# Configuração Otimizada (V3 - Eco Mode)
+# Configurações Dinâmicas (Serão atualizadas pelo load_configs)
 BATCH_SIZE = 50 
-WRITE_BUFFER_SIZE = 500 # Aumentado de 100 para 500 (Menos I/O no disco)
-WRITE_INTERVAL = 3.0    # Aumentado de 1.0s para 3.0s (Menos commits no banco)
+WRITE_BUFFER_SIZE = 500 
+WRITE_INTERVAL = 3.0    
 PING_TIMEOUT = settings.ping_timeout_seconds
 PING_INTERVAL = settings.ping_interval_seconds
+DOWN_COUNT = 3
 
 class PingerService:
     def __init__(self):
@@ -95,6 +96,15 @@ class PingerService:
                     res = await session.execute(select(Parameters))
                     params = {p.key: p.value for p in res.scalars().all()}
                     self.config = params
+                    
+                    # Atualizar variáveis globais do serviço
+                    global PING_INTERVAL, PING_TIMEOUT, DOWN_COUNT
+                    if "ping_interval" in params:
+                        PING_INTERVAL = int(params["ping_interval"])
+                    if "ping_timeout" in params:
+                        PING_TIMEOUT = int(params["ping_timeout"])
+                    if "ping_down_count" in params:
+                        DOWN_COUNT = int(params["ping_down_count"])
             except Exception as e:
                 logger.error(f"Error loading configs: {e}")
                 await asyncio.sleep(5) # Retry faster if failed
@@ -118,9 +128,9 @@ class PingerService:
                     # Count=2, Interval=0.05s for stability
                     results = await async_multiping(
                         targets_chunk, 
-                        count=3,        # Reduzido de 5 para 3 (Menos carga)
-                        interval=0.05,  # Aumentado de 0.03 para 0.05 (Mais "respiro" entre pings)
-                        timeout=2.0, 
+                        count=3,        
+                        interval=0.05,  
+                        timeout=float(PING_TIMEOUT), 
                         payload_size=32,
                         privileged=True 
                     )
@@ -167,20 +177,9 @@ class PingerService:
             if tasks:
                 await asyncio.gather(*tasks)
 
-            # Accurate Interval Control
+            # Accurate Interval Control (Uses Global Dynamic Interval)
             elapsed = time.time() - cycle_start
-            
-            # Read interval from database (with fallback to settings)
-            try:
-                async with async_session_factory() as session:
-                    from backend.app.models import Parameters
-                    res = await session.execute(select(Parameters).where(Parameters.key == "ping_interval"))
-                    param = res.scalar_one_or_none()
-                    interval = int(param.value) if param else PING_INTERVAL
-            except:
-                interval = PING_INTERVAL
-            
-            sleep_time = max(0.5, interval - elapsed) # Respect configured interval
+            sleep_time = max(0.5, float(PING_INTERVAL) - elapsed) # Respect configured interval
             
             # logger.debug(f"Ping Cycle: {len(all_targets)} hosts in {elapsed:.2f}s. Sleeping {sleep_time:.2f}s")
             await asyncio.sleep(sleep_time)
@@ -253,8 +252,8 @@ class PingerService:
                         # Sucesso no ping
                         target_info['fail_count'] = 0
 
-                    # Somente muda para OFFLINE se falhar 3x seguidas
-                    if target_info['fail_count'] >= 3:
+                    # Somente muda para OFFLINE se falhar a quantidade de vezes configurada
+                    if target_info['fail_count'] >= DOWN_COUNT:
                         new_status = False
                     elif raw_new_status:
                         # Se deu online uma vez, já considera online (recuperação rápida)
@@ -278,7 +277,9 @@ class PingerService:
                         if template:
                             message = template.replace("{name}", device_name).replace("{ip}", item['ip'])
                             # Suporte para o novo formato de template
+                            now_dt = datetime.now()
                             message = message.replace("[Device.Name]", device_name).replace("[Device.IP]", item['ip'])
+                            message = message.replace("[Date]", now_dt.strftime("%d/%m/%Y")).replace("[Time]", now_dt.strftime("%H:%M"))
                         else:
                             message = f"Dispositivo {device_name} ({item['ip']}) está {msg_type}"
                         

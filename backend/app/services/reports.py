@@ -231,44 +231,67 @@ def generate_incidents_pdf(data: list, period_str: str, stats: dict = None):
             elements.append(rank_table)
             elements.append(Spacer(1, 0.4 * inch))
 
-    # --- 3. LISTA DE EVENTOS (Logs) ---
-    elements.append(Paragraph("3. Detalhamento de Eventos Recentes", sub_title_style))
+    # --- 3. SUMÁRIO DE EVENTOS POR EQUIPAMENTO (Groups logs by device) ---
+    elements.append(Paragraph("3. Resumo de Eventos por Equipamento", sub_title_style))
     
-    event_table_data = [['Data/Hora', 'Equipamento', 'Evento / Status']]
+    event_table_data = [['Período', 'Equipamento', 'Status do Período']]
     
-    # Limitar aos últimos 100 eventos para não explodir o PDF se tiver muitos
-    recent_events = data[:200]
-    
-    for item in recent_events:
-        msg = item.get('message', 'N/A')
+    # Pre-calculate counts and date ranges per device
+    device_summary = {}
+    for ev in data:
+        d_name = ev.get('device_name', 'Unknown')
+        ts_str = ev.get('timestamp', '')
         
-        # Simple icon logic
-        if "Offline" in msg or "down" in msg or "Queda" in msg:
-            status_icon = "🔴 Queda"
-            bg_color = colors.HexColor('#fef2f2') # Red 50
-        elif "Online" in msg or "up" in msg or "Voltou" in msg:
-            status_icon = "🟢 Voltou"
-            bg_color = colors.HexColor('#f0fdf4') # Green 50
-        else:
-            status_icon = "ℹ️ Info"
-            bg_color = colors.white
-            
+        if d_name not in device_summary:
+            device_summary[d_name] = {
+                'down': 0, 'up': 0, 
+                'first': ts_str, 'last': ts_str
+            }
+        
+        # Update counters
+        m_txt = ev.get('message', '').lower()
+        if any(x in m_txt for x in ["offline", "down", "queda", "falha"]):
+             device_summary[d_name]['down'] += 1
+        elif any(x in m_txt for x in ["online", "up", "voltou", "restabelecida"]):
+             device_summary[d_name]['up'] += 1
+             
+        # Update range (Assuming data is mostly chronological, but we check anyway)
+        # Simply keeping track of seen timestamps
+        if ts_str < device_summary[d_name]['first']: device_summary[d_name]['first'] = ts_str
+        if ts_str > device_summary[d_name]['last']: device_summary[d_name]['last'] = ts_str
+
+    # Build the table rows from grouped data
+    for d_name, info in device_summary.items():
+        # Format Period: dd/mm/yyyy ao dd/mm/yyyy
+        # Extract only date part if it's "dd/mm/yyyy HH:MM"
+        d1 = info['first'].split(' ')[0] if ' ' in info['first'] else info['first']
+        d2 = info['last'].split(' ')[0] if ' ' in info['last'] else info['last']
+        period_text = f"{d1} ao {d2}"
+        
+        # Format Status: Quedas: X | Voltas: Y
+        status_text = f"Quedas: {info['down']} | Voltas: {info['up']}"
+        
         event_table_data.append([
-            item.get('timestamp', 'N/A'),
-            item.get('device_name', 'N/A'),
-            f"{status_icon} - {msg}"
+            period_text,
+            d_name,
+            Paragraph(status_text, normal_style)
         ])
 
-    t = Table(event_table_data, colWidths=[1.5*inch, 2.0*inch, 3.7*inch])
+    # If no data
+    if len(event_table_data) == 1:
+        event_table_data.append(["-", "Nenhum evento registrado", "-"])
+
+    t = Table(event_table_data, colWidths=[2.2*inch, 2.3*inch, 2.7*inch])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')), # Header Blue
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')])
     ]))
     
     elements.append(t)

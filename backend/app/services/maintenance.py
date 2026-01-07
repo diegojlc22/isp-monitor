@@ -43,7 +43,9 @@ async def cleanup_job():
                 logger.info(f"[OK] Limpeza: {res_traffic.rowcount} logs de tráfego antigos removidos.")
 
             # Delete old LatencyHistory
-            stmt_latency = delete(LatencyHistory).where(LatencyHistory.timestamp < cutoff_naive)
+            # LatencyHistory stores timestamp as Float (Unix)
+            cutoff_unix = cutoff_naive.timestamp()
+            stmt_latency = delete(LatencyHistory).where(LatencyHistory.timestamp < cutoff_unix)
             res_latency = await session.execute(stmt_latency)
             if res_latency.rowcount > 0:
                 logger.info(f"[OK] Limpeza: {res_latency.rowcount} logs de latência antigos removidos.")
