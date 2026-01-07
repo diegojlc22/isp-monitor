@@ -525,6 +525,8 @@ async def update_dashboard_layout(
 
 class MonitoringSchedules(BaseModel):
     ping_interval: int = 30
+    ping_timeout: int = 1
+    ping_down_count: int = 3
     snmp_interval: int = 10
     agent_interval: int = 300
     topology_interval: int = 1800
@@ -541,6 +543,8 @@ async def get_monitoring_schedules(db: AsyncSession = Depends(get_db)):
 
     return MonitoringSchedules(
         ping_interval=await get_val("ping_interval", 30),
+        ping_timeout=await get_val("ping_timeout", 1),
+        ping_down_count=await get_val("ping_down_count", 3),
         snmp_interval=await get_val("snmp_interval", 10),
         agent_interval=await get_val("agent_check_interval", 300),
         topology_interval=await get_val("topology_interval", 1800),
@@ -563,6 +567,8 @@ async def update_monitoring_schedules(
             obj.value = str(value)
 
     await upsert("ping_interval", config.ping_interval)
+    await upsert("ping_timeout", config.ping_timeout)
+    await upsert("ping_down_count", config.ping_down_count)
     await upsert("snmp_interval", config.snmp_interval)
     await upsert("agent_check_interval", config.agent_interval)
     await upsert("topology_interval", config.topology_interval)
