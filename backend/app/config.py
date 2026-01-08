@@ -15,12 +15,23 @@ logger.add(
     format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
     level="INFO"
 )
+
+# Determine log file based on process
+proc_name = sys.argv[0]
+if "uvicorn" in proc_name or "main.py" in proc_name:
+    log_file = "logs/api.log"
+elif "collector.py" in proc_name or "snmp_monitor.py" in proc_name:
+    log_file = "logs/collector_internal.log"
+else:
+    log_file = "logs/general.log"
+
 logger.add(
-    "logs/backend.log", 
+    log_file, 
     rotation="10 MB", 
     retention="7 days", 
-    level="INFO", # CHANGED: DEBUG -> INFO to save CPU
-    compression="zip"
+    level="INFO", 
+    compression="zip",
+    enqueue=True # Async safe
 )
 
 # Find project root (where .env lives)
