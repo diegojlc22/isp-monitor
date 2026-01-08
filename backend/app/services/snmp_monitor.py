@@ -77,10 +77,11 @@ async def snmp_monitor_job():
                                 if h_stats['voltage'] is not None:
                                     result["updates"]["voltage"] = h_stats['voltage']
                             except Exception as e:
-                                pass
+                                logger.debug(f"[SNMP] Health stats error for {ip}: {e}")
+                    except Exception as e:
                     except Exception as e:
                         # Falha silenciosa para wireless não travar tráfego
-                        pass
+                        logger.debug(f"[SNMP] Wireless stats error for {ip}: {e}")
 
                 # --- TRAFFIC ---
                 # A) Mikrotik API
@@ -134,8 +135,7 @@ async def snmp_monitor_job():
                 return result
 
             except Exception as e:
-                import logging
-                logging.warning(f"[SNMP] Error fetching {eq_data['ip']}: {e}")
+                logger.warning(f"[SNMP] Error fetching {eq_data['ip']}: {e}")
                 return None
 
     while True:
@@ -195,14 +195,12 @@ async def snmp_monitor_job():
             # 2. Run Parallel Fetching (With 15s timeout per device)
             async def fetch_with_timeout(eq_dict):
                 try:
-                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=15.0)
+                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=4.0)
                 except asyncio.TimeoutError:
-                    import logging
-                    logging.warning(f"[SNMP] Timeout polling {eq_dict['ip']} (exceeded 15s)")
+                    logger.warning(f"[SNMP] Timeout polling {eq_dict['ip']} (exceeded 15s)")
                     return None
                 except Exception as e:
-                    import logging
-                    logging.error(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
+                    logger.error(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
                     return None
 
             tasks = [fetch_with_timeout(eq) for eq in equipments_data]
@@ -435,8 +433,7 @@ async def snmp_monitor_job():
                     del snmp_last_logged[k]
 
         except Exception as e:
-            import logging
-            logging.error(f"[SNMP] Batch update error: {e}")
+            logger.error(f"[SNMP] Batch update error: {e}")
         
         # Read interval from database (with fallback)
         try:

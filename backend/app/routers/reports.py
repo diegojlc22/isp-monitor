@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, literal_column
 from backend.app.database import get_db
 from backend.app.models import Equipment, PingStatsHourly, Alert
 from backend.app.services.reports import generate_sla_pdf, generate_incidents_pdf
@@ -52,8 +52,8 @@ async def get_sla_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db),
             
             # Se não tem stats históricos, usar dados atuais ou 0
             # (Para ser justo, se não tem histórico, talvez não deva aparecer ou mostrar N/A)
-            uptime = round(stat.avg_uptime, 2) if stat else 0.0
-            latency = round(stat.avg_latency, 2) if stat else 0.0
+            uptime = round(stat.avg_uptime or 0.0, 2) if stat else 0.0
+            latency = round(stat.avg_latency or 0.0, 2) if stat else 0.0
             
             report_data.append({
                 "name": eq.name,
@@ -109,14 +109,14 @@ async def get_sla_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db),
         # Query for Line Chart (Daily Evolution)
         # Using date_trunc for Postgres
         stmt_daily = select(
-            func.date_trunc('day', PingStatsHourly.timestamp).label('day'),
+            func.date_trunc(literal_column("'day'"), PingStatsHourly.timestamp).label('day'),
             func.avg(PingStatsHourly.availability_percent).label('avg_upt')
         ).where(
             PingStatsHourly.timestamp >= start_date
         ).group_by(
-            func.date_trunc('day', PingStatsHourly.timestamp)
+            func.date_trunc(literal_column("'day'"), PingStatsHourly.timestamp)
         ).order_by(
-            func.date_trunc('day', PingStatsHourly.timestamp)
+            func.date_trunc(literal_column("'day'"), PingStatsHourly.timestamp)
         )
         
         daily_res = await db.execute(stmt_daily)
@@ -130,7 +130,7 @@ async def get_sla_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db),
                 d_str = d.strftime('%d/%m')
             else:
                 d_str = str(d)[:10] # Fallback
-            line_data.append((d_str, round(row.avg_upt, 2)))
+            line_data.append((d_str, round(row.avg_upt or 0.0, 2)))
 
         stats = {
             "global_uptime": global_uptime,
@@ -232,11 +232,38 @@ async def get_incidents_report_pdf(days: int = 30, db: AsyncSession = Depends(ge
             else:
                 conclusion += "As interrupções foram pontuais e rapidamente recuperadas."
 
+        # Agrupar incidentes por dia para o gráfico de evolução
+        daily_counts = {}
+        for alert in alerts:
+            if "offline" in alert.message.lower() or "down" in alert.message.lower():
+                d_str = alert.timestamp.strftime('%d/%m')
+                daily_counts[d_str] = daily_counts.get(d_str, 0) + 1
+        
+        # Sort by date (requires keeping full date or sorting strings if format allows)
+        # Using a list of tuples sorted by the original timestamp would be safer, 
+        # but here we iterate alerts which are already sorted DESC.
+        # So we can construct the list and reverse it.
+        daily_evolution = []
+        current_daily = {} 
+        # Re-iterating slightly inefficiently but clearer:
+        # Pega datas uniques dos alertas e ordena
+        sorted_dates = sorted(list(set(a.timestamp.date() for a in alerts)))
+        
+        daily_evo_data = [] # [(date_str, count)]
+        for d in sorted_dates:
+            d_str = d.strftime('%d/%m')
+            count = 0
+            for a in alerts:
+                 if a.timestamp.date() == d and ("offline" in a.message.lower() or "down" in a.message.lower()):
+                     count += 1
+            daily_evo_data.append((d_str, count))
+
         stats = {
             "total_devices": total_devices,
             "total_drops": total_drops,
             "total_recoveries": total_recoveries,
             "top_problematic": top_problematic,
+            "daily_evolution": daily_evo_data,
             "conclusion": conclusion
         }
             

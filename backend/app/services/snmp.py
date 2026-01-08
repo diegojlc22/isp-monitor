@@ -1,6 +1,7 @@
 import asyncio
 import time
 from pysnmp.hlapi.asyncio import CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity, getCmd, nextCmd, SnmpEngine
+from loguru import logger
 
 # Shared engine to avoid overhead
 _snmp_engine = None
@@ -25,8 +26,8 @@ async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
         )
         if not errorIndication and not errorStatus:
             return varBinds
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"[SNMP] v2c Get Error {ip}: {e}")
 
     # Try SNMPv1 fallback
     try:
@@ -40,8 +41,8 @@ async def _snmp_get(ip, community, oids, port=161, timeout=1.0):
         )
         if not errorIndication and not errorStatus:
             return varBinds
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"[SNMP] v1 Get Error {ip}: {e}")
     
     return None
 
@@ -60,8 +61,8 @@ async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
         )
         if not errorIndication and not errorStatus and varBinds:
             return varBinds
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"[SNMP] v2c Next Error {ip}: {e}")
 
     # Try SNMPv1
     try:
@@ -76,8 +77,8 @@ async def _snmp_next(ip, community, root_oid, port=161, timeout=1.0):
         )
         if not errorIndication and not errorStatus and varBinds:
             return varBinds
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"[SNMP] v1 Next Error {ip}: {e}")
 
     return None
 

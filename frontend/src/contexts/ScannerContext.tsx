@@ -132,33 +132,35 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
-    // Polling for Batch Detection Status
+    // Polling for Batch Detection Status (Dynamic Interval)
     useEffect(() => {
-        let interval: any;
+        let timeout: ReturnType<typeof setTimeout>;
+        let mounted = true;
 
         const checkStatus = async () => {
             try {
                 const status = await getBatchDetectStatus();
-                setIsDetecting(status.is_running);
-                if (status.total > 0) {
-                    setDetectionProgress(Math.round((status.processed / status.total) * 100));
-                }
+                if (mounted) {
+                    setIsDetecting(status.is_running);
+                    if (status.total > 0) {
+                        setDetectionProgress(Math.round((status.processed / status.total) * 100));
+                    }
 
-                // If it was running and now it's not and processed all
-                if (!status.is_running && status.processed >= status.total && status.total > 0) {
-                    // One final toast if we were detecting
-                    // We can't easily know if we *just* finished without ref, but this is fine
+                    // Poll fast if running, slow if idle
+                    const nextInterval = status.is_running ? 2000 : 8000;
+                    timeout = setTimeout(checkStatus, nextInterval);
                 }
-            } catch (e) { }
+            } catch (e) {
+                if (mounted) timeout = setTimeout(checkStatus, 10000);
+            }
         };
 
-        // Check immediately on mount
         checkStatus();
 
-        // Interval for continuous checking
-        interval = setInterval(checkStatus, 3000);
-
-        return () => clearInterval(interval);
+        return () => {
+            mounted = false;
+            clearTimeout(timeout);
+        };
     }, []);
 
     // Cleanup on Global Unmount

@@ -70,6 +70,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ [SEED] Erro ao popular dados iniciais: {e}")
         
+    try:
+        from backend.app.services.db_cleanup import scheduler_cleanup
+        asyncio.create_task(scheduler_cleanup())
+        logger.info("[CLEANUP] Scheduler de limpeza iniciado.")
+    except Exception as e:
+        logger.error(f"❌ [CLEANUP] Erro ao iniciar scheduler: {e}")
+
     logger.info("[INFO] API Ready (Collector Running in Separate Process)")
     
     yield
