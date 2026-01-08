@@ -403,6 +403,27 @@ async def snmp_monitor_job():
                                 
                                 # Atualizar no DB via buffer
                                 upd_data["last_voltage_alert_sent"] = datetime.now()
+                        
+                        elif cv is not None and threshold is not None and cv > threshold:
+                            # ✅ RECOVERY: Se a voltagem normalizou, avisa e reseta o timer
+                            last_alert_v = eq_data.get("last_voltage_alert_sent")
+                            if last_alert_v:
+                                # Send Recovery Notification
+                                now_str = datetime.now().strftime("%H:%M")
+                                recovery_msg = f"⚡ *VOLTAGEM NORMALIZADA* ⚡\n\n📍 *{eq_data['tower_name']}*\n📟 {eq_data['name']}\n🌐 IP: {eq_data['ip']}\n\n✅ Voltagem Atual: *{cv}V* (Ok)\n\n🕒 {now_str}"
+                                
+                                asyncio.create_task(send_notification(
+                                    message=recovery_msg,
+                                    telegram_token=notif_config.get('telegram_token'),
+                                    telegram_chat_id=notif_config.get('telegram_chat_id'),
+                                    telegram_enabled=notif_config.get('telegram_enabled', 'true').lower() == 'true',
+                                    whatsapp_enabled=notif_config.get('whatsapp_enabled', 'false').lower() == 'true',
+                                    whatsapp_target=notif_config.get('whatsapp_target'),
+                                    whatsapp_target_group=notif_config.get('whatsapp_target_group')
+                                ))
+                                
+                                # Reset alert timer so next drop triggers immediately
+                                upd_data["last_voltage_alert_sent"] = None
                 
                 # Execute Batch Operations
                 if updates_buffer:
