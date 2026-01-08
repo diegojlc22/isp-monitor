@@ -607,11 +607,26 @@ async def update_equipment(eq_id: int, equipment: EquipmentUpdate, db: AsyncSess
         raise HTTPException(status_code=404, detail="Equipment not found")
     
     update_data = equipment.model_dump(exclude_unset=True)
+    
+    # Pre-check IP uniqueness to avoid DB transaction error if possible, 
+    # but race condition might still happen so try/except is essential.
+    if 'ip' in update_data and update_data['ip'] != db_eq.ip:
+        existing_check = await db.execute(select(Equipment).where(Equipment.ip == update_data['ip']))
+        if existing_check.scalar_one_or_none():
+             raise HTTPException(status_code=400, detail=f"O IP {update_data['ip']} já está em uso por outro equipamento.")
+
     for key, value in update_data.items():
         setattr(db_eq, key, value)
     
-    await db.commit()
-    await db.refresh(db_eq)
+    try:
+        await db.commit()
+        await db.refresh(db_eq)
+    except Exception as e:
+        await db.rollback()
+        error_str = str(e).lower()
+        if "unique" in error_str or "duplicate" in error_str:
+             raise HTTPException(status_code=400, detail=f"O IP {update_data.get('ip')} já está cadastrado em outro equipamento.")
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar: {str(e)}")
     
     await cache.clear()
     return db_eq
