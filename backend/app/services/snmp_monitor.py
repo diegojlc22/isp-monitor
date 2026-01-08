@@ -79,7 +79,6 @@ async def snmp_monitor_job():
                             except Exception as e:
                                 logger.debug(f"[SNMP] Health stats error for {ip}: {e}")
                     except Exception as e:
-                    except Exception as e:
                         # Falha silenciosa para wireless não travar tráfego
                         logger.debug(f"[SNMP] Wireless stats error for {ip}: {e}")
 

@@ -53,7 +53,7 @@ const INITIAL_FORM_STATE: FormData = {
     max_traffic_out: null,
     traffic_alert_interval: 360,
     min_voltage_threshold: 16.0,
-    voltage_alert_interval: 360
+    voltage_alert_interval: 30
 };
 
 // --- Custom Hooks ---
