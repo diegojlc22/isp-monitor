@@ -383,7 +383,7 @@ class PingerService:
         except Exception as e:
             logger.error(f"Failed to flush to DB: {e}")
             import traceback
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
 
     async def start(self):
         logger.info("Starting ISP Monitor Pinger Service (Turbo V2)...")

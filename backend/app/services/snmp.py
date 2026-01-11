@@ -311,7 +311,7 @@ async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 16
             if found_version:
                 break
     except Exception as e:
-        print(f"Error scanning interfaces for {ip}: {e}")
+        logger.warning(f"[SNMP] Error scanning interfaces for {ip}: {e}")
         
     return interfaces
 

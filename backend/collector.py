@@ -22,6 +22,8 @@ from backend.app.database import AsyncSessionLocal
 from backend.app.models import Parameters
 
 # Configure Loguru
+logger.remove() # Remove default stderr handler (level=DEBUG)
+logger.add(sys.stderr, level="INFO") # Re-add stderr with level=INFO
 logger.add("collector_supervisor.log", rotation="1 MB", retention="5 days", level="INFO")
 
 async def topology_loop():
