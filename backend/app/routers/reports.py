@@ -132,10 +132,21 @@ async def get_sla_report_pdf(days: int = 30, db: AsyncSession = Depends(get_db),
                 d_str = str(d)[:10] # Fallback
             line_data.append((d_str, round(row.avg_upt or 0.0, 2)))
 
+        # Identificar Top Críticos
+        critical_devices_list = []
+        for item in report_data:
+            if item['availability_percent'] < 95.0: # Prioridade crítica
+                 critical_devices_list.append(item)
+        
+        # Sort by uptime ASC (Piores primeiro)
+        critical_devices_list.sort(key=lambda x: x['availability_percent'])
+        top_critical = critical_devices_list[:10]
+
         stats = {
             "global_uptime": global_uptime,
             "global_latency": global_latency,
             "critical_devices_count": critical_devices_count,
+            "top_critical_devices": top_critical, # Passando os dados para o PDF
             "conclusion": conclusion,
             "pie_data": [count_exc, count_good, count_warn, count_crit],
             "line_data": line_data

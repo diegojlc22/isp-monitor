@@ -284,7 +284,37 @@ def generate_sla_pdf(data: list, period_str: str, stats: dict = None):
             lc.lines[0].strokeWidth = 2
             
             d_line.add(lc)
+            d_line.add(lc)
             elements.append(d_line)
+            elements.append(Spacer(1, 0.4*inch))
+
+        # --- 2.5. DESTAQUE CRÍTICO (NOVIDADE) ---
+        if stats.get('top_critical_devices'):
+            elements.append(Paragraph("⚠️ Top 10 - Equipamentos com Maior Impacto", styles['ChartTitle']))
+            
+            crit_data = [['DISPOSITIVO', 'IP', 'DISPONIBILIDADE', 'STATUS']]
+            for d in stats['top_critical_devices']:
+                crit_data.append([
+                    d['name'][:25], 
+                    d['ip'], 
+                    f"{d['availability_percent']}%", 
+                    "CRÍTICO"
+                ])
+                
+            t_crit = Table(crit_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+            t_crit.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#dc2626')), # Red Header
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                
+                # Rows
+                ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#fef2f2')), # Light Red Bg
+                ('TEXTCOLOR', (2,1), (2,-1), colors.red), # Uptime Red
+                ('FONTNAME', (0,1), (-1,-1), 'Helvetica-Bold'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#fecaca')),
+            ]))
+            elements.append(t_crit)
             elements.append(Spacer(1, 0.4*inch))
 
     # --- 3. TABELA DETALHADA ---

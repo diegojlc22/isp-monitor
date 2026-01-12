@@ -191,31 +191,50 @@ async def snmp_monitor_job():
             
             logger.info(f"[SNMP] 🔄 Processando {len(equipments_data)} equipamentos online...")
 
-            # 2. Run Parallel Fetching (With 15s timeout per device)
+            # 2. Run Parallel Fetching (With 4s timeout per device inside, 5m global)
             async def fetch_with_timeout(eq_dict):
                 try:
+                     # Timeout reduzido para 4s para garantir agilidade
                     return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=4.0)
                 except asyncio.TimeoutError:
-                    logger.warning(f"[SNMP] Timeout polling {eq_dict['ip']} (exceeded 15s)")
-                    return None
+                    # Muted to DEBUG to avoid log explosion (50MB+ logs)
+                    # logger.debug(f"[SNMP] Timeout polling {eq_dict['ip']} (exceeded 4s)")
+                    return "TIMEOUT"
                 except Exception as e:
-                    logger.error(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
-                    return None
+                    logger.debug(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
+                    return "ERROR"
 
             tasks = [fetch_with_timeout(eq) for eq in equipments_data]
             
-            # 🔥 WORKAROUND: Timeout global para evitar travamento
             try:
-                results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=300.0)  # 5 min max
-                logger.info(f"[SNMP] ✅ Processamento concluído: {len([r for r in results if r])} sucessos de {len(equipments_data)}")
+                raw_results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=300.0)
+                
+                # Process results and stats
+                results = []
+                timeouts = 0
+                errors = 0
+                
+                for r in raw_results:
+                    if r == "TIMEOUT":
+                        timeouts += 1
+                    elif r == "ERROR":
+                        errors += 1
+                    elif r is not None:
+                        results.append(r)
+
+                if timeouts > 0 or errors > 0:
+                     logger.warning(f"[SNMP] Ciclo concluído com falhas: {timeouts} Timeouts, {errors} Erros, {len(results)} Sucessos.")
+                else:
+                     logger.info(f"[SNMP] ✅ Processamento concluído: {len(results)} sucessos de {len(equipments_data)}")
+
             except asyncio.TimeoutError:
                 logger.error(f"[SNMP] ⏰ TIMEOUT GLOBAL! Processamento de {len(equipments_data)} equipamentos excedeu 5 minutos. Reiniciando loop...")
                 await asyncio.sleep(10)
                 continue
             except Exception as e:
                 logger.error(f"[SNMP] 💥 ERRO CRÍTICO no gather: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
+                # import traceback
+                # logger.error(traceback.format_exc())
                 await asyncio.sleep(10)
                 continue
             
