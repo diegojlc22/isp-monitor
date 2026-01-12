@@ -10,7 +10,7 @@ import time
 import logging
 import asyncio
 
-from backend.app.routers import towers, equipments, settings, auth, users, alerts, agent, mobile, metrics, expo, ngrok, system, reports, insights
+from backend.app.routers import towers, equipments, settings, auth, users, alerts, agent, mobile, metrics, expo, ngrok, system, reports, insights, cortex
 from backend.app.database import engine, Base, AsyncSessionLocal
 from backend.app import models, auth_utils
 from backend.app.utils.network_diagnostics import run_diagnostics
@@ -130,7 +130,7 @@ app = FastAPI(title="ISP Monitor API", lifespan=lifespan)
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if cors_origins != ["*"] else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -185,6 +185,7 @@ app.include_router(ngrok.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
+app.include_router(cortex.router, prefix="/api")
 
 # Static Files
 frontend_path = os.path.join(os.getcwd(), 'frontend', 'dist')

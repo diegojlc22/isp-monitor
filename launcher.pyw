@@ -700,7 +700,11 @@ class ModernLauncher:
             except:
                 is_up = False
             
-            # Update main status
+            # --- AUTO-HEAL INTEGRATION ---
+            if self.should_be_running and not is_up:
+                # Se deveria estar rodando, mas não está: Chamar médico
+                self.run_self_heal_check()
+            # -----------------------------
             if self.is_running != is_up:
                 self.is_running = is_up
                 if is_up:
@@ -718,6 +722,16 @@ class ModernLauncher:
 
 
 
+
+
+    def run_self_heal_check(self):
+        """Executa protocolo de auto-cura se API falhar"""
+        try:
+           # Roda script de auto-cura em processo separado (não bloquear UI)
+           script = os.path.join(os.getcwd(), 'backend', 'app', 'utils', 'self_heal.py')
+           if os.path.exists(script):
+               subprocess.Popen(['python', script], creationflags=0x08000000)
+        except: pass
 
     def start_system(self):
         if self.is_running: return

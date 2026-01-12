@@ -25,7 +25,8 @@ async def snmp_monitor_job():
     logger.info("[TRAFFIC] Traffic/Wireless Monitor started (Interval: 10s)...")
     
     # Limit Concurrency to avoid network flood and CPU spikes
-    sem = asyncio.Semaphore(25) # Reduced from 100 to 25 
+    # Increased to 100 to handle 450+ devices without global timeout
+    sem = asyncio.Semaphore(100) 
     
     # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 
@@ -206,37 +207,47 @@ async def snmp_monitor_job():
 
             tasks = [fetch_with_timeout(eq) for eq in equipments_data]
             
-            try:
-                raw_results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=300.0)
-                
-                # Process results and stats
-                results = []
-                timeouts = 0
-                errors = 0
-                
-                for r in raw_results:
-                    if r == "TIMEOUT":
-                        timeouts += 1
-                    elif r == "ERROR":
-                        errors += 1
-                    elif r is not None:
-                        results.append(r)
+            # Smart Gathering: Use wait() instead of valid_for(gather) to avoid losing ALL data on timeout
+            done, pending = await asyncio.wait(tasks, timeout=300.0)
 
-                if timeouts > 0 or errors > 0:
-                     logger.warning(f"[SNMP] Ciclo concluído com falhas: {timeouts} Timeouts, {errors} Erros, {len(results)} Sucessos.")
-                else:
-                     logger.info(f"[SNMP] ✅ Processamento concluído: {len(results)} sucessos de {len(equipments_data)}")
+            # Cancel pending tasks (slow devices) to free resources
+            for p in pending:
+                p.cancel()
+                
+            # Coletar resultados das tarefas concluídas
+            raw_results = []
+            for task in done:
+                try:
+                    if not task.cancelled():
+                        res = task.result()
+                        if res: raw_results.append(res)
+                except Exception as e:
+                    logger.debug(f"[SNMP] Task exception: {e}")
 
-            except asyncio.TimeoutError:
-                logger.error(f"[SNMP] ⏰ TIMEOUT GLOBAL! Processamento de {len(equipments_data)} equipamentos excedeu 5 minutos. Reiniciando loop...")
-                await asyncio.sleep(10)
-                continue
-            except Exception as e:
-                logger.error(f"[SNMP] 💥 ERRO CRÍTICO no gather: {e}")
-                # import traceback
-                # logger.error(traceback.format_exc())
-                await asyncio.sleep(10)
-                continue
+            # Process results and stats
+            results = []
+            timeouts = 0
+            errors = 0
+            
+            for r in raw_results:
+                if r == "TIMEOUT":
+                    timeouts += 1
+                elif r == "ERROR":
+                    errors += 1
+                elif r is not None:
+                    results.append(r)
+
+            if len(pending) > 0:
+                 logger.warning(f"[SNMP] ⚠️ Ciclo incompleto! {len(pending)} tarefas canceladas por Timeout Global (300s). Ajustando carga...")
+            
+            if timeouts > 0 or errors > 0:
+                    logger.warning(f"[SNMP] Ciclo concluído com falhas: {timeouts} Timeouts, {errors} Erros, {len(results)} Sucessos.")
+            else:
+                    logger.info(f"[SNMP] ✅ Processamento concluído: {len(results)} sucessos de {len(equipments_data)}")
+
+            # Removido bloco except asyncio.TimeoutError pois asyncio.wait não lança essa exceção
+            # O controle de fluxo segue naturalmente para salvar os 'results' obtidos
+
             
             # 3. Batch Update DB (Optimized)
             from sqlalchemy import update, insert
@@ -467,9 +478,17 @@ async def snmp_monitor_job():
             if updates_count > 0 or traffic_logs_buffer:
                 # Basic GC for memory cache (Run every 10 cycles roughly, or just here)
                 active_ids = {eq["id"] for eq in equipments_data}
+                
+                # Cleanup 1: Logs Cache
                 keys_to_remove = [k for k in snmp_last_logged.keys() if k not in active_ids]
                 for k in keys_to_remove:
                     del snmp_last_logged[k]
+
+                # Cleanup 2: Traffic Counters Cache (Fix Memory Leak)
+                # Cache Key is tuple (id, interface_index). We check if 'id' is still active.
+                cnt_keys_to_remove = [k for k in previous_counters.keys() if k[0] not in active_ids]
+                for k in cnt_keys_to_remove:
+                    del previous_counters[k]
 
         except Exception as e:
             logger.error(f"[SNMP] Batch update error: {e}")
