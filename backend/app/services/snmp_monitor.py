@@ -25,8 +25,8 @@ async def snmp_monitor_job():
     logger.info("[TRAFFIC] Traffic/Wireless Monitor started (Interval: 10s)...")
     
     # Limit Concurrency to avoid network flood and CPU spikes
-    # Reduced to 20 to prioritize stability and avoid socket timeouts on Windows
-    sem = asyncio.Semaphore(20) 
+    # Increased to 100 to handle 450+ devices without global timeout
+    sem = asyncio.Semaphore(100) 
     
     # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 
@@ -195,11 +195,12 @@ async def snmp_monitor_job():
             # 2. Run Parallel Fetching (With 4s timeout per device inside, 5m global)
             async def fetch_with_timeout(eq_dict):
                 try:
-                     # Timeout reduzido para 4s para garantir agilidade
-                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=4.0)
+                    # Aumentado para 8s pois alguns equipamentos são mais lentos (especialmente MikroTik com muitos dados)
+                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=8.0)
                 except asyncio.TimeoutError:
-                    # Muted to DEBUG to avoid log explosion (50MB+ logs)
-                    # logger.debug(f"[SNMP] Timeout polling {eq_dict['ip']} (exceeded 4s)")
+                    # Logar em modo debug para não encher o log, mas permitir rastrear se necessário
+                    if eq_dict['ip'] == '192.168.106.62': # Log específico para o teste do usuário
+                        logger.warning(f"[SNMP] Timeout persistente em {eq_dict['ip']} (limite 8s)")
                     return "TIMEOUT"
                 except Exception as e:
                     logger.debug(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
