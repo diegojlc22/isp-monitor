@@ -15,9 +15,9 @@ from backend.app.database import get_db
 from backend.app.models import Equipment, PingLog, TrafficLog, LatencyHistory
 from backend.app.schemas import Equipment as EquipmentSchema, EquipmentCreate, EquipmentUpdate
 from backend.app.services.cache import cache
-from backend.app.services.ssh_commander import reboot_device
-from backend.app.services.pinger_fast import scan_network
-from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
+# from backend.app.services.ssh_commander import reboot_device
+# from backend.app.services.pinger_fast import scan_network
+# from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
 from backend.app.dependencies import get_current_user
 from pydantic import BaseModel
 from fastapi import BackgroundTasks
@@ -65,6 +65,7 @@ async def run_batch_detection_task(ids: List[int], db_session_factory, override_
                         continue
 
                     # Auto-detect using SNMP
+                    from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
                     comm = override_community or eq.snmp_community or 'public'
                     brand = await detect_brand(eq.ip, comm, eq.snmp_port)
                     eq_type = await detect_equipment_type(eq.ip, brand, comm, eq.snmp_port)
@@ -275,6 +276,7 @@ async def detect_equipment_brand(request: DetectBrandRequest, current_user=Depen
     try:
         logger.info(f"Iniciando detecção para IP: {request.ip}")
         # 1. Detect brand first (fastest and gives context for others)
+        from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type, detect_equipment_name
         brand = await detect_brand(request.ip, request.snmp_community, request.snmp_port)
         logger.info(f"Marca detectada para {request.ip}: {brand}")
 
@@ -658,6 +660,10 @@ async def reboot_equipment_endpoint(eq_id: int, db: AsyncSession = Depends(get_d
     if not password:
          raise HTTPException(status_code=400, detail="Senha SSH não configurada")
 
+    if not password:
+         raise HTTPException(status_code=400, detail="Senha SSH não configurada")
+
+    from backend.app.services.ssh_commander import reboot_device
     success, msg = await reboot_device(db_eq.ip, user, password, port)
     
     if not success:
@@ -737,6 +743,8 @@ async def scan_network_stream(
     - Multi: 10.0.0.1, 10.0.0.5, 192.168.0.0/24
     """
     try:
+        from backend.app.services.pinger_fast import scan_network
+        from backend.app.services.wireless_snmp import detect_brand, detect_equipment_type
         ips_to_scan = []
         
         # Split by comma to support multiple targets

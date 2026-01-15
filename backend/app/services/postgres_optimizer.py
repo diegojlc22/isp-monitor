@@ -25,6 +25,13 @@ async def setup_table_partitioning(conn):
         logger.warning(f"[OPTIMIZER] ⚠️ Migrando '{table_name}' para particionamento (Big Data Mode)...")
         
         # 2. Rename old table
+        # Check if _old exists
+        check_old = await conn.execute(text(f"SELECT 1 FROM pg_class WHERE relname = '{table_name}_old'"))
+        if check_old.scalar():
+            logger.warning(f"[OPTIMIZER] ⚠️ Tabela '{table_name}_old' já existe! Renomeando para backup...")
+            ts = datetime.now().strftime("%Y%m%d%H%M%S")
+            await conn.execute(text(f"ALTER TABLE {table_name}_old RENAME TO {table_name}_old_bkp_{ts}"))
+        
         await conn.execute(text(f"ALTER TABLE {table_name} RENAME TO {table_name}_old"))
         
         # 3. Create new Partitioned Table
@@ -35,9 +42,16 @@ async def setup_table_partitioning(conn):
         next_month_str = next_month.strftime("%Y-%m-%d")
         
         part_name = f"{table_name}_history"
-        await conn.execute(text(
-            f"CREATE TABLE {part_name} PARTITION OF {table_name} FOR VALUES FROM (MINVALUE) TO ('{next_month_str}')"
-        ))
+        
+        # Check if partition exists
+        part_check = await conn.execute(text(f"SELECT 1 FROM pg_class WHERE relname = '{part_name}'"))
+        if not part_check.scalar():
+            await conn.execute(text(
+                f"CREATE TABLE {part_name} PARTITION OF {table_name} FOR VALUES FROM (MINVALUE) TO ('{next_month_str}')"
+            ))
+            logger.info(f"[OPTIMIZER] Partição inicial {part_name} criada.")
+        else:
+            logger.warning(f"[OPTIMIZER] Partição {part_name} já existe. Pulando criação.")
         
         # 5. Restore Data
         logger.info(f"[OPTIMIZER] 📥 Migrando dados legados de {table_name}...")

@@ -19,6 +19,8 @@ export function Alerts() {
         whatsapp_enabled: false,
         whatsapp_target: '',
         whatsapp_target_group: '',
+        whatsapp_group_battery: '',
+        whatsapp_group_ai: '',
         // Notification Types
         notify_equipment_status: true,
         notify_backups: true,
@@ -34,6 +36,7 @@ export function Alerts() {
 
     // Group Modal State
     const [showGroupModal, setShowGroupModal] = useState(false);
+    const [activeGroupField, setActiveGroupField] = useState('whatsapp_target_group');
     const [groups, setGroups] = useState<any[]>([]);
     const [groupFilter, setGroupFilter] = useState('');
     const [loadingGroups, setLoadingGroups] = useState(false);
@@ -77,6 +80,8 @@ export function Alerts() {
                     whatsapp_enabled: res.whatsapp_enabled === true,
                     whatsapp_target: res.whatsapp_target || '',
                     whatsapp_target_group: res.whatsapp_target_group || '',
+                    whatsapp_group_battery: res.whatsapp_group_battery || '',
+                    whatsapp_group_ai: res.whatsapp_group_ai || '',
                     backup_chat_id: res.backup_chat_id || '',
                     notify_equipment_status: res.notify_equipment_status !== false,
                     notify_backups: res.notify_backups !== false,
@@ -105,13 +110,14 @@ export function Alerts() {
         }
     };
 
-    const openGroupSelector = () => {
+    const openGroupSelector = (field: string) => {
+        setActiveGroupField(field);
         setShowGroupModal(true);
         if (groups.length === 0) loadGroups();
     };
 
     const selectGroup = (id: string) => {
-        setConfig({ ...config, whatsapp_target_group: id });
+        setConfig({ ...config, [activeGroupField]: id });
         setShowGroupModal(false);
     };
 
@@ -409,14 +415,14 @@ export function Alerts() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">ID do Grupo</label>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">ID do Grupo (Geral/Padrão)</label>
                                     <div className="flex gap-2">
                                         <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
                                             value={config.whatsapp_target_group || ''}
                                             onChange={e => setConfig({ ...config, whatsapp_target_group: e.target.value })}
                                             placeholder="12036...@g.us" />
 
-                                        <button type="button" onClick={openGroupSelector} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 text-slate-300 transition-colors" title="Buscar Grupo">
+                                        <button type="button" onClick={() => openGroupSelector('whatsapp_target_group')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 text-slate-300 transition-colors" title="Buscar Grupo">
                                             <Search size={16} />
                                         </button>
 
@@ -427,10 +433,34 @@ export function Alerts() {
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* Grupo Técnico (Bateria + IA) */}
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Grupo Técnico (Bateria / IA / Manutenção) <span className="text-amber-500 text-xs">(Prioridade)</span></label>
+                                    <div className="flex gap-2">
+                                        <input type="text" className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white text-sm font-mono"
+                                            value={config.whatsapp_group_battery || ''}
+                                            onChange={e => setConfig({ ...config, whatsapp_group_battery: e.target.value })}
+                                            placeholder="Grupo específico..." />
+
+                                        <button type="button" onClick={() => openGroupSelector('whatsapp_group_battery')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 text-slate-300 transition-colors" title="Buscar Grupo">
+                                            <Search size={16} />
+                                        </button>
+
+                                        <button type="button" onClick={() => handleTestWhatsapp(config.whatsapp_group_battery)}
+                                            disabled={!config.whatsapp_group_battery}
+                                            className="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-600 text-xs disabled:opacity-50">
+                                            Testar
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-1">
+                                        Se definido, alertas de <b>Bateria, Energia, Voltagem, Cortex AI e Anomalias</b> serão enviados apenas para este grupo.
+                                    </p>
+                                </div>
                             </div>
                         </div>
-
                     </div>
+
                 </div>
 
                 {/* Tipos de Notificações */}
@@ -530,7 +560,7 @@ export function Alerts() {
                         {configLoading ? 'Salvando...' : 'Salvar Configurações'}
                     </button>
                 </div>
-            </form>
-        </div>
+            </form >
+        </div >
     );
 }

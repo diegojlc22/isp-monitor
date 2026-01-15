@@ -124,6 +124,8 @@ class TelegramConfig(BaseModel):
     whatsapp_enabled: Optional[bool] = False
     whatsapp_target: Optional[str] = None 
     whatsapp_target_group: Optional[str] = None
+    whatsapp_group_battery: Optional[str] = None # Grupo específico Bateria
+    whatsapp_group_ai: Optional[str] = None # Grupo específico IA
     
     # Notification Types
     notify_equipment_status: Optional[bool] = True

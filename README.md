@@ -20,41 +20,32 @@ Sistema completo de monitoramento de torres e equipamentos para provedores de in
 
 ---
 
-## 🚀 Novidades da Versão 5.0 (05/01/2026) - AI Edition
+## 🚀 Novidades da Versão 6.0 (15/01/2026) - AIOps & Big Data
 
-### 🤖 1. Inteligência Artificial de Rede
-Sistema de análise proativa com recomendações automáticas:
-- **🔒 Auditoria de Segurança**: Detecta equipamentos sem senha, portas abertas e vulnerabilidades
-- **📊 Planejamento de Capacidade**: Prevê saturação de links e sugere upgrades
-- **💡 Insights Acionáveis**: Recomendações práticas para otimização da rede
-- **📋 Central de Inteligência**: Dashboard dedicado para visualizar e gerenciar análises
+### � 1. Cortex AI v2.0 (AIOps Engine)
+O cérebro do sistema foi totalmente redesenhado para análise preditiva avançada:
+- **� Detecção de Flapping**: Identifica equipamentos com instabilidade intermitente ("pisca-pisca") e gera alertas preventivos.
+- **� Inteligência de Energia**: Monitoramento inteligente de voltagem e baterias com previsão de autonomia.
+- **�️ Anomalias de Segurança**: Detecção proativa de ataques de força bruta e mudanças suspeitas de tráfego.
+- **🕒 Análise de Ciclo**: Identifica padrões de falha baseados em horário (ex: equipamentos que falham apenas à noite).
 
-### 🎯 2. Gestão de Equipamentos Prioritários
-Monitoramento avançado para equipamentos críticos:
-- **⚙️ Edição Rápida de Limites**: Configure thresholds de tráfego diretamente na interface
-- **🚨 Alertas Personalizados**: Notificações quando limites de download/upload são ultrapassados
-- **⏱️ Cooldown Configurável**: Controle a frequência de alertas por equipamento
-- **📈 Visualização em Tempo Real**: Acompanhe tráfego atual vs. limites configurados
+### � 2. Notificações Multicanal Inteligentes
+Novo sistema de roteamento de alertas para WhatsApp e Telegram:
+- **� Roteamento Dinâmico**: Encaminha alertas técnicos (Energia/Bateria/IA) para grupos específicos e alertas de queda para grupos operacionais.
+- **� Atendimento Automático**: O Bot de WhatsApp agora suporta comandos básicos e listagem de grupos diretamente pelo sistema.
+- **🛠️ Self-Healing Feedback**: O sistema notifica quando o "Doctor" realiza um auto-reparo bem-sucedido.
 
-### 🗺️ 3. Mapa de Topologia Avançado
-Visualização interativa da infraestrutura de rede:
-- **🔗 Links Inteligentes**: Diferenciação visual entre fibra (azul) e rádio (verde)
-- **📡 Detecção Automática**: Descoberta de equipamentos via LLDP/MNDP
-- **ℹ️ Popups Informativos**: Detalhes completos ao clicar em links e torres
-- **🎨 Indicadores de Status**: Cores dinâmicas baseadas no estado da conexão
+### � 3. Big Data Engine (PostgreSQL Partitioning)
+Otimização para ISPs com milhares de equipamentos e milhões de logs:
+- **� Particionamento Nativo**: Tabelas de `ping_logs` e `traffic_logs` agora são particionadas mensalmente de forma automática.
+- **⚡ Performance Flash**: Consultas em históricos de anos agora levam milissegundos devido à técnica de *Constraint Exclusion*.
+- **🧹 Manutenção Zero**: O sistema gerencia a criação de partições futuras e a limpeza de logs antigos sem intervenção humana.
 
-### 📊 4. Relatórios Gerenciais Modernos
-Interface redesenhada para geração de relatórios:
-- **📄 PDF de SLA**: Relatório de disponibilidade e latência média
-- **🚨 PDF de Incidentes**: Histórico detalhado de quedas e alertas
-- **📋 Log de Incidentes**: Visualização dos últimos 10 eventos com filtros
-- **🎨 Design Premium**: Interface dark moderna e responsiva
-
-### 🔧 5. Melhorias de UX/UI
-- **🌙 Tema Dark Consistente**: Design moderno em toda aplicação
-- **⚡ Animações Suaves**: Transições e micro-interações polidas
-- **📱 Responsividade Total**: Otimizado para desktop, tablet e mobile
-- **🎯 Feedback Visual**: Estados claros de loading, sucesso e erro
+### � 4. Doctor V4.0 - Guardião Supremo
+Novo watchdog residente no Launcher:
+- **👁️ Monitoramento 360°**: Monitora simultaneamente API, Collector, Frontend, WhatsApp Gateway e PostgreSQL.
+- **� Força Bruta**: Capaz de encerrar processos zumbis e limpar travas de socket (Porta 8080/3001) para garantir reinícios perfeitos.
+- **📝 Logs Espelhados**: Logs de startup e erro condensados em uma visão única para facilitaro diagnóstico.
 
 ---
 

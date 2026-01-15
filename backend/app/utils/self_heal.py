@@ -13,7 +13,7 @@ logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(message)s'
 )
 
-API_URL = "http://localhost:8080/api/health"
+API_URL = "http://127.0.0.1:8080/api/health"
 
 def kill_process_by_name(name_snippet):
     count = 0
@@ -42,15 +42,21 @@ def clear_pycache():
                 logging.error(f"Erro ao deletar {path}: {e}")
     logging.info(f"Cache limpo: {deleted} pastas removidas.")
 
-def check_api_health():
-    try:
-        response = requests.get(API_URL, timeout=5)
-        if response.status_code == 200:
-            return True, "Healthy"
-        else:
-            return False, f"Status Code {response.status_code}"
-    except Exception as e:
-        return False, str(e)
+def check_api_health(retries=3):
+    """Tenta checar a saúde da API com retries para evitar falsos positivos"""
+    for attempt in range(retries):
+        try:
+            response = requests.get(API_URL, timeout=5)
+            if response.status_code == 200:
+                return True, "Healthy"
+            else:
+                logging.warning(f"⚠️ Tentativa {attempt+1}/{retries} falhou: Status {response.status_code}")
+        except Exception as e:
+            logging.warning(f"⚠️ Tentativa {attempt+1}/{retries} falhou: {e}")
+        
+        time.sleep(2) # Espera antes de tentar de novo
+        
+    return False, "Max retries exceeded"
 
 def perform_self_healing():
     logging.warning("⚠️ DETECTADA FALHA NA API. INICIANDO PROTOCOLO DE AUTO-CURA...")

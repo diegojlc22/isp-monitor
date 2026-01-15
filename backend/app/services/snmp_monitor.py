@@ -205,7 +205,7 @@ async def snmp_monitor_job():
                     logger.debug(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
                     return "ERROR"
 
-            tasks = [fetch_with_timeout(eq) for eq in equipments_data]
+            tasks = [asyncio.create_task(fetch_with_timeout(eq)) for eq in equipments_data]
             
             # Smart Gathering: Use wait() instead of valid_for(gather) to avoid losing ALL data on timeout
             done, pending = await asyncio.wait(tasks, timeout=300.0)

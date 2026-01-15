@@ -10,14 +10,24 @@ import time
 import logging
 import asyncio
 
+
+
+
 from backend.app.routers import towers, equipments, settings, auth, users, alerts, agent, mobile, metrics, expo, ngrok, system, reports, insights, cortex
+
+# print("DEBUG: Routers imported successfully.", flush=True)
 from backend.app.database import engine, Base, AsyncSessionLocal
+
+
+
 from backend.app import models, auth_utils
 from backend.app.utils.network_diagnostics import run_diagnostics
 from backend.app.config import PING_INTERVAL_SECONDS
 
+
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("paramiko").setLevel(logging.WARNING)
 logger = logging.getLogger("api")
 
 print("[INFO] Using ULTRA-FAST pinger (icmplib)")
@@ -85,6 +95,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 async def seed_initial_data():
+
     """Seed Admin and Default Configs"""
     admin_email = os.getenv("ADMIN_EMAIL", "diegojlc22@gmail.com")
     admin_password = os.getenv("ADMIN_PASSWORD", "110812")

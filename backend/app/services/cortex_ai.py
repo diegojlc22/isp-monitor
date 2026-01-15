@@ -15,7 +15,9 @@ class CortexAI:
         self.insights: List[Dict[str, Any]] = []
         self.last_run = None
         self.is_running = False
-        # Configuração dinâmica com pesos para o score de risco
+        # Para roteamento de mensagens:
+        # A string de grupos pode ser salva no DB como "ID_GRUPO_GERAL;ID_GRUPO_BATERIA;ID_GRUPO_IA"
+        # O notifier irá fazer o split e decidir.
         self.config = {
             "enabled": True,
             "modules": {
@@ -24,8 +26,8 @@ class CortexAI:
                 "performance": True
             },
             "thresholds": {
-                "z_score_sensitivity": 3.0, # Desvios padrão para considerar anomalia
-                "predictive_window_minutes": 60 # Janela para cálculo de tendência
+                "z_score_sensitivity": 3.0, 
+                "predictive_window_minutes": 60 
             }
         }
 
@@ -240,13 +242,15 @@ class CortexAI:
         
         stmt = select(
             Equipment.name,
+            Equipment.equipment_type, # 'station' ou 'transmitter' (AP)
+            Equipment.is_panel,       # Booleano auxiliar
             func.avg(TrafficLog.out_mbps).label("avg_upload"),
             func.stddev(TrafficLog.out_mbps).label("std_dev_upload"),
             func.max(TrafficLog.out_mbps).label("peak_upload"),
             func.avg(TrafficLog.in_mbps).label("avg_download")
         ).join(TrafficLog, Equipment.id == TrafficLog.equipment_id)\
          .where(TrafficLog.timestamp >= datetime.utcnow() - timedelta(hours=24))\
-         .group_by(Equipment.name)
+         .group_by(Equipment.name, Equipment.equipment_type, Equipment.is_panel)
 
         try:
             res = await session.execute(stmt)
@@ -255,35 +259,45 @@ class CortexAI:
             logger.error(f"[CORTEX] Erro SQL Security: {e}")
             return []
 
-        for name, avg_up, std_up, peak_up, avg_down in stats:
+        for name, eq_type, is_panel, avg_up, std_up, peak_up, avg_down in stats:
             avg_up = avg_up or 0
-            std_up = std_up or 1 # Evitar div por zero
+            std_up = std_up or 1 
             peak_up = peak_up or 0
             avg_down = avg_down or 0
 
-            # Detecção 1: Anomalia Estatística (Z-Score > 3)
-            # Se o pico atual é muito maior que a média histórica + 3 desvios padrão
+            # Normalização de Tipo
+            is_infrastructure = (eq_type == 'transmitter') or is_panel
+            
+            # Detecção 1: Anomalia Estatística (Z-Score)
             if std_up > 0:
                 z_score = (peak_up - avg_up) / std_up
-                
-                if z_score > self.config["thresholds"]["z_score_sensitivity"] and peak_up > 20: # Ignora picos pequenos
+                if z_score > self.config["thresholds"]["z_score_sensitivity"] and peak_up > 20:
                     insights.append({
                         "type": "security", "severity": "warning",
-                        "title": f"Comportamento Anômalo em {name}",
-                        "description": f"Pico de upload incomum (Z-Score: {round(z_score, 1)}). Desvio muito acima do padrão histórico.",
+                        "title": f"Pico Anômalo (Z-Score): {name}",
+                        "description": f"Tráfego desviou {round(z_score, 1)}x do padrão histórico.",
                         "timestamp": datetime.now(),
-                        "recommendation": "Investigar origem do tráfego. Pode ser backup não agendado ou anomalia.",
+                        "recommendation": "Verificar logs de atividade.",
                         "equipment_name": name
                     })
 
-            # Detecção 2: Assimetria de Tráfego (Sinal de Ataque de Amplificação ou Vírus)
-            # Upload muito alto com Download baixo (comum em botnets, incomum em uso residencial)
-            if peak_up > 50 and avg_down < 5: 
+            # Detecção 2: Assimetria de Tráfego Inteligente
+            # Lógica:
+            # - Se é Infraestrutura (AP/Torre): Upload Alto = Download dos Clientes. NORMAL.
+            # - Se é Cliente (Station): Upload Alto = Vírus/Torrent/Backup. SUSPEITO.
+            
+            check_assymetry = True
+            if is_infrastructure:
+                # Para APs, "Upload" é o tráfego indo para os clientes. 
+                # É perfeitamente normal um AP ter 100Mbps de Upload (clientes baixando) e 5Mbps de Download.
+                check_assymetry = False 
+            
+            if check_assymetry and peak_up > 50 and avg_down < 5: 
                 insights.append({
-                    "type": "security", "severity": "critical",
-                    "title": f"Possível Ataque/Botnet em {name}",
-                    "description": f"Alto tráfego de saída ({int(peak_up)} Mbps) com entrada quase nula. Padrão típico de DDoS ou exfiltração.",
-                    "recommendation": "Verifique tabelas de conexão (Torch) e bloqueie a porta de origem se necessário.",
+                    "type": "security", "severity": "critical", # Agora podemos ser assertivos
+                    "title": f"Possível Ataque/Vírus em {name}",
+                    "description": f"Este equipamento (identificado como Station/Cliente) está enviando {int(peak_up)} Mbps, mas recebendo quase nada. Isso indica que o cliente pode estar infectado ou fazendo DoS.",
+                    "recommendation": "Bloqueie a porta do switch ou entre em contato com o cliente (possível vírus).",
                     "timestamp": datetime.now(),
                     "equipment_name": name
                 })

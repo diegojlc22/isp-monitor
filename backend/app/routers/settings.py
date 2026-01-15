@@ -51,6 +51,8 @@ async def get_telegram_config(db: AsyncSession = Depends(get_db)):
         whatsapp_enabled=(await get_val("whatsapp_enabled") == "true"),  # Default False
         whatsapp_target=await get_val("whatsapp_target") or "",
         whatsapp_target_group=await get_val("whatsapp_target_group") or "",
+        whatsapp_group_battery=await get_val("whatsapp_group_battery") or "",
+        whatsapp_group_ai=await get_val("whatsapp_group_ai") or "",
         # Notification Types
         notify_equipment_status=(await get_val("notify_equipment_status") != "false"),
         notify_backups=(await get_val("notify_backups") != "false"),
@@ -63,16 +65,17 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     # Pelo menos um target deve existir se estiver ativado, mas frontend valida melhor
     pass
 
+    print(f"[SETTINGS] Updating Config: BatteryGroup='{config.whatsapp_group_battery}', AI='{config.whatsapp_group_ai}'")
+
     async def upsert(key, value):
-        # Se value for None, nao faz nada, assumindo opcional nao enviado
-        # Mas para booleanos e strings vazias, queremos salvar.
-        if value is None: return 
+        # Se value for None, nao faz nada? Não! Vamos converter para string vazia se for None para garantir que limpa se o user limpar.
+        val_str = str(value) if value is not None else ""
         
         obj = (await db.execute(select(Parameters).where(Parameters.key == key))).scalar_one_or_none()
         if not obj:
-            db.add(Parameters(key=key, value=str(value)))
+            db.add(Parameters(key=key, value=val_str))
         else:
-            obj.value = str(value)
+            obj.value = val_str
 
     await upsert("telegram_token", config.bot_token)
     await upsert("telegram_chat_id", config.chat_id)
@@ -88,6 +91,9 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     
     await upsert("whatsapp_target", config.whatsapp_target)
     await upsert("whatsapp_target_group", config.whatsapp_target_group)
+    # Salvar grupos especificos
+    await upsert("whatsapp_group_battery", config.whatsapp_group_battery)
+    await upsert("whatsapp_group_ai", config.whatsapp_group_ai)
     
     # Notification Types
     await upsert("notify_equipment_status", "true" if config.notify_equipment_status else "false")
@@ -95,6 +101,7 @@ async def update_telegram_config(config: TelegramConfig, db: AsyncSession = Depe
     await upsert("notify_agent", "true" if config.notify_agent else "false")
 
     await db.commit()
+    print("[SETTINGS] Config saved successfully.")
     return {"message": "Configurações de alerta atualizadas"}
 
 from backend.app.schemas import LatencyThresholds
@@ -362,7 +369,7 @@ async def test_whatsapp_message_route(
                     print(f"[DEBUG SETTINGS] Resposta Corpo: {response_text}")
                     
                     if resp.status == 200:
-                        return {"message": f"Mensagem enviada para {target_value}"}
+                        return {"message": f"Mensagem enviada para {target_value}", "target": target_value}
                     elif resp.status == 404:
                          return {"error": "Número não encontrado no WhatsApp."}
                     elif resp.status == 503:

@@ -27,6 +27,16 @@ async def close_client():
         await _client.aclose()
         _client = None
 
+from backend.app.database import AsyncSessionLocal
+from backend.app.models import Parameters
+from sqlalchemy import select
+
+async def _get_param(key: str):
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(Parameters).where(Parameters.key == key))
+        obj = res.scalar_one_or_none()
+        return obj.value if obj else None
+
 async def send_notification(
     message: str, 
     telegram_token: str = None, 
@@ -49,16 +59,36 @@ async def send_notification(
     if telegram_enabled and token and chat_id:
         tasks.append(send_telegram(message, token, chat_id))
 
-    # 2. WhatsApp
-    target_1 = whatsapp_target or WHATSAPP_NUMBER
-    target_2 = whatsapp_target_group
+    # 2. WhatsApp Routing Strategy
+    target_padrão = whatsapp_target or WHATSAPP_NUMBER
     
     if whatsapp_enabled:
-        # Prioritize group if available (or logic as preferred) - logic kept from original
-        if target_2:
-             tasks.append(send_whatsapp(message, target_2))
-        elif target_1:
-            tasks.append(send_whatsapp(message, target_1))
+        # Detecção de Contexto
+        msg_lower = message.lower()
+        is_battery = "bateria" in msg_lower or "voltagem" in msg_lower or "energia" in msg_lower or "voltage" in msg_lower
+        is_ai = "cortex" in msg_lower or "inteligência" in msg_lower or "previsão" in msg_lower or "anomalia" in msg_lower
+        
+        # Tentativa de Roteamento Especializado (Consulta DB para pegar config atualizada)
+        routed = False
+        
+        # Roteamento Simplificado: 2 Grupos (Geral vs Técnico)
+        # Bateria, Energia, Voltagem, IA, Cortex -> Grupo Técnico (antigo group_battery)
+        if is_battery or is_ai:
+            # Usamos a chave existente 'whatsapp_group_battery' como "Grupo Técnico"
+            group_tech = await _get_param("whatsapp_group_battery")
+            if group_tech:
+                tasks.append(send_whatsapp(message, group_tech))
+                routed = True
+        
+        # Fallback: Grupo Geral ou Individual
+        if not routed:
+            # Tenta grupo geral primeiro
+            target_general = whatsapp_target_group or (await _get_param("whatsapp_target_group"))
+            
+            if target_general:
+                tasks.append(send_whatsapp(message, target_general))
+            elif target_padrão:
+                tasks.append(send_whatsapp(message, target_padrão))
         
     # Execute Async
     if tasks:

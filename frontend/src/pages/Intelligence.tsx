@@ -32,7 +32,7 @@ const Intelligence: React.FC = () => {
     const fetchCortexData = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/cortex/insights/');
+            const response = await api.get('/cortex/insights');
             setConfig(response.data);
         } catch (err) {
             console.error(err);
@@ -48,7 +48,7 @@ const Intelligence: React.FC = () => {
         try {
             // Optimistic update
             setConfig({ ...config, enabled: newState });
-            await api.post(`/cortex/config/?enabled=${newState}`);
+            await api.post(`/cortex/config?enabled=${newState}`);
             toast.success(newState ? "CORTEX Ativado" : "CORTEX Desativado");
         } catch (err) {
             toast.error("Falha ao alterar estado do CORTEX.");
@@ -63,7 +63,7 @@ const Intelligence: React.FC = () => {
         }
         try {
             setAnalyzing(true);
-            const res = await api.post('/cortex/force-run/');
+            const res = await api.post('/cortex/force-run');
             toast.success(`Análise Completa! ${res.data.insights_count} insights gerados.`);
             fetchCortexData(); // Reload results
         } catch (err) {
