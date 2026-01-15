@@ -34,7 +34,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     const statusColor = getStatusColors(status);
 
     return (
-        <div className="bg-slate-900 border border-slate-700/50 rounded-lg p-5 flex flex-col justify-between h-32 hover:border-slate-600 transition-colors shadow-sm">
+        <div className="bg-slate-900 border border-slate-700/50 rounded-lg p-5 flex flex-col justify-between min-h-36 h-full hover:border-slate-600 transition-colors shadow-sm">
 
             {/* Header */}
             <div className="flex justify-between items-start mb-2">

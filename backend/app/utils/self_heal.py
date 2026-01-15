@@ -42,21 +42,22 @@ def clear_pycache():
                 logging.error(f"Erro ao deletar {path}: {e}")
     logging.info(f"Cache limpo: {deleted} pastas removidas.")
 
-def check_api_health(retries=3):
-    """Tenta checar a saúde da API com retries para evitar falsos positivos"""
+def check_api_health(retries=10):
+    """Tenta checar a saúde da API com retries para evitar falsos positivos (Aumentado para startup lênto)"""
     for attempt in range(retries):
         try:
-            response = requests.get(API_URL, timeout=5)
+            response = requests.get(API_URL, timeout=3)
             if response.status_code == 200:
                 return True, "Healthy"
             else:
                 logging.warning(f"⚠️ Tentativa {attempt+1}/{retries} falhou: Status {response.status_code}")
         except Exception as e:
-            logging.warning(f"⚠️ Tentativa {attempt+1}/{retries} falhou: {e}")
+            # logging.warning(f"⚠️ Tentativa {attempt+1}/{retries} falhou: {e}")
+            pass
         
-        time.sleep(2) # Espera antes de tentar de novo
+        time.sleep(3) # Espera antes de tentar de novo
         
-    return False, "Max retries exceeded"
+    return False, "Max retries exceeded after several attempts"
 
 def perform_self_healing():
     logging.warning("⚠️ DETECTADA FALHA NA API. INICIANDO PROTOCOLO DE AUTO-CURA...")

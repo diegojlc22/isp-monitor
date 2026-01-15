@@ -53,6 +53,13 @@ async def setup_table_partitioning(conn):
         else:
             logger.warning(f"[OPTIMIZER] Partição {part_name} já existe. Pulando criação.")
         
+        # 4.1. Create Default Partition (Catch-all for odd dates)
+        def_part_name = f"{table_name}_default"
+        def_part_check = await conn.execute(text(f"SELECT 1 FROM pg_class WHERE relname = '{def_part_name}'"))
+        if not def_part_check.scalar():
+            await conn.execute(text(f"CREATE TABLE {def_part_name} PARTITION OF {table_name} DEFAULT"))
+            logger.info(f"[OPTIMIZER] Partição DEFAULT {def_part_name} criada.")
+        
         # 5. Restore Data
         logger.info(f"[OPTIMIZER] 📥 Migrando dados legados de {table_name}...")
         await conn.execute(text(
