@@ -2,19 +2,22 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import {
     BrainCircuit, ShieldCheck, TrendingUp, CheckCircle2,
-    RefreshCw, Power, Activity, Zap, Info
+    RefreshCw, Power, Activity, Zap, Info, Wifi
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
 interface Insight {
-    type: 'security' | 'capacity' | 'performance' | 'system' | 'error';
+    type: 'security' | 'capacity' | 'performance' | 'system' | 'error' | 'signal';
     severity: 'info' | 'warning' | 'critical';
     title: string;
     description: string;
     recommendation?: string | null;
     timestamp: string;
     equipment_name?: string | null;
+    equipment_id?: number | null;
+    learning_key?: string | null;
+    learning_value?: any;
 }
 
 interface CortexConfig {
@@ -27,18 +30,54 @@ const Intelligence: React.FC = () => {
     const [config, setConfig] = useState<CortexConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [analyzing, setAnalyzing] = useState(false);
-    const [filter, setFilter] = useState<'all' | 'security' | 'capacity' | 'performance'>('all');
+    const [filter, setFilter] = useState<'all' | 'security' | 'capacity' | 'performance' | 'signal'>('all');
+    const [pendingSignals, setPendingSignals] = useState<any[]>([]);
+    const [signalThreshold, setSignalThreshold] = useState<number>(-70);
+    const [savingThreshold, setSavingThreshold] = useState(false);
 
     const fetchCortexData = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/cortex/insights');
-            setConfig(response.data);
+            const [insightsRes, signalsRes, settingsRes] = await Promise.all([
+                api.get('/cortex/insights'),
+                api.get('/cortex/signal-pending'),
+                api.get('/cortex/signal-settings')
+            ]);
+
+            setConfig(insightsRes.data);
+            setPendingSignals(signalsRes.data);
+            setSignalThreshold(settingsRes.data.threshold);
         } catch (err) {
             console.error(err);
-            toast.error("Erro ao conectar com CORTEX AI.");
+            toast.error("Erro ao sincronizar com CORTEX AI.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const updateThreshold = async (val: number) => {
+        try {
+            setSavingThreshold(true);
+            await api.post(`/cortex/signal-settings?threshold=${val}`);
+            setSignalThreshold(val);
+            toast.success(`Limite de monitoramento ajustado para ${val}dBm`);
+        } catch (err) {
+            toast.error("Erro ao salvar configuração.");
+        } finally {
+            setSavingThreshold(false);
+        }
+    };
+
+    const handleSignalConfirmation = async (id: number, normal: boolean) => {
+        try {
+            toast.loading(normal ? "Ensinando IA..." : "Registrando...", { id: 'sig-conf' });
+            await api.post(`/cortex/signal-confirm/${id}?normal=${normal}`);
+            toast.success(normal ? "Cortex aprendeu o novo padrão!" : "Alerta mantido.", { id: 'sig-conf' });
+            // Refresh list
+            const signalsRes = await api.get('/cortex/signal-pending');
+            setPendingSignals(signalsRes.data);
+        } catch (err) {
+            toast.error("Erro ao processar confirmação.", { id: 'sig-conf' });
         }
     };
 
@@ -53,6 +92,27 @@ const Intelligence: React.FC = () => {
         } catch (err) {
             toast.error("Falha ao alterar estado do CORTEX.");
             setConfig({ ...config, enabled: !newState }); // Rollback
+        }
+    };
+
+    const handleLearn = async (insight: Insight) => {
+        if (!insight.equipment_id || !insight.learning_key) return;
+
+        try {
+            toast.loading("IA Estudando comportamento...", { id: 'learn' });
+            const val = insight.learning_value !== undefined ? insight.learning_value : true;
+            await api.post(`/cortex/teach/${insight.equipment_id}?parameter=${insight.learning_key}&value=${val}`);
+            toast.success("Cortex aprendeu! Esse comportamento será ignorado.", { id: 'learn' });
+
+            // Remover localmente para feedback imediato
+            if (config) {
+                setConfig({
+                    ...config,
+                    insights: config.insights.filter(item => item !== insight)
+                });
+            }
+        } catch (err) {
+            toast.error("Erro ao ensinar IA.");
         }
     };
 
@@ -148,6 +208,7 @@ const Intelligence: React.FC = () => {
                     { id: 'security', label: 'Segurança', icon: ShieldCheck },
                     { id: 'capacity', label: 'Capacidade', icon: TrendingUp },
                     { id: 'performance', label: 'Performance', icon: Zap },
+                    { id: 'signal', label: 'Sinal (RF)', icon: Wifi },
                 ].map(tab => (
                     <button
                         key={tab.id}
@@ -170,6 +231,82 @@ const Intelligence: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-32 opacity-50">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-500 mb-4"></div>
                     <p className="text-slate-400 text-sm animate-pulse">Sincronizando com Núcleo Neural...</p>
+                </div>
+            ) : filter === 'signal' ? (
+                <div className="space-y-6">
+                    {/* Signal Logic Header */}
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="flex-1">
+                                <h3 className="text-white font-bold flex items-center gap-2 mb-1">
+                                    <Wifi size={18} className="text-purple-400" />
+                                    Monitoramento de Sinal Adaptativo
+                                </h3>
+                                <p className="text-sm text-slate-400 max-w-xl">
+                                    Defina abaixo a partir de qual nível de sinal o Cortex deve considerar uma "anomalia".
+                                    A IA aprenderá com suas respostas para ignorar rádios que possuem sinais altos por natureza.
+                                </p>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg flex items-center gap-4 min-w-[300px]">
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Monitorar acima de:</label>
+                                        {savingThreshold && <RefreshCw size={12} className="animate-spin text-purple-400" />}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="range"
+                                            min="-90"
+                                            max="-50"
+                                            step="1"
+                                            value={signalThreshold}
+                                            onChange={(e) => updateThreshold(parseInt(e.target.value))}
+                                            className="flex-1 accent-purple-500"
+                                        />
+                                        <span className="text-lg font-mono font-bold text-purple-400 w-12 text-right">{signalThreshold}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Pending Confirmations */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {pendingSignals.length === 0 ? (
+                            <div className="col-span-full py-12 text-center bg-slate-900/10 border border-slate-800 border-dashed rounded-xl">
+                                <CheckCircle2 className="mx-auto text-slate-600 mb-2" size={32} />
+                                <p className="text-slate-500 text-sm">Nenhum sinal suspeito aguardando confirmação no momento.</p>
+                            </div>
+                        ) : pendingSignals.map(sig => (
+                            <div key={sig.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center justify-between gap-4 group hover:border-purple-500/30 transition-all">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-white font-bold">{sig.name}</span>
+                                        <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded uppercase font-mono">{sig.brand}</span>
+                                    </div>
+                                    <p className="text-sm text-slate-400 italic">
+                                        Sinal atual: <span className="text-rose-400 font-bold">{sig.signal}dBm</span>. Isso é normal?
+                                    </p>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleSignalConfirmation(sig.id, true)}
+                                        className="px-4 py-2 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white rounded-lg text-sm font-bold border border-purple-600/20 transition-all"
+                                    >
+                                        Sim (Ignorar)
+                                    </button>
+                                    <button
+                                        onClick={() => handleSignalConfirmation(sig.id, false)}
+                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-sm font-medium border border-slate-700 transition-all"
+                                    >
+                                        Não
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : filteredInsights.length === 0 ? (
                 <div className="text-center py-20 bg-slate-900/20 border border-slate-800 border-dashed rounded-xl">
@@ -235,8 +372,18 @@ const Intelligence: React.FC = () => {
 
                                 {insight.recommendation && (
                                     <div className="mt-auto pt-4 border-t border-slate-800">
-                                        <div className="flex items-center gap-2 mb-1 text-xs font-bold text-purple-400 uppercase">
-                                            <BrainCircuit size={14} /> Recomendação Cortex
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase">
+                                                <BrainCircuit size={14} /> Recomendação Cortex
+                                            </div>
+                                            {insight.equipment_id && insight.learning_key && (
+                                                <button
+                                                    onClick={() => handleLearn(insight)}
+                                                    className="text-[10px] font-bold bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white px-2 py-1 rounded transition-all border border-purple-600/20"
+                                                >
+                                                    🎓 Aprender
+                                                </button>
+                                            )}
                                         </div>
                                         <p className="text-slate-300 text-sm italic bg-slate-800/50 p-3 rounded-lg border border-slate-800/50">
                                             "{insight.recommendation}"

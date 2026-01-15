@@ -90,6 +90,7 @@ class Equipment(Base):
     ccq = Column(Integer, nullable=True)
     connected_clients = Column(Integer, nullable=True, default=0)  # For APs/Transmitters
     whatsapp_groups = Column(JSON, nullable=True, default=[]) # List of Group IDs
+    ai_overrides = Column(JSON, nullable=True, default={}) # Human-in-the-loop learnable patterns
 
     last_traffic_in = Column(Float, default=0.0) # Mbps
     last_traffic_out = Column(Float, default=0.0) # Mbps
@@ -281,3 +282,16 @@ class Insight(Base):
     is_dismissed = Column(Boolean, default=False)
 
     equipment = relationship("Equipment")
+
+class SignalLog(Base):
+    """
+    High-frequency logs for Wireless Signal (RSSI/CCQ) health analysis.
+    """
+    __tablename__ = "signal_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    equipment_id = Column(Integer, ForeignKey("equipments.id", ondelete="CASCADE"), index=True)
+    rssi = Column(Float)
+    ccq = Column(Integer)
+    noise_floor = Column(Integer, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)

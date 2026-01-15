@@ -173,3 +173,12 @@ export const saveDashboardLayout = (layout: any[]) => api.post('/settings/dashbo
 // Monitoring Schedules
 export const getMonitoringSchedules = () => api.get('/settings/monitoring-schedules').then(res => res.data);
 export const updateMonitoringSchedules = (data: any) => api.post('/settings/monitoring-schedules', data).then(res => res.data);
+
+// Cortex AI Human-in-the-Loop & Signal
+export const teachCortex = (id: number, parameter: string, value: string | number) =>
+    api.post(`/cortex/teach/${id}?parameter=${parameter}&value=${value}`).then(res => res.data);
+
+export const getCortexSignalSettings = () => api.get('/cortex/signal-settings').then(res => res.data);
+export const updateCortexSignalSettings = (threshold: number) => api.post(`/cortex/signal-settings?threshold=${threshold}`).then(res => res.data);
+export const getCortexPendingSignals = () => api.get('/cortex/signal-pending').then(res => res.data);
+export const confirmCortexSignal = (id: number, normal: boolean) => api.post(`/cortex/signal-confirm/${id}?normal=${normal}`).then(res => res.data);

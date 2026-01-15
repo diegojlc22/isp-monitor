@@ -24,6 +24,7 @@ interface Equipment {
     is_priority?: boolean;
     max_traffic_in?: number;
     max_traffic_out?: number;
+    ai_overrides?: any;
     traffic_alert_interval?: number;
     voltage?: number;
     temperature?: number;
@@ -144,6 +145,7 @@ const EquipmentRow = ({ index, data }: any) => {
                 <button onClick={() => onTest && onTest(eq)} className="text-slate-400 hover:text-green-400 p-1.5 rounded hover:bg-slate-700" title="Testar Ping">
                     <Zap size={18} />
                 </button>
+
 
                 {/* Secondary Actions (Hidden on very small screens, shown in dropdown or just hidden to save space?) 
                     For now, let's keep them but maybe hide less critical ones if space is tight? 
@@ -319,6 +321,66 @@ const WirelessMonitorModal = ({ equipment, onClose }: { equipment: any, onClose:
                         </div>
                     </div>
                 )}
+            </div>
+        </div>
+    );
+};
+
+const HistoryModal = ({ equipment, data, period, onPeriodChange, onClose }: {
+    equipment: Equipment,
+    data: any[],
+    period: string,
+    onPeriodChange: (p: string) => void,
+    onClose: () => void
+}) => {
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl p-6 h-[70vh] flex flex-col shadow-2xl">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 className="text-white font-bold text-lg">{equipment.name}</h3>
+                        <p className="text-slate-500 text-xs">Histórico de Latência (ICMP)</p>
+                    </div>
+                    <div className="flex bg-slate-800 rounded-lg p-1">
+                        {['1h', '6h', '24h', '7d'].map((p) => (
+                            <button
+                                key={p}
+                                onClick={() => onPeriodChange(p)}
+                                className={clsx(
+                                    "px-3 py-1 rounded-md text-xs transition-all",
+                                    period === p ? "bg-blue-600 text-white shadow-lg" : "text-slate-400 hover:text-white"
+                                )}
+                            >
+                                {p.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex-1 min-h-0 relative bg-slate-950/50 rounded-lg border border-slate-800/50 p-4">
+                    <ResponsiveContainer width="100%" height="100%" debounce={100}>
+                        <AreaChart data={data}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
+                            <XAxis dataKey="timeStr" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
+                            <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
+                                formatter={(value: any) => [`${Math.round(value)} ms`, 'Latência']}
+                            />
+                            <Area type="monotone" dataKey="latency" stroke="#3b82f6" fill="url(#colorLat)" strokeWidth={2} />
+                            <defs>
+                                <linearGradient id="colorLat" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                    <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg transition-colors">Fechar</button>
+                </div>
             </div>
         </div>
     );
@@ -661,6 +723,7 @@ export function Equipments() {
         } catch (e) { console.error('Error loading data:', e); }
     }, []);
 
+
     usePoll(load, 20000); // Aumentado para 20s para evitar travas com muitos dispositivos
 
     useEffect(() => {
@@ -984,8 +1047,9 @@ export function Equipments() {
                                         <EquipmentRow
                                             key={eq.id}
                                             index={index}
+                                            itemSize={64}
                                             data={{
-                                                equipments: filteredEquipments,
+                                                equipments: filteredEquipments.slice(0, visibleCount),
                                                 towers,
                                                 onAction: handleWirelessInfo,
                                                 onReboot: handleReboot,
@@ -1521,35 +1585,14 @@ export function Equipments() {
                 )
             }
 
-            {
-                showHistoryModal && selectedEqHistory && (
-                    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl p-6 h-[70vh] flex flex-col">
-                            <h3 className="text-white font-bold mb-4">{selectedEqHistory.name} - Histórico ({historyPeriod})</h3>
-                            <div className="flex-1 min-h-0 relative">
-                                <ResponsiveContainer width="100%" height="100%" debounce={100}>
-                                    <AreaChart data={historyData}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                                        <XAxis dataKey="timeStr" stroke="#666" />
-                                        <YAxis stroke="#666" />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }}
-                                            formatter={(value: any) => [Math.round(value), 'Latência']}
-                                        />
-                                        <Area type="monotone" dataKey="latency" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <button onClick={() => setShowHistoryModal(false)} className="mt-4 bg-slate-800 text-white px-4 py-2 rounded">Fechar</button>
-                        </div>
-                    </div>
-                )
-            }
-            {
-                showWirelessModal && selectedWirelessEq && (
-                    <WirelessMonitorModal equipment={selectedWirelessEq} onClose={() => setShowWirelessModal(false)} />
-                )
-            }
+            {showHistoryModal && selectedEqHistory && (
+                <HistoryModal equipment={selectedEqHistory} data={historyData} period={historyPeriod} onPeriodChange={(p) => loadHistory(selectedEqHistory.id, p)} onClose={() => setShowHistoryModal(false)} />
+            )}
+
+            {showWirelessModal && selectedWirelessEq && (
+                <WirelessMonitorModal equipment={selectedWirelessEq} onClose={() => setShowWirelessModal(false)} />
+            )}
+
             {showTemplateModal && (<div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-slate-900 border border-slate-700 rounded p-6"><input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Nome do Template" className="bg-slate-950 border border-slate-700 rounded p-2 text-white block mb-4 w-full" /><div className="flex gap-2 justify-end"><button onClick={() => setShowTemplateModal(false)} className="text-slate-400">Cancelar</button><button onClick={saveTemplate} className="bg-purple-600 text-white px-4 py-2 rounded">Salvar</button></div></div></div>)}
 
             {/* Detecção Progress Table Overlay */}

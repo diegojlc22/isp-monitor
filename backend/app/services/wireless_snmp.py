@@ -71,29 +71,37 @@ async def detect_equipment_type(ip, brand, community, port=161):
 OIDS = {
     'ubiquiti': {
         'signal': [
+            '1.3.6.1.4.1.41112.1.4.5.1.5',    # AirMAX (M5/M2)
+            '1.3.6.1.4.1.41112.1.4.7.1.3',    # AC Station Table
             '1.3.6.1.4.1.41112.1.10.1.4.1.5', # LTU
-            '1.3.6.1.4.1.41112.1.4.7.1.3',    # AC Sta
-            '1.3.6.1.4.1.41112.1.4.5.1.5',    # AirMAX
-            '1.3.6.1.4.1.41112.1.4.1.1.5.1',  # Radio
-            '1.3.6.1.4.1.41112.1.3.2.1.11.1', # AF-4X Chain 0
-            '1.3.6.1.4.1.41112.1.3.2.1.14.1'  # AF-4X Chain 1
+            '1.3.6.1.4.1.41112.1.3.2.1.11.1', # AirFiber Chain 0
+            '1.3.6.1.4.1.41112.1.4.1.1.5.1',  # Legacy Radio Signal
         ],
         'ccq': [
-            '1.3.6.1.4.1.41112.1.10.1.4.1.21', # LTU
-            '1.3.6.1.4.1.41112.1.4.6.1.3',    # AC Qual
-            '1.3.6.1.4.1.41112.1.4.6.1.4',    # AC Cap
-            '1.3.6.1.4.1.41112.1.4.5.1.7',     # CCQ
-            '1.3.6.1.4.1.41112.1.4.7.1.6'
+            '1.3.6.1.4.1.41112.1.4.5.1.7',    # AirMAX CCQ
+            '1.3.6.1.4.1.41112.1.4.7.1.6',    # AC Station CCQ
+            '1.3.6.1.4.1.41112.1.4.6.1.3',    # AC Quality
+            '1.3.6.1.4.1.41112.1.10.1.4.1.21' # LTU Quality
         ],
         'clients': [
-            '1.3.6.1.4.1.41112.1.10.1.4',      # LTU
-            '1.3.6.1.4.1.41112.1.4.5.1.15'     # AC/M5
+            '1.3.6.1.4.1.41112.1.4.5.1.15',    # AirMAX Clients
+            '1.3.6.1.4.1.41112.1.10.1.4'       # LTU Clients
         ]
     },
     'mikrotik': {
-        'signal': ['1.3.6.1.4.1.14988.1.1.1.2.1.19', '1.3.6.1.4.1.14988.1.1.1.1.1.4'],
-        'ccq': ['1.3.6.1.4.1.14988.1.1.1.3.1.10', '1.3.6.1.4.1.14988.1.1.1.1.1.10'],
-        'clients': '1.3.6.1.4.1.14988.1.1.1.3.1.6'
+        'signal': [
+            '1.3.6.1.4.1.14988.1.1.1.2.1.3',    # Strength Average
+            '1.3.6.1.4.1.14988.1.1.1.2.1.19',   # Registration Table Signal
+            '1.3.6.1.4.1.14988.1.1.1.1.1.4'     # Interface Table Signal
+        ],
+        'ccq': [
+            '1.3.6.1.4.1.14988.1.1.1.3.1.10',   # Overall CCQ
+            '1.3.6.1.4.1.14988.1.1.1.1.1.10'    # Wlan Interface CCQ
+        ],
+        'clients': [
+            '1.3.6.1.4.1.14988.1.1.1.3.1.6',    # Stat Registered Clients
+            '1.3.6.1.4.1.14988.1.1.1.1.1.6'     # Interface Registered Clients
+        ]
     },
     'mimosa': {
         'signal': [
@@ -189,25 +197,57 @@ async def get_neighbors_data(ip, brand, community, port=161):
 async def get_wireless_stats(ip, brand, community, port=161, interface_index=None, equipment_type=None):
     stats = {'signal_dbm': None, 'ccq': None}
     brand_key = brand.lower()
+    
+    # 1. Tentar busca direta por índice se fornecido (MikroTik Wireless Interface Table)
     if brand_key == 'mikrotik' and interface_index:
         try:
-            val_dbm = await get_snmp_value(ip, community, f'1.3.6.1.4.1.14988.1.1.19.1.1.10.{interface_index}', port)
+            # mtxrWlStatSignalStrength OID .1.3.6.1.4.1.14988.1.1.1.1.1.4 + index
+            val_dbm = await get_snmp_value(ip, community, f'1.3.6.1.4.1.14988.1.1.1.1.1.4.{interface_index}', port)
+            if not val_dbm:
+                # Tentativa secundária mtxrWlRtabSignalStrength (Tabela de Registro)
+                val_dbm = await get_snmp_walk_first(ip, community, f'1.3.6.1.4.1.14988.1.1.1.2.1.19.{interface_index}', port)
+                
             if val_dbm:
-                stats['signal_dbm'] = round(float(val_dbm) / 1000.0, 2)
-                return stats
+                try:
+                    stats['signal_dbm'] = int(val_dbm) if int(val_dbm) < 0 else -int(val_dbm)
+                except: pass
         except: pass
 
     if brand_key not in OIDS: return stats
-    for oid in OIDS[brand_key].get('signal', []):
-        sig = await get_snmp_value(ip, community, oid, port)
-        if sig is not None and isinstance(sig, int) and sig != 0:
-            stats['signal_dbm'] = sig if sig < 0 else -sig
-            break
-    for oid in OIDS[brand_key].get('ccq', []):
-        ccq = await get_snmp_value(ip, community, oid, port)
-        if ccq is not None and isinstance(ccq, int):
-            stats['ccq'] = ccq
-            break
+    
+    # 2. Busca Gerencial por OIDs conhecidas
+    if stats['signal_dbm'] is None:
+        for oid in OIDS[brand_key].get('signal', []):
+            # Tenta Get Direto (.0) ou Walk First (fallback para índices dinâmicos)
+            sig = await get_snmp_value(ip, community, f"{oid}.0", port) # Tenta .0 primeiro
+            if sig is None:
+                sig = await get_snmp_value(ip, community, oid, port) # Tenta puro
+            if sig is None:
+                # Tenta explicitamente com o índice 1 (comum em Ubiquiti)
+                sig = await get_snmp_value(ip, community, f"{oid}.1", port)
+            if sig is None:
+                sig = await get_snmp_walk_first(ip, community, oid, port) # Tenta walk
+                
+            if sig is not None and isinstance(sig, (int, float)) and sig != 0:
+                # Validação de sinal Realista: -100 a -10 dBm
+                # Isso evita que códigos de status (ex: 1, 2, 5) sejam confundidos com sinal
+                candidate = int(sig) if sig < 0 else -int(sig)
+                if -100 <= candidate <= -10:
+                    stats['signal_dbm'] = candidate
+                    break
+                
+    if stats['ccq'] is None:
+        for oid in OIDS[brand_key].get('ccq', []):
+            ccq = await get_snmp_value(ip, community, f"{oid}.0", port)
+            if ccq is None:
+                ccq = await get_snmp_value(ip, community, oid, port)
+            if ccq is None:
+                ccq = await get_snmp_walk_first(ip, community, oid, port)
+                
+            if ccq is not None and isinstance(ccq, (int, float)):
+                stats['ccq'] = int(ccq)
+                break
+                
     return stats
 
 async def get_connected_clients_count(ip, brand, community, port=161):
@@ -215,9 +255,25 @@ async def get_connected_clients_count(ip, brand, community, port=161):
     if brand_key not in OIDS: return None
     oids = OIDS[brand_key].get('clients', [])
     if isinstance(oids, str): oids = [oids]
+    
     for oid in oids:
-        count = await get_snmp_value(ip, community, oid, port)
-        if count is not None and isinstance(count, int): return count
+        # Para APs, o total pode ser a soma de múltiplas interfaces ou um OID central
+        # Primeiro tentamos o OID direto
+        count = await get_snmp_value(ip, community, f"{oid}.0", port)
+        if count is None:
+            count = await get_snmp_value(ip, community, oid, port)
+        
+        # Se falhar, tentamos dar um walk para ver se é uma tabela de interfaces
+        if count is None:
+            vals = await snmp_walk_list(ip, community, oid, port)
+            if vals:
+                try:
+                    return sum(int(v) for v in vals if str(v).isdigit())
+                except: pass
+        
+        if count is not None and isinstance(count, (int, float)): 
+            return int(count)
+            
     return None
 
 async def get_health_stats(ip, brand, community, port=161):

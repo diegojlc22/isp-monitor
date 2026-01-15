@@ -548,19 +548,17 @@ async def auto_detect_all(
                 result["name"] = sys_name
 
             if brand != "generic":
+                # Detectar Tipo (AP ou Station)
                 eq_type = await detect_equipment_type(ip, brand, community, port)
                 result["equipment_type"] = eq_type
                 
-                # Try to find signal interface
+                # Para APs, se o tipo for 'transmitter', tentamos buscar contagem de clientes
+                # Para Stations, o tipo é 'station' e buscamos o sinal
                 stats = await get_wireless_stats(ip, brand, community, port)
                 if stats.get("signal_dbm") is not None:
                     result["signal_dbm"] = stats["signal_dbm"]
-                    # In some brands, we might want to store which interface gave the signal
-                    # But for now, we just indicate we found signal.
         except Exception as e:
             logger.error(f"[AUTO-DETECT] Step 1 falhou para {ip}: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
             result["errors"].append(f"Erro ao detectar marca/tipo: {str(e)}")
         
         # STEP 2: Detectar interface de tráfego

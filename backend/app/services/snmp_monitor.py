@@ -1,8 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import select, insert, update
 from backend.app.database import AsyncSessionLocal
-from backend.app.models import Equipment, TrafficLog, Tower
+from backend.app.models import Equipment, TrafficLog, Tower, SignalLog
 from backend.app.services.mikrotik_api import get_mikrotik_live_traffic
 from backend.app.services.snmp import get_snmp_interface_traffic
 from backend.app.services.wireless_snmp import get_wireless_stats, get_health_stats, get_connected_clients_count
@@ -12,9 +12,9 @@ from loguru import logger
 # Config
 SNMP_INTERVAL = 10 # Check SNMP every 10s (Balanced for CPU/Responsiveness)
 
-# ✅ SPRINT 3: Smart Logging - Tracking de estado
 # Armazena último valor salvo para evitar logs duplicados
 snmp_last_logged = {}  # eq_id -> {"in": mbps, "out": mbps, "signal": dbm, "ccq": %, "time": timestamp}
+signal_last_logged = {} # eq_id -> {"signal": dbm, "ccq": %, "time": timestamp}
 
 async def snmp_monitor_job():
     """
@@ -25,8 +25,8 @@ async def snmp_monitor_job():
     logger.info("[TRAFFIC] Traffic/Wireless Monitor started (Interval: 10s)...")
     
     # Limit Concurrency to avoid network flood and CPU spikes
-    # Increased to 100 to handle 450+ devices without global timeout
-    sem = asyncio.Semaphore(100) 
+    # Reduced to 20 to prioritize stability and avoid socket timeouts on Windows
+    sem = asyncio.Semaphore(20) 
     
     # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
     previous_counters = {} 
@@ -255,6 +255,7 @@ async def snmp_monitor_job():
             async with AsyncSessionLocal() as session:
                 updates_buffer = []      # List of dicts for Table Equipment
                 traffic_logs_buffer = [] # List of dicts for Table TrafficLog
+                signal_logs_buffer = []  # List of dicts for Table SignalLog
                 
                 updates_count = 0
                 
@@ -287,6 +288,38 @@ async def snmp_monitor_job():
 
                     upd_data["id"] = res["id"] # PK for bind
                     updates_buffer.append(upd_data)
+                    
+                    # ✅ CORTEX v3.0: Logging de Sinal (RSSI/CCQ) para análise física
+                    if "signal_dbm" in upd_data and upd_data["signal_dbm"] is not None:
+                        eq_id = res["id"]
+                        curr_sig = upd_data["signal_dbm"]
+                        curr_ccq = upd_data.get("ccq") or 0
+                        current_time = time.time()
+                        
+                        # Lógica de throttling para sinais (logar a cada 2 min ou se variar > 2dB)
+                        should_log_signal = False
+                        if eq_id not in signal_last_logged:
+                            should_log_signal = True
+                        else:
+                            last_sig = signal_last_logged[eq_id]
+                            time_since = current_time - last_sig["time"]
+                            if time_since > 120: # 2 minutos
+                                should_log_signal = True
+                            elif abs(curr_sig - last_sig["signal"]) >= 2:
+                                should_log_signal = True
+                        
+                        if should_log_signal:
+                            signal_logs_buffer.append({
+                                "equipment_id": eq_id,
+                                "rssi": curr_sig,
+                                "ccq": curr_ccq,
+                                "timestamp": datetime.now()
+                            })
+                            signal_last_logged[eq_id] = {
+                                "signal": curr_sig,
+                                "ccq": curr_ccq,
+                                "time": current_time
+                            }
                     
                     # ✅ SPRINT 3: Smart Logging para Traffic (Memory based, no DB read needed)
                     if res["log"]:
@@ -463,6 +496,9 @@ async def snmp_monitor_job():
                 if traffic_logs_buffer:
                     await session.execute(insert(TrafficLog), traffic_logs_buffer)
                 
+                if signal_logs_buffer:
+                    await session.execute(insert(SignalLog), signal_logs_buffer)
+                
                 # --- UPDATE HEARTBEAT FOR HEALTH CHECK ---
                 from sqlalchemy import text
                 await session.execute(text("""
@@ -473,7 +509,7 @@ async def snmp_monitor_job():
 
                 await session.commit()
                 if updates_count > 0:
-                    logger.info(f"[SNMP] Updated {updates_count} devices and inserted {len(traffic_logs_buffer)} logs.")
+                    logger.info(f"[SNMP] Updated {updates_count} devices, {len(traffic_logs_buffer)} traffic logs, {len(signal_logs_buffer)} signal logs.")
 
             if updates_count > 0 or traffic_logs_buffer:
                 # Basic GC for memory cache (Run every 10 cycles roughly, or just here)
@@ -483,6 +519,11 @@ async def snmp_monitor_job():
                 keys_to_remove = [k for k in snmp_last_logged.keys() if k not in active_ids]
                 for k in keys_to_remove:
                     del snmp_last_logged[k]
+                
+                # Cleanup 1.1: Signal Cache
+                sig_keys_to_remove = [k for k in signal_last_logged.keys() if k not in active_ids]
+                for k in sig_keys_to_remove:
+                    del signal_last_logged[k]
 
                 # Cleanup 2: Traffic Counters Cache (Fix Memory Leak)
                 # Cache Key is tuple (id, interface_index). We check if 'id' is still active.
