@@ -10,7 +10,7 @@ from backend.app.services.notifier import send_notification
 from loguru import logger
 
 # Config
-SNMP_INTERVAL = 10 # Check SNMP every 10s (Balanced for CPU/Responsiveness)
+SNMP_INTERVAL = 30 # Default (will be updated by job)
 
 # Armazena último valor salvo para evitar logs duplicados
 snmp_last_logged = {}  # eq_id -> {"in": mbps, "out": mbps, "signal": dbm, "ccq": %, "time": timestamp}
@@ -22,14 +22,15 @@ async def snmp_monitor_job():
     Parallelized for high performance (Semaphore limited).
     """
     import time
-    logger.info("[TRAFFIC] Traffic/Wireless Monitor started (Interval: 10s)...")
+    logger.info(f"[TRAFFIC] Monitor de Tráfego/Wireless iniciado (Intervalo base: {SNMP_INTERVAL}s)...")
     
     # Limit Concurrency to avoid network flood and CPU spikes
-    # Adjusted to 50 for better stability with pysnmp on Windows
     sem = asyncio.Semaphore(50) 
     
-    # Cache for bandwidth calculation (SNMP only): eq_id -> (timestamp, in_bytes, out_bytes)
+    # Cache for bandwidth calculation (SNMP only)
     previous_counters = {} 
+    
+    interval = 30
     
     async def fetch_device_data(eq_data):
         """
@@ -76,7 +77,11 @@ async def snmp_monitor_job():
                                 if h_stats['temperature'] is not None:
                                     result["updates"]["temperature"] = h_stats['temperature']
                                 if h_stats['voltage'] is not None:
-                                    result["updates"]["voltage"] = h_stats['voltage']
+                                    # Aplicar Calibração (Fator e Offset)
+                                    v_multiplier = eq_data.get("voltage_multiplier") or 1.0
+                                    v_offset = eq_data.get("voltage_offset") or 0.0
+                                    calibrated_v = round((h_stats['voltage'] * v_multiplier) + v_offset, 1)
+                                    result["updates"]["voltage"] = calibrated_v
                             except Exception as e:
                                 logger.debug(f"[SNMP] Health stats error for {ip}: {e}")
                     except Exception as e:
@@ -182,6 +187,8 @@ async def snmp_monitor_job():
                         "min_voltage_threshold": eq.min_voltage_threshold,
                         "voltage_alert_interval": eq.voltage_alert_interval,
                         "last_voltage_alert_sent": eq.last_voltage_alert_sent,
+                        "voltage_multiplier": eq.voltage_multiplier,
+                        "voltage_offset": eq.voltage_offset,
                         "tower_name": tower_name
                     })
             

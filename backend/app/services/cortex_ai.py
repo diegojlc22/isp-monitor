@@ -23,7 +23,8 @@ class CortexAI:
                 "security": True,
                 "capacity": True,
                 "performance": True,
-                "radio_health": True
+                "radio_health": True,
+                "energy": True
             },
             "thresholds": {
                 "z_score_sensitivity": 3.0, 
@@ -173,6 +174,11 @@ class CortexAI:
                 # 4. Saúde de Rádio (RF Adaptive) - NOVO v3.0
                 if self.config["modules"]["radio_health"]:
                     res = await self._analyze_radio_health(session)
+                    self.insights.extend(res)
+
+                # 5. Saúde de Energia (Proativo) - NOVO v3.1
+                if self.config["modules"].get("energy"):
+                    res = await self._analyze_energy_health(session)
                     self.insights.extend(res)
 
         except Exception as e:
@@ -406,6 +412,66 @@ class CortexAI:
                     "learning_key": "bypass_traffic_anomaly"
                 })
 
+        return insights
+
+    # --- MÓDULO 5: SAÚDE DE ENERGIA E PREDITIVA (v3.1) ---
+    async def _analyze_energy_health(self, session):
+        """
+        Analisa a estabilidade de energia (Voltagem) e prevê queda de bateria.
+        Utiliza a nova base de dados calibrada.
+        """
+        insights = []
+        now = datetime.utcnow()
+        window_1h = now - timedelta(hours=1)
+        
+        # 1. Coleta dados de energia e thresholds
+        stmt = select(
+            Equipment.id,
+            Equipment.name,
+            Equipment.last_voltage,
+            Equipment.min_voltage_threshold,
+            func.avg(TrafficLog.voltage).label("avg_volt_1h")
+        ).join(TrafficLog, Equipment.id == TrafficLog.equipment_id)\
+         .where(TrafficLog.timestamp >= window_1h)\
+         .where(Equipment.last_voltage != None)\
+         .group_by(Equipment.id, Equipment.name, Equipment.last_voltage, Equipment.min_voltage_threshold)
+        
+        try:
+            res = await session.execute(stmt)
+            data = res.all()
+            
+            for eq_id, name, last_v, threshold, avg_v in data:
+                if not last_v or not avg_v or not threshold: continue
+                
+                # Regra Proativa: Se a voltagem caiu significativamente em relação à média (descarga)
+                # E está chegando na zona de perigo (threshold + margem de 1V)
+                safety_margin = 1.0
+                if last_v < (avg_v - 0.15) and last_v < (threshold + safety_margin):
+                    insights.append({
+                        "type": "performance", "severity": "warning",
+                        "title": f"Tendência de Queda de Energia: {name}",
+                        "description": f"O equipamento apresenta queda proativa de voltagem ({last_v}V), operando abaixo da média recente ({round(avg_v, 2)}V). Possível operação em bateria.",
+                        "recommendation": "Verificar status da rede AC e autonomia das baterias.",
+                        "equipment_name": name,
+                        "equipment_id": eq_id,
+                        "timestamp": datetime.now()
+                    })
+                
+                # Regra Crítica: Bateria quase no fim (abaixo do threshold + 0.3V)
+                elif last_v < (threshold + 0.3):
+                    insights.append({
+                        "type": "performance", "severity": "critical",
+                        "title": f"Energia Crítica: {name}",
+                        "description": f"Baterias em nível crítico ({last_v}V), muito próximas ao limite de desligamento ({threshold}V).",
+                        "recommendation": "Ação imediata necessária (Gerador ou substituição de baterias).",
+                        "equipment_name": name,
+                        "equipment_id": eq_id,
+                        "timestamp": datetime.now()
+                    })
+
+        except Exception as e:
+            logger.error(f"[CORTEX] Erro no módulo de energia: {e}")
+        
         return insights
 
 cortex_engine = CortexAI()

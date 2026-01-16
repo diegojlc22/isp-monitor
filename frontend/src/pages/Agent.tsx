@@ -13,7 +13,8 @@ import {
     updateAgentSettings,
     updateMonitorTarget
 } from '../services/api';
-import { Activity, Globe, Wifi, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp, RefreshCw, Eraser, Pencil, Check } from 'lucide-react';
+import { Activity, Globe, Play, AlertTriangle, Plus, Trash2, X, Settings, ChevronDown, ChevronUp, RefreshCw, Eraser, Pencil, Check, TrendingUp, ShieldCheck } from 'lucide-react';
+import { AreaChart, Area, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
@@ -62,7 +63,7 @@ const Agent: React.FC = () => {
         setLoading(true);
         try {
             const [resLogs, resTargets] = await Promise.all([
-                getAgentLogs(),
+                getAgentLogs(200), // Increased limit for better charts
                 getMonitorTargets()
             ]);
             setLogs(resLogs);
@@ -306,40 +307,124 @@ const Agent: React.FC = () => {
                 )}
             </div>
 
-            {/* Cards de Resumo */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="card p-6 bg-gray-800 rounded-xl border border-gray-700/50">
+            {/* Cards de Resumo Modernizados */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg hover:border-blue-500/50 transition-all">
                     <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-gray-400 text-sm">Status Web</p>
-                            <h3 className="text-2xl font-bold text-green-400">Normal</h3>
+                        <div className="p-2 bg-blue-500/10 rounded-lg">
+                            <Globe className="text-blue-500" size={20} />
                         </div>
-                        <Globe className="text-gray-500" />
+                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded uppercase">Internet Ops</span>
                     </div>
-                    <div className="text-sm text-gray-500">Média Latência: 45ms</div>
+                    <div>
+                        <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Status Web</p>
+                        <h3 className="text-2xl font-bold text-white mt-1">Normal</h3>
+                        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                            <ShieldCheck size={12} className="text-emerald-500" /> Todos os serviços respondendo
+                        </p>
+                    </div>
                 </div>
 
-                <div className="card p-6 bg-gray-800 rounded-xl border border-gray-700/50">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg hover:border-purple-500/50 transition-all">
                     <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-gray-400 text-sm">Resolução DNS</p>
-                            <h3 className="text-2xl font-bold text-green-400">Ótimo</h3>
+                        <div className="p-2 bg-purple-500/10 rounded-lg">
+                            <Activity className="text-purple-500" size={20} />
                         </div>
-                        <Wifi className="text-gray-500" />
+                        <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded uppercase">Desempenho</span>
                     </div>
-                    <div className="text-sm text-gray-500">Média Latência: 12ms</div>
+                    <div>
+                        <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Média Latência</p>
+                        <h3 className="text-2xl font-bold text-white mt-1">
+                            {logs.length > 0 ? Math.round(logs.reduce((acc, l) => acc + (l.latency_ms || 0), 0) / logs.length) : 0}ms
+                        </h3>
+                        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                            <TrendingUp size={12} className="text-purple-500" /> Baseado nos últimos 200 testes
+                        </p>
+                    </div>
                 </div>
 
-                <div className="card p-6 bg-gray-800 rounded-xl border border-gray-700/50">
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg hover:border-emerald-500/50 transition-all">
                     <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <p className="text-gray-400 text-sm">Problemas Hoje</p>
-                            <h3 className="text-2xl font-bold text-purple-400">0</h3>
+                        <div className="p-2 bg-emerald-500/10 rounded-lg">
+                            <ShieldCheck className="text-emerald-500" size={20} />
                         </div>
-                        <AlertTriangle className="text-gray-500" />
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">Disponibilidade</span>
                     </div>
-                    <div className="text-sm text-gray-500">0 anomalias detectadas</div>
+                    <div>
+                        <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Taxa de Sucesso</p>
+                        <h3 className="text-2xl font-bold text-white mt-1">
+                            {logs.length > 0 ? Math.round((logs.filter(l => l.success).length / logs.length) * 100) : 100}%
+                        </h3>
+                        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 tracking-tight">
+                            Controle sintético contínuo
+                        </p>
+                    </div>
                 </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg hover:border-amber-500/50 transition-all">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-2 bg-amber-500/10 rounded-lg">
+                            <AlertTriangle className="text-amber-500" size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded uppercase">Alertas AI</span>
+                    </div>
+                    <div>
+                        <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Anomalias Hoje</p>
+                        <h3 className="text-2xl font-bold text-white mt-1">
+                            {logs.filter(l => l.timestamp.includes(new Date().toISOString().split('T')[0]) && !l.success).length}
+                        </h3>
+                        <p className="text-[10px] text-slate-400 mt-1">Detectadas pelo motor CORTEX</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Visualização de Latência por Alvo */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {targets.map(target => {
+                    const targetLogs = logs.filter(l => l.target === target.target).slice(0, 30).reverse();
+                    return (
+                        <div key={target.id} className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-700 transition-colors">
+                            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-200">{target.name}</h4>
+                                    <p className="text-[10px] text-slate-500 font-mono">{target.target}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-xl font-black text-white font-mono">
+                                        {targetLogs.length > 0 ? Math.round(targetLogs[targetLogs.length - 1].latency_ms || 0) : 0}ms
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="h-40 w-full p-2 bg-slate-950/20">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={targetLogs}>
+                                        <defs>
+                                            <linearGradient id={`colorLat-${target.id}`} x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', fontSize: '12px' }}
+                                            itemStyle={{ color: '#8b5cf6' }}
+                                            labelStyle={{ display: 'none' }}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="latency_ms"
+                                            stroke="#8b5cf6"
+                                            strokeWidth={2}
+                                            fillOpacity={1}
+                                            fill={`url(#colorLat-${target.id})`}
+                                            animationDuration={1500}
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Histórico de Testes */}

@@ -84,7 +84,12 @@ async def check_ping(target: str) -> dict:
     try:
         # Strip protocol if present for ping
         host = target.replace("https://", "").replace("http://", "").split("/")[0]
-        result = await async_ping(host, count=2, timeout=2, privileged=False)
+        # Prefer privileged=True for better accuracy as seen in pinger_fast.py
+        try:
+            result = await async_ping(host, count=2, timeout=2, privileged=True)
+        except Exception:
+            # Fallback for environments where raw sockets are not allowed
+            result = await async_ping(host, count=2, timeout=2, privileged=False)
         
         if result.is_alive:
             return {"success": True, "latency": round(result.avg_rtt)}
@@ -285,6 +290,8 @@ async def run_single_test_cycle():
                 elif t.type == 'http':
                     url = t.target if t.target.startswith("http") else f"https://{t.target}"
                     res = await check_http(url)
+                elif t.type == 'icmp':
+                    res = await check_ping(t.target)
                 
                 test_result = {
                     "type": t.type,
@@ -397,6 +404,8 @@ async def synthetic_agent_job():
                     elif t_type == 'http':
                         url = t_target if t_target.startswith("http") else f"https://{t_target}"
                         res = await check_http(url)
+                    elif t_type == 'icmp':
+                        res = await check_ping(t_target)
                     
                     batch_results.append({
                         "type": t_type,

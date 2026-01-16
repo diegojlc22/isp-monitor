@@ -82,7 +82,7 @@ export const getLatencyHistory = (id: number, period: string) => api.get(`/equip
 export const getTrafficHistory = (id: number, period: string) => api.get(`/equipments/${id}/traffic-history?period=${period}`).then(res => res.data);
 
 // Synthetic Agent
-export const getAgentLogs = () => api.get('/agent/logs').then(res => res.data);
+export const getAgentLogs = (limit: number = 20) => api.get(`/agent/logs?limit=${limit}`).then(res => res.data);
 export const getMonitorTargets = () => api.get('/agent/targets').then(res => res.data);
 export const createMonitorTarget = (data: any) => api.post('/agent/targets', data).then(res => res.data);
 export const updateMonitorTarget = (id: number, data: any) => api.put(`/agent/targets/${id}`, data).then(res => res.data);

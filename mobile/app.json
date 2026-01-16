@@ -3,6 +3,12 @@
     "name": "ISP Monitor",
     "slug": "isp-monitor",
     "scheme": "isp-tech",
+    "updates": {
+      "url": "https://u.expo.dev/586ff99a-50a5-4a63-be27-2fc667d32b8e"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -106,6 +106,8 @@ class Equipment(Base):
     temperature = Column(Float, nullable=True)
     voltage = Column(Float, nullable=True)
     min_voltage_threshold = Column(Float, nullable=True, default=16.0)
+    voltage_multiplier = Column(Float, default=1.0) # Fator de ajuste (Ex: 1.05 = +5%)
+    voltage_offset = Column(Float, default=0.0)    # Ajuste fixo (Ex: -0.5V)
     last_voltage_alert_sent = Column(DateTime, nullable=True)
     voltage_alert_interval = Column(Integer, default=30)
     

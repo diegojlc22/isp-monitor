@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getEquipments, createEquipment, createEquipmentsBatch, updateEquipment, deleteEquipment, deleteEquipmentsBatch, getTowers, getLatencyHistory, rebootEquipment, testEquipment, exportEquipmentsCSV, importEquipmentsCSV, getNetworkDefaults, detectEquipmentBrand, getWirelessStatus, scanInterfaces, autoDetectAll } from '../services/api';
 import { useScanner } from '../contexts/ScannerContext';
 
-import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus } from 'lucide-react';
+import { Plus, Trash2, Search, Server, MonitorPlay, CheckSquare, Square, Edit2, Activity, Power, Wifi, Download, Upload, Users, Zap, Minus, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -31,6 +31,8 @@ interface Equipment {
     cpu_usage?: number;
     min_voltage_threshold?: number;
     voltage_alert_interval?: number;
+    voltage_multiplier?: number;
+    voltage_offset?: number;
 }
 interface FormData {
     name: string; ip: string; tower_id: string; parent_id: string; ssh_user: string; ssh_password: string;
@@ -43,6 +45,8 @@ interface FormData {
     traffic_alert_interval: number;
     min_voltage_threshold: number | null;
     voltage_alert_interval: number;
+    voltage_multiplier: number;
+    voltage_offset: number;
 }
 
 const INITIAL_FORM_STATE: FormData = {
@@ -54,7 +58,9 @@ const INITIAL_FORM_STATE: FormData = {
     max_traffic_out: null,
     traffic_alert_interval: 360,
     min_voltage_threshold: 16.0,
-    voltage_alert_interval: 30
+    voltage_alert_interval: 30,
+    voltage_multiplier: 1.0,
+    voltage_offset: 0.0
 };
 
 // --- Custom Hooks ---
@@ -772,7 +778,9 @@ export function Equipments() {
             max_traffic_out: eq.max_traffic_out || null,
             traffic_alert_interval: eq.traffic_alert_interval || 360,
             min_voltage_threshold: eq.min_voltage_threshold || 16.0,
-            voltage_alert_interval: eq.voltage_alert_interval || 360
+            voltage_alert_interval: eq.voltage_alert_interval || 360,
+            voltage_multiplier: eq.voltage_multiplier || 1.0,
+            voltage_offset: eq.voltage_offset || 0.0
         });
         setShowModal(true);
     }, []);
@@ -1436,6 +1444,39 @@ export function Equipments() {
                                                 </div>
                                             </div>
                                             <p className="text-[10px] text-slate-500 italic mt-2">Dispara alerta quando a voltagem cair abaixo do limite. Use 0 para desativar.</p>
+                                        </div>
+
+                                        {/* Calibração de Voltagem */}
+                                        <div className="bg-gradient-to-br from-indigo-900/20 to-blue-900/20 p-4 rounded-lg border border-indigo-500/30">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <TrendingUp className="text-indigo-400" size={20} />
+                                                <label className="text-sm text-indigo-300 font-bold">Calibração de Voltagem</label>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Multiplicador (Fator)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.001"
+                                                        className="w-full bg-slate-950 border border-indigo-500/50 rounded-lg p-3 text-white focus:border-indigo-400 outline-none transition-colors"
+                                                        placeholder="1.0"
+                                                        value={formData.voltage_multiplier}
+                                                        onChange={e => setFormData({ ...formData, voltage_multiplier: parseFloat(e.target.value) || 1.0 })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-400 uppercase font-bold mb-2">Offset (V)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        className="w-full bg-slate-950 border border-indigo-500/50 rounded-lg p-3 text-white focus:border-indigo-400 outline-none transition-colors"
+                                                        placeholder="0.0"
+                                                        value={formData.voltage_offset}
+                                                        onChange={e => setFormData({ ...formData, voltage_offset: parseFloat(e.target.value) || 0.0 })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 italic mt-2">Ajuste fino: Calibrado = (Leitura * Multiplicador) + Offset.</p>
                                         </div>
 
                                         <div className="bg-gradient-to-br from-blue-900/20 to-cyan-900/20 p-4 rounded-lg border border-blue-500/30">

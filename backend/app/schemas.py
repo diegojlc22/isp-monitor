@@ -57,6 +57,8 @@ class EquipmentBase(BaseModel):
     traffic_alert_interval: int = 360
     min_voltage_threshold: Optional[float] = 16.0
     voltage_alert_interval: int = 360
+    voltage_multiplier: float = 1.0
+    voltage_offset: float = 0.0
     whatsapp_groups: Optional[List[str]] = []
 
     @validator('whatsapp_groups', pre=True)
@@ -100,6 +102,8 @@ class EquipmentUpdate(BaseModel):
     traffic_alert_interval: Optional[int] = None
     min_voltage_threshold: Optional[float] = None
     voltage_alert_interval: Optional[int] = None
+    voltage_multiplier: Optional[float] = None
+    voltage_offset: Optional[float] = None
     whatsapp_groups: Optional[List[str]] = None
 
 class Equipment(EquipmentBase):

@@ -74,8 +74,8 @@ class Settings(BaseSettings):
         return self.cors_origins.split(",")
 
     # --- Pinger Core ---
-    ping_interval_seconds: int = Field(5, ge=2)
-    ping_timeout_seconds: float = Field(1.0, ge=0.1)
+    ping_interval_seconds: int = Field(10, ge=2)
+    ping_timeout_seconds: float = Field(2.0, ge=0.1)
     ping_concurrent_limit: int = Field(50, ge=1, le=2000)
     log_retention_days: int = Field(30, ge=1)
     
