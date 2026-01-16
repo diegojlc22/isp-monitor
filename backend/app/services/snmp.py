@@ -212,12 +212,13 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
                     ObjectType(ObjectIdentity(oid_in)),
                     ObjectType(ObjectIdentity(oid_out))
                 )
-                if not errorIndication and not errorStatus and varBinds:
+                if not errorIndication and not errorStatus and varBinds and len(varBinds) >= 2:
                     # Verify they are actual numbers
                     res_in, res_out = varBinds[0][1], varBinds[1][1]
                     if str(res_in) != "" and str(res_out) != "":
                         return (int(res_in), int(res_out))
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[SNMP] Ubiquiti Strategy Error: {e}")
                 continue
 
     # Standard OIDs (RFC1213 / IF-MIB)
@@ -241,10 +242,10 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
             ObjectType(ObjectIdentity(oid_out_64))
         )
         
-        if not errorIndication and not errorStatus and varBinds:
+        if not errorIndication and not errorStatus and varBinds and len(varBinds) >= 2:
              return (int(varBinds[0][1]), int(varBinds[1][1]))
-    except Exception:
-        pass # Fallback
+    except Exception as e:
+        logger.debug(f"[SNMP] 64-bit Get Error: {e}")
 
     # 2. Fallback para 32-bit (v1)
     try:
@@ -257,10 +258,10 @@ async def get_snmp_interface_traffic(ip: str, community: str = "public", port: i
             ObjectType(ObjectIdentity(oid_out_32))
         )
         
-        if not errorIndication and not errorStatus and varBinds:
+        if not errorIndication and not errorStatus and varBinds and len(varBinds) >= 2:
              return (int(varBinds[0][1]), int(varBinds[1][1]))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[SNMP] 32-bit Get Error: {e}")
         
     return None
 async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 161):
@@ -295,7 +296,7 @@ async def get_snmp_interfaces(ip: str, community: str = "public", port: int = 16
                     lexicographicMode=False
                 )
                 
-                if errorIndication or errorStatus or not varBinds:
+                if errorIndication or errorStatus or not varBinds or len(varBinds) == 0 or len(varBinds[0]) == 0:
                     break
                 
                 found_version = True

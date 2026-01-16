@@ -290,7 +290,7 @@ class CortexAI:
         ).join(Equipment, Alert.device_name == Equipment.name)\
          .where(Alert.timestamp >= one_hour_ago)\
          .where(or_(Alert.message.ilike("%offline%"), Alert.message.ilike("%restabelecida%")))\
-         .group_by(Alert.device_name, Equipment.id, Equipment.parent_id)
+         .group_by(Equipment.id, Alert.device_name, Equipment.parent_id)
         
         res = await session.execute(stmt)
         flappers = res.all()
