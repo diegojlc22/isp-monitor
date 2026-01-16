@@ -1051,12 +1051,15 @@ class ModernLauncher:
         # Resultado Final
         if success:
             self.btn_update_front.config(text="✔ Sistema Atualizado", bg=COLORS['card'], fg=COLORS['success'], state="disabled")
-            messagebox.showinfo("Sucesso", "Interface do usuário atualizada com sucesso!")
+            self.info_label.config(text="✅ Build finalizado! A Interface web foi atualizada com sucesso.", fg=COLORS['success'])
+            # Resetar mensagem após 5 segundos
+            self.root.after(5000, lambda: self.info_label.config(text="Sistema pronto.", fg=COLORS['subtext']))
         else:
             # Em caso de erro, permitir tentar novamente
-            self.btn_update_front.config(text="❌ Erro (Tentar Novamente)", bg=COLORS['danger'], fg='white', state="normal", cursor="hand2")
-            if error_msg:
-                messagebox.showerror("Erro de Compilação", error_msg)
+            self.btn_update_front.config(text="❌ Erro na Compilação", bg=COLORS['danger'], fg='white', state="normal", cursor="hand2")
+            self.info_label.config(text=f"❌ {error_msg.split('.')[0]}", fg=COLORS['danger'])
+            # Resetar mensagem após 10 segundos para erros
+            self.root.after(10000, lambda: self.info_label.config(text="Sistema pronto.", fg=COLORS['subtext']))
         
         return success
 
