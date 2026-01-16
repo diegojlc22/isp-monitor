@@ -428,13 +428,13 @@ class CortexAI:
         stmt = select(
             Equipment.id,
             Equipment.name,
-            Equipment.last_voltage,
+            Equipment.voltage,
             Equipment.min_voltage_threshold,
             func.avg(TrafficLog.voltage).label("avg_volt_1h")
         ).join(TrafficLog, Equipment.id == TrafficLog.equipment_id)\
          .where(TrafficLog.timestamp >= window_1h)\
-         .where(Equipment.last_voltage != None)\
-         .group_by(Equipment.id, Equipment.name, Equipment.last_voltage, Equipment.min_voltage_threshold)
+         .where(Equipment.voltage != None)\
+         .group_by(Equipment.id, Equipment.name, Equipment.voltage, Equipment.min_voltage_threshold)
         
         try:
             res = await session.execute(stmt)
