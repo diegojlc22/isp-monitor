@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react';
 import api, { getTowers, getEquipments, getLatencyConfig, getLatencyHistory, getAgentLogs } from '../services/api';
-import { Activity, ShieldCheck, AlertTriangle, Radio, Loader2, Globe } from 'lucide-react';
+import { Activity, ShieldCheck, AlertTriangle, Radio, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
 
 export function Dashboard() {
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0, agentSuccess: 100 });
+    const [stats, setStats] = useState({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0 });
     // Widget State
     const [devices, setDevices] = useState<any[]>([]);
     const [selectedDevice, setSelectedDevice] = useState<any>(null);
     const [historyData, setHistoryData] = useState<any[]>([]);
     const [historyConfig, setHistoryConfig] = useState({ good: 50, critical: 200 });
-    const [agentData, setAgentData] = useState<any[]>([]);
 
     useEffect(() => {
         async function load() {
@@ -20,37 +19,29 @@ export function Dashboard() {
                 // Don't set loading true on interval updates to avoid flicker
                 // Only on mount (initial load)
 
-                const [towers, equips, latConfig, insightData, agentLogs] = await Promise.all([
+                const [towers, equips, latConfig, insightData] = await Promise.all([
                     getTowers(),
                     getEquipments(),
                     getLatencyConfig(),
-                    api.get('/insights/').then(r => r.data).catch(() => []),
-                    getAgentLogs(50).catch(() => [])
+                    api.get('/insights/').then(r => r.data).catch(() => [])
                 ]);
                 const allDevices = [...towers, ...equips];
                 const monitoredDevices = allDevices.filter((d: any) => d.ip && d.ip.trim() !== '');
 
                 if (monitoredDevices.length === 0) {
-                    setStats({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0, agentSuccess: 100 });
+                    setStats({ towers: 0, equipments: 0, online: 0, offline: 0, insights: 0 });
                 } else {
                     const online = monitoredDevices.filter((x: any) => x.is_online).length;
                     const offline = monitoredDevices.length - online;
-
-                    const totalLogs = agentLogs.length;
-                    const successLogs = agentLogs.filter((l: any) => l.success).length;
-                    const successRate = totalLogs > 0 ? Math.round((successLogs / totalLogs) * 100) : 100;
 
                     setStats({
                         towers: towers.length,
                         equipments: equips.length,
                         online: online,
                         offline: offline,
-                        insights: insightData.length,
-                        agentSuccess: successRate
+                        insights: insightData.length
                     });
                 }
-
-                setAgentData(agentLogs);
 
                 setDevices(equips);
                 setHistoryConfig(latConfig);
@@ -121,20 +112,6 @@ export function Dashboard() {
                     <p className="text-3xl font-bold text-rose-500 mt-2">
                         {loading ? <Loader2 className="animate-spin h-8 w-8 text-rose-500" /> : stats.offline}
                     </p>
-                </div>
-
-                <div
-                    onClick={() => window.location.href = '/agent'}
-                    className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm relative overflow-hidden group hover:border-blue-500/50 transition-colors cursor-pointer"
-                >
-                    <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Globe size={48} className="text-blue-500" />
-                    </div>
-                    <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Agente Sintético</h3>
-                    <p className="text-3xl font-bold text-blue-400 mt-2">
-                        {loading ? <Loader2 className="animate-spin h-8 w-8 text-blue-500" /> : `${stats.agentSuccess}% OK`}
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-1">Disponibilidade de serviços externos</p>
                 </div>
 
                 <div
@@ -213,33 +190,6 @@ export function Dashboard() {
                                 {selectedDevice ? 'Sem dados para este período.' : 'Selecione um dispositivo para ver o histórico.'}
                             </div>
                         )}
-                    </div>
-                </div>
-
-                <div className="bg-slate-900 rounded-xl border border-slate-800 p-6 flex flex-col">
-                    <h3 className="text-lg font-semibold text-white mb-4">Provas Sintéticas Recentes</h3>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        <div className="space-y-3">
-                            {agentData.slice(0, 10).map((log: any) => (
-                                <div key={log.id} className="flex items-center gap-3 p-3 bg-slate-950/50 rounded-lg border border-slate-800/50 group hover:border-slate-700 transition-colors">
-                                    <div className={clsx("w-2 h-2 rounded-full", log.success ? "bg-emerald-500" : "bg-red-500 animate-pulse")}></div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-slate-200 truncate">{log.target}</p>
-                                        <p className="text-[10px] text-slate-500">{log.test_type.toUpperCase()} • {new Date(log.timestamp).toLocaleTimeString()}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className={clsx("text-sm font-mono font-bold", log.latency_ms > 200 ? "text-amber-400" : "text-emerald-400")}>
-                                            {log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '--'}
-                                        </p>
-                                    </div>
-                                </div>
-                            ))}
-                            {agentData.length === 0 && (
-                                <div className="h-full flex items-center justify-center text-slate-500 text-sm py-10">
-                                    Sem dados de monitoramento sintético.
-                                </div>
-                            )}
-                        </div>
                     </div>
                 </div>
 
