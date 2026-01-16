@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api, { getTowers, getEquipments, getLatencyConfig, getLatencyHistory, getAgentLogs } from '../services/api';
+import api, { getTowers, getEquipments, getLatencyConfig, getLatencyHistory } from '../services/api';
 import { Activity, ShieldCheck, AlertTriangle, Radio, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import clsx from 'clsx';
