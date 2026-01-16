@@ -281,31 +281,50 @@ async def get_health_stats(ip, brand, community, port=161):
     brand_key = brand.lower()
     
     if brand_key == 'mikrotik':
-        # CPU
-        cpu = await get_snmp_value(ip, community, '1.3.6.1.2.1.25.3.3.1.2.1', port)
-        if cpu is not None: stats['cpu_usage'] = int(cpu)
-        # Temp
-        temp = await get_snmp_value(ip, community, '1.3.6.1.4.1.14988.1.1.3.11.0', port)
-        if temp: stats['temperature'] = round(float(temp) / 10.0, 1)
-        # Voltage
-        volt = await get_snmp_value(ip, community, '1.3.6.1.4.1.14988.1.1.3.8.0', port)
-        if volt: stats['voltage'] = round(float(volt) / 10.0, 1)
-        
-    elif brand_key == 'ubiquiti':
-        # Voltage (Common in airMAX AC / LTU)
-        # OID .1.3.6.1.4.1.41112.1.4.1.1.11.1 usually gives voltage in mV or V*10 or V*100
-        volt_raw = await get_snmp_value(ip, community, '1.3.6.1.4.1.41112.1.4.1.1.11.1', port)
-        if not volt_raw:
-            volt_raw = await get_snmp_value(ip, community, '1.3.6.1.4.1.41112.1.4.1.1.11.0', port)
+        # Batch Get for Mikrotik Health
+        oids = [
+            '1.3.6.1.2.1.25.3.3.1.2.1',       # CPU
+            '1.3.6.1.4.1.14988.1.1.3.11.0',    # Temp
+            '1.3.6.1.4.1.14988.1.1.3.8.0'      # Voltage
+        ]
+        results = await _snmp_get(ip, community, oids, port)
+        if results and len(results) >= 3:
+            cpu = results[0][1]
+            temp = results[1][1]
+            volt = results[2][1]
             
-        if volt_raw is not None and isinstance(volt_raw, int):
-            # UBNT scales vary. Usually 1000 for mV, sometimes 10 for V*10
-            if volt_raw > 1000: # Probably mV
-                stats['voltage'] = round(float(volt_raw) / 1000.0, 1)
-            elif volt_raw > 100: # Probably V*10 or high voltage?
-                stats['voltage'] = round(float(volt_raw) / 10.0, 1)
-            else:
-                stats['voltage'] = float(volt_raw)
+            if cpu is not None and str(cpu) != "": stats['cpu_usage'] = int(cpu)
+            if temp is not None and str(temp) != "": stats['temperature'] = round(float(temp) / 10.0, 1)
+            if volt is not None and str(volt) != "": stats['voltage'] = round(float(volt) / 10.0, 1)
+            
+    elif brand_key == 'ubiquiti':
+        # Batch Get for UBNT (Attempt common OIDs)
+        oids = [
+            '1.3.6.1.4.1.41112.1.4.1.1.11.1', # Voltage AC v1
+            '1.3.6.1.4.1.41112.1.4.1.1.11.0', # Voltage AC v0
+            '1.3.6.1.4.1.41112.1.4.1.1.2.0'   # Temp (Alternative)
+        ]
+        results = await _snmp_get(ip, community, oids, port)
+        if results:
+            # Check Voltages
+            volt_raw = None
+            if len(results) >= 1 and results[0][1] is not None and str(results[0][1]) != "":
+                volt_raw = int(results[0][1])
+            elif len(results) >= 2 and results[1][1] is not None and str(results[1][1]) != "":
+                volt_raw = int(results[1][1])
+            
+            if volt_raw is not None:
+                if volt_raw > 1000: # Probably mV
+                    stats['voltage'] = round(float(volt_raw) / 1000.0, 1)
+                elif volt_raw > 100: # Probably V*10
+                    stats['voltage'] = round(float(volt_raw) / 10.0, 1)
+                else:
+                    stats['voltage'] = float(volt_raw)
+            
+            # Temp (Optional)
+            if len(results) >= 3 and results[2][1] is not None and str(results[2][1]) != "":
+                try: stats['temperature'] = float(results[2][1])
+                except: pass
 
     elif brand_key == 'intelbras':
         # Voltage (APC Series)

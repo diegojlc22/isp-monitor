@@ -122,6 +122,79 @@ async def postgres_watchdog():
         
         await asyncio.sleep(30)  # Verifica a cada 30 segundos
 
+async def cortex_alert_loop():
+    """
+    Job que roda a análise do Cortex AI e envia notificações para alertas novos/críticos.
+    Roda a cada 5 minutos.
+    """
+    from backend.app.services.cortex_ai import CortexAIService
+    from backend.app.services.notifier import send_notification
+    import hashlib
+
+    logger.info("[COLLECTOR] 🧠 Cortex AI Proactive Alerts iniciado (5min)")
+    cortex = CortexAIService()
+    sent_alerts = set() # Hash das mensagens enviadas para evitar spam
+
+    while True:
+        try:
+            # 1. Aguarda um pouco para não rodar junto com outros jobs pesados
+            await asyncio.sleep(30)
+            
+            # 2. Executa Análise
+            insights = await cortex.analyze()
+            
+            # 3. Processa Insights críticos ou avisos
+            async with AsyncSessionLocal() as session:
+                # Pegar config de notificação
+                from backend.app.models import Parameters
+                params_res = await session.execute(
+                    select(Parameters).where(Parameters.key.in_([
+                        'telegram_token', 'telegram_chat_id', 'telegram_enabled',
+                        'whatsapp_enabled', 'whatsapp_target', 'whatsapp_target_group'
+                    ]))
+                )
+                notif_config = {p.key: p.value for p in params_res.scalars().all()}
+
+                for insight in insights:
+                    if insight.get("severity") in ["critical", "warning"]:
+                        # Gerar um ID único para este alerta baseado no título e equipamento
+                        # Validade de 6 horas para o mesmo alerta
+                        alert_key = f"{insight.get('title')}_{insight.get('equipment_id')}"
+                        msg_hash = hashlib.md5(alert_key.encode()).hexdigest()
+                        
+                        if msg_hash not in sent_alerts:
+                            # Montar Mensagem Estilizada
+                            emoji = "🚨" if insight['severity'] == "critical" else "⚠️"
+                            msg = f"{emoji} *CORTEX AI: {insight['title']}*\n\n"
+                            msg += f"📟 Dispositivo: {insight.get('equipment_name', 'Geral')}\n"
+                            msg += f"📝 {insight['description']}\n\n"
+                            msg += f"💡 *Recomendação:* {insight.get('recommendation', 'Verificar painel.')}"
+                            
+                            # Enviar
+                            await send_notification(
+                                message=msg,
+                                telegram_token=notif_config.get('telegram_token'),
+                                telegram_chat_id=notif_config.get('telegram_chat_id'),
+                                telegram_enabled=notif_config.get('telegram_enabled', 'true').lower() == 'true',
+                                whatsapp_enabled=notif_config.get('whatsapp_enabled', 'false').lower() == 'true',
+                                whatsapp_target=notif_config.get('whatsapp_target'),
+                                whatsapp_target_group=notif_config.get('whatsapp_target_group')
+                            )
+                            
+                            sent_alerts.add(msg_hash)
+                            logger.info(f"[CORTEX ALERT] Notificação enviada: {insight.get('title')}")
+
+            # Limpeza de cache de alertas a cada 6 horas (aproximadamente 72 ciclos de 5min)
+            if len(sent_alerts) > 100: sent_alerts.clear()
+
+        except asyncio.CancelledError:
+            logger.info("[CORTEX] Loop de alertas cancelado.")
+            break
+        except Exception as e:
+            logger.error(f"[ERROR] Falha no loop de alertas Cortex: {e}")
+        
+        await asyncio.sleep(300) # 5 minutos
+
 async def maintenance_loop():
     """Roda tarefas de limpeza a cada 24 horas"""
     logger.info("[COLLECTOR] Agendador de limpeza iniciado (24h)")
@@ -227,6 +300,7 @@ async def main():
     start_task("SNMP Monitor", snmp_monitor_job())
     start_task("AI Agent", synthetic_agent_job())
     start_task("Auto Priority Monitor", start_auto_priority_loop())  # 🎯 NEW: Auto-monitor priority targets
+    start_task("Cortex Alerts", cortex_alert_loop())
     start_task("Topology", topology_loop())
     start_task("Maintenance", maintenance_loop())
     start_task("Heartbeat", heartbeat_loop())
@@ -269,6 +343,7 @@ async def main():
                     elif name == "Topology": new_coro = topology_loop()
                     elif name == "Maintenance": new_coro = maintenance_loop()
                     elif name == "Heartbeat": new_coro = heartbeat_loop()
+                    elif name == "Cortex Alerts": new_coro = cortex_alert_loop()
                     elif name == "PostgreSQL Watchdog": new_coro = postgres_watchdog()
                     elif name == "Security Audit": new_coro = security_audit_job()
                     elif name == "Capacity Planning": new_coro = capacity_planning_job()

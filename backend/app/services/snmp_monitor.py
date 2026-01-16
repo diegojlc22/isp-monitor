@@ -25,7 +25,8 @@ async def snmp_monitor_job():
     logger.info(f"[TRAFFIC] Monitor de Tráfego/Wireless iniciado (Intervalo base: {SNMP_INTERVAL}s)...")
     
     # Limit Concurrency to avoid network flood and CPU spikes
-    sem = asyncio.Semaphore(50) 
+    # Reduzido de 50 para 30 em Windows por limitações de sockets
+    sem = asyncio.Semaphore(30) 
     
     # Cache for bandwidth calculation (SNMP only)
     previous_counters = {} 
@@ -63,6 +64,7 @@ async def snmp_monitor_job():
                             clients = await get_connected_clients_count(ip, brand, community, port)
                             if clients is not None:
                                  result["updates"]["connected_clients"] = clients
+                                 # logger.debug(f"[SNMP] Clients for {ip}: {clients}") # Log verboso removido
                         
                         # --- HEALTH STATS (CPU, Temp, Voltage) ---
                         if brand in ['mikrotik', 'ubiquiti', 'intelbras']:
@@ -202,12 +204,12 @@ async def snmp_monitor_job():
             # 2. Run Parallel Fetching (With 4s timeout per device inside, 5m global)
             async def fetch_with_timeout(eq_dict):
                 try:
-                    # Aumentado para 8s pois alguns equipamentos são mais lentos (especialmente MikroTik com muitos dados)
-                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=8.0)
+                    # Aumentado para 15s pois alguns equipamentos são mais lentos quando sob carga
+                    return await asyncio.wait_for(fetch_device_data(eq_dict), timeout=15.0)
                 except asyncio.TimeoutError:
                     # Logar em modo debug para não encher o log, mas permitir rastrear se necessário
                     if eq_dict['ip'] == '192.168.106.62': # Log específico para o teste do usuário
-                        logger.warning(f"[SNMP] Timeout persistente em {eq_dict['ip']} (limite 8s)")
+                        logger.warning(f"[SNMP] Timeout persistente em {eq_dict['ip']} (limite 15s)")
                     return "TIMEOUT"
                 except Exception as e:
                     logger.debug(f"[SNMP] Crash polling {eq_dict['ip']}: {e}")
@@ -461,6 +463,8 @@ async def snmp_monitor_job():
                             if can_send_v:
                                 now_str = datetime.now().strftime("%H:%M do dia %d/%m/%Y")
                                 alert_msg = f"🪫 *ALERTA DE BAIXA VOLTAGEM*\n\n📍 *{eq_data['tower_name']}*\n📟 Rádio: {eq_data['name']}\n🌐 IP: {eq_data['ip']}\n\n⚠️ Voltagem Atual: *{cv}V*\n🛑 Limite Crítico: {threshold}V\n\n🕒 Horário: {now_str}\n\n🔔 *Ação Preventiva Necessária!*"
+                                
+                                logger.info(f"[ALERT] Enviando alerta de VOLTAGEM para {eq_data['ip']} ({cv}V <= {threshold}V)")
                                 
                                 asyncio.create_task(send_notification(
                                     message=alert_msg,
