@@ -74,10 +74,7 @@ def perform_self_healing():
     logging.info("✅ Ambiente limpo. O Launcher deve reiniciar a API em instantes.")
 
 if __name__ == "__main__":
-    logging.info("🔍 Diagnosticando Saúde do Sistema...")
     ok, msg = check_api_health()
     if not ok:
         logging.error(f"❌ API Falhou no diagnóstico: {msg}")
         perform_self_healing()
-    else:
-        logging.info("✅ Sistema Saudável. Nenhuma ação necessária.")

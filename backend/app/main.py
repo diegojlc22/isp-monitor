@@ -28,6 +28,16 @@ from backend.app.config import PING_INTERVAL_SECONDS
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("paramiko").setLevel(logging.WARNING)
+
+# 🚀 Custom filter to silence frequent/redundant health check logs
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Ignore frequent health checks and status polls if they are Successful (200)
+        ignored_endpoints = ["/api/health", "/api/equipments/batch-detect/status", "GET /api/health"]
+        return not any(endpoint in record.getMessage() for endpoint in ignored_endpoints)
+
+# Apply filter to uvicorn access logs
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 logger = logging.getLogger("api")
 
 print("[INFO] Using ULTRA-FAST pinger (icmplib)")

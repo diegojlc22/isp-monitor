@@ -247,7 +247,8 @@ def run_doctor():
                     log("✅ [DOCTOR] PostgreSQL detectado na porta 5432.")
                     pg_ready = True
                     break
-                log(f"⏳ [DOCTOR] Aguardando PostgreSQL... ({i+1}/15)")
+                if (i+1) % 5 == 0: # Log only every 5 attempts
+                    log(f"⏳ [DOCTOR] Ainda aguardando PostgreSQL... ({i+1}/15)")
                 time.sleep(2)
             
             if not pg_ready:
@@ -269,16 +270,22 @@ def run_doctor():
 
         for name, config in SERVICES.items():
             try:
+                # Store dynamic states to avoid log spam
+                if not hasattr(run_doctor, "history"): run_doctor.history = {}
+                
+                is_up = is_running(name, config)
                 should_start = False
+                
                 if first_run:
-                    log(f"🧹 [CLEANUP] Preparando {name.upper()}...")
-                    kill_duplicates(name, config)
+                    # Cleanup verbose output: only log if we actually kill something
+                    if kill_duplicates(name, config):
+                        log(f"🧹 [CLEANUP] Duplicatas de {name.upper()} removidas.")
+                    
                     if name == "whatsapp": 
                         subprocess.run("taskkill /F /IM node.exe /T", shell=True, capture_output=True, creationflags=0x08000000)
                     should_start = True
-                    time.sleep(0.5)
                 else:
-                    if not is_running(name, config):
+                    if not is_up:
                         if "port" in config and check_port(config["port"]):
                             log(f"⚠️ [REPAIR] Porta {config['port']} ocupada mas serviço não responde. Limpando...", "WARN")
                             kill_process_by_port(config["port"])
@@ -286,9 +293,15 @@ def run_doctor():
                         if name == "frontend" and os.path.exists("frontend/dist/index.html"):
                             continue 
                         should_start = True
+                    else:
+                        # Log health only once per status change
+                        if run_doctor.history.get(name) != "UP":
+                            log(f"✅ [STABLE] {name.upper()} está operacional.", "INFO")
+                            run_doctor.history[name] = "UP"
 
                 if should_start:
                     log(f"🚀 [START] Iniciando {name.upper()}...", "INFO")
+                    run_doctor.history[name] = "STARTING"
                     log_path = config["log"]
                     os.makedirs(os.path.dirname(log_path), exist_ok=True)
                     mode = "w" if first_run else "a"

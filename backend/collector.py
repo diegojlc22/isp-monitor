@@ -127,12 +127,12 @@ async def cortex_alert_loop():
     Job que roda a análise do Cortex AI e envia notificações para alertas novos/críticos.
     Roda a cada 5 minutos.
     """
-    from backend.app.services.cortex_ai import CortexAIService
+    from backend.app.services.cortex_ai import CortexAI
     from backend.app.services.notifier import send_notification
     import hashlib
 
     logger.info("[COLLECTOR] 🧠 Cortex AI Proactive Alerts iniciado (5min)")
-    cortex = CortexAIService()
+    cortex = CortexAI()
     sent_alerts = set() # Hash das mensagens enviadas para evitar spam
 
     while True:

@@ -740,7 +740,7 @@ class ModernLauncher:
         self.restart_attempts = 0 # Reset ao iniciar manual
         
         # --- CLEANUP PREVENTIVO (Matar processos zumbis) ---
-        print("[LAUNCHER] Executando limpeza de processos órfãos...")
+        # print("[LAUNCHER] Executando limpeza de processos órfãos...")
         try:
             my_pid = os.getpid()
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
@@ -841,7 +841,6 @@ class ModernLauncher:
             python_exe = sys.executable
             doctor_cmd = [python_exe, "scripts/self_heal.py", str(my_pid)]
             subprocess.Popen(doctor_cmd, creationflags=0x08000000)
-            print(f"[LAUNCHER] Doctor V4.0 Guardião Supremo iniciado (Monitorando PID {my_pid}).")
             
             # Pequeno delay para os arquivos de log serem liberados pelo OS
             time.sleep(1)
