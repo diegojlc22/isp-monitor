@@ -148,6 +148,7 @@ Thumbs.db
 *.old
 
 # Backup
+backups/
 backup_*/
 
 # Setup / Instalador

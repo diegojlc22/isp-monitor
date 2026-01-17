@@ -109,11 +109,11 @@ export function Health() {
                     colorClass="text-amber-500 bg-amber-500"
                 />
                 <StatCard
-                    title="Segurança & Backup"
+                    title="Backup & Segurança"
                     icon={ShieldAlert}
                     status={health?.backup?.last_run ? 'ok' : 'offline'}
-                    value={health?.version || '4.2.0-turbo'}
-                    subtext={health?.backup?.last_run ? `Backup: ${new Date(health.backup.last_run).toLocaleDateString()} ${new Date(health.backup.last_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Sem backups realizados"}
+                    value={health?.backup?.last_run ? "PROTEGIDO" : "PENDENTE"}
+                    subtext={health?.backup?.last_run ? `Último: ${new Date(health.backup.last_run).toLocaleDateString()} ${new Date(health.backup.last_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Backup automático pendente"}
                     colorClass="text-emerald-500 bg-emerald-500"
                 />
             </div>
@@ -277,6 +277,14 @@ export function Health() {
                         </div>
                     </div>
                 </div>
+            </div>
+            {/* Footer / Version */}
+            <div className="flex justify-between items-center text-[10px] text-slate-600 font-mono pt-4 border-t border-slate-800/50">
+                <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50 animate-pulse" />
+                    <span>SISTEMA OPERACIONAL • NÚCLEO V{health?.version || '4.2.0-TURBO'}</span>
+                </div>
+                <span>ISP MONITOR © 2026 • TODOS OS DIREITOS RESERVADOS</span>
             </div>
         </div>
     );
