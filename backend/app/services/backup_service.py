@@ -99,8 +99,15 @@ async def run_backup_job():
                         whatsapp_target=wa_target,
                         whatsapp_target_group=wa_group
                     )
+            # --- UPDATE LAST BACKUP PARAMETER ---
+            async with AsyncSessionLocal() as session:
+                param = await session.get(Parameters, "last_backup_run")
+                if not param:
+                    session.add(Parameters(key="last_backup_run", value=datetime.now().isoformat()))
                 else:
-                    logger.info("[BACKUP] Notifications disabled by user preference.")
+                    param.value = datetime.now().isoformat()
+                await session.commit()
+                logger.info("[BACKUP] Updated 'last_backup_run' param in DB.")
 
             # Cleanup old backups
             cleanup_old_backups()
@@ -135,16 +142,28 @@ def cleanup_old_backups():
         logger.warning(f"[BACKUP] Error collecting garbage: {e}")
 
 async def backup_scheduler_loop():
-    """Loop to check if backup is needed (e.g., daily at 02:00 AM)"""
-    logger.info("[BACKUP] Scheduler started.")
+    """
+    Robust scheduler for daily backups.
+    Checks if a backup was already performed today.
+    """
+    logger.info("[BACKUP] Scheduler started (Daily at 03:00 AM).")
+    
+    last_backup_date = None
     
     while True:
-        now = datetime.now()
-        
-        # Schedule for 03:00 AM
-        if now.hour == 3 and now.minute == 0:
-            await run_backup_job()
-            await asyncio.sleep(70) # Sleep > 1 min to avoid double run
-        
-        # Check every minute
-        await asyncio.sleep(60)
+        try:
+            now = datetime.now()
+            current_date = now.date()
+            
+            # Target window: 03:00 AM - 04:00 AM
+            if now.hour == 3 and last_backup_date != current_date:
+                logger.info(f"[BACKUP] Window matched (Hour: {now.hour}), triggering daily backup...")
+                await run_backup_job()
+                last_backup_date = current_date # Mark as done for today
+                
+            # Internal check every 5 minutes is enough and more efficient
+            await asyncio.sleep(300) 
+            
+        except Exception as e:
+            logger.error(f"[BACKUP] Scheduler error: {e}")
+            await asyncio.sleep(60)

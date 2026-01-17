@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getSystemHealth } from '../services/api';
-import { Activity, Server, Database, ShieldAlert, Cpu, HardDrive, Clock, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Activity, Server, Database, ShieldAlert, Cpu, HardDrive, CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import clsx from 'clsx';
 
 export function Health() {
@@ -71,169 +71,211 @@ export function Health() {
         </div>
     );
 
-    return (
-        <div className="p-6 space-y-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                        <Activity className="text-blue-500" /> Integridade do Sistema
-                    </h2>
-                    <p className="text-slate-400 text-sm mt-1">Status em tempo real de todos os serviços core.</p>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Clock size={14} />
-                    Última atualização: {new Date().toLocaleTimeString()}
-                </div>
-            </div>
+    const cleanAlertMessage = (msg: string) => {
+        // Remove markdown bolding and extra symbols for a cleaner UI table display
+        return msg
+            .replace(/\*(.*?)\*/g, '$1') // Remove *bold*
+            .replace(/📡|🌐|🕒|📍|📟|⚠️|🛑|🔔|📍|🔋/g, '') // Remove redundant icons (we have our own in the table)
+            .split('\n')[0] // Take only the first line/title
+            .trim();
+    };
 
+    return (
+        <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+            {/* Real-time Status Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     title="Coletor Principal"
                     icon={Server}
                     status={health?.collector?.status}
-                    value={health?.collector?.status === 'online' ? "🟢 ATIVO" : "🔴 INATIVO"}
-                    subtext={health?.collector?.last_seen ? `Visto em: ${new Date(health.collector.last_seen).toLocaleTimeString()}` : "Nunca visto"}
-                    colorClass="text-blue-500 bg-blue-500"
+                    value={health?.collector?.status === 'online' ? "ATIVO" : "INATIVO"}
+                    subtext={health?.collector?.last_seen ? `Visto: ${new Date(health.collector.last_seen).toLocaleTimeString()}` : "Desconectado"}
+                    colorClass="text-sky-500 bg-sky-500"
                 />
                 <StatCard
                     title="Monitor SNMP"
                     icon={Activity}
-                    status={health?.snmp?.online > 0 ? 'ok' : 'offline'}
+                    status={health?.snmp?.status === 'active' ? 'ok' : 'offline'}
                     value={`${health?.snmp?.online} / ${health?.snmp?.total}`}
-                    subtext="Equipamentos Online"
-                    colorClass="text-purple-500 bg-purple-500"
+                    subtext="Dispositivos Online"
+                    colorClass="text-indigo-500 bg-indigo-500"
                 />
                 <StatCard
                     title="Banco de Dados"
                     icon={Database}
                     status={health?.database?.status}
                     value={`${health?.database?.latency_ms} ms`}
-                    subtext="Latência de query"
+                    subtext="Latência de Query"
                     colorClass="text-amber-500 bg-amber-500"
                 />
                 <StatCard
-                    title="Versão do Sistema"
-                    icon={CheckCircle2}
-                    status="ok"
-                    value={health?.version || '2.0.0'}
-                    subtext="Build: Stable"
+                    title="Segurança & Backup"
+                    icon={ShieldAlert}
+                    status={health?.backup?.last_run ? 'ok' : 'offline'}
+                    value={health?.version || '4.2.0-turbo'}
+                    subtext={health?.backup?.last_run ? `Backup: ${new Date(health.backup.last_run).toLocaleDateString()} ${new Date(health.backup.last_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : "Sem backups realizados"}
                     colorClass="text-emerald-500 bg-emerald-500"
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Resources */}
-                <div className="lg:col-span-1 space-y-4">
-                    <h3 className="text-lg font-bold text-white px-1">Recursos do Servidor</h3>
-                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-6">
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                                <span className="flex items-center gap-2 text-slate-400"><Cpu size={16} /> CPU (Monitor)</span>
-                                <span className="text-white font-bold">{health?.resources?.cpu_percent}%</span>
-                            </div>
-                            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div
-                                    className={clsx("h-full transition-all duration-500", health?.resources?.cpu_percent > 80 ? "bg-rose-500" : "bg-blue-500")}
-                                    style={{ width: `${Math.min(health?.resources?.cpu_percent, 100)}%` }}
-                                />
-                            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Resources Panel */}
+                <div className="lg:col-span-4 space-y-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden h-full">
+                        <div className="absolute top-0 right-0 p-4 opacity-5">
+                            <Cpu size={120} />
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                                <span className="flex items-center gap-2 text-slate-400"><HardDrive size={16} /> Memória RAM (Monitor)</span>
-                                <span className="text-white font-bold">{health?.resources?.ram_percent}%</span>
-                            </div>
-                            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div
-                                    className={clsx("h-full transition-all duration-500", health?.resources?.ram_percent > 90 ? "bg-rose-500" : "bg-purple-500")}
-                                    style={{ width: `${health?.resources?.ram_percent}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Usado: {health?.resources?.ram_used_gb} GB</span>
-                                <span>Total: {health?.resources?.ram_total_gb} GB</span>
-                            </div>
-                        </div>
+                        <h3 className="text-lg font-bold text-white mb-6">Recursos do Servidor</h3>
 
-                        <div className="pt-4 border-t border-slate-800">
-                            <div className="flex items-start gap-3">
-                                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
-                                    <ShieldAlert size={18} />
+                        <div className="space-y-8">
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-end">
+                                    <span className="flex items-center gap-2 text-slate-400 text-sm font-medium">
+                                        <Cpu size={18} className="text-sky-500" /> CPU App
+                                    </span>
+                                    <span className="text-white font-bold">{health?.resources?.cpu_percent}%</span>
                                 </div>
-                                <div>
-                                    <h5 className="text-sm font-bold text-white">Status de Segurança</h5>
-                                    <p className="text-xs text-slate-500 mt-0.5">Firewall ativo, logs seguros.</p>
+                                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                    <div
+                                        className={clsx("h-full transition-all duration-1000 ease-out", health?.resources?.cpu_percent > 80 ? "bg-rose-500" : "bg-sky-500")}
+                                        style={{ width: `${Math.min(health?.resources?.cpu_percent, 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-end">
+                                    <span className="flex items-center gap-2 text-slate-400 text-sm font-medium">
+                                        <HardDrive size={18} className="text-indigo-500" /> RAM App
+                                    </span>
+                                    <span className="text-white font-bold">{health?.resources?.ram_percent}%</span>
+                                </div>
+                                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                    <div
+                                        className={clsx("h-full transition-all duration-1000 ease-out", health?.resources?.ram_percent > 90 ? "bg-rose-500" : "bg-indigo-500")}
+                                        style={{ width: `${health?.resources?.ram_percent}%` }}
+                                    />
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-500 font-medium px-1">
+                                    <span>Uso: {health?.resources?.ram_used_gb} GB</span>
+                                    <span>Total: {health?.resources?.ram_total_gb} GB</span>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-slate-800/50">
+                                <div className="flex items-center gap-4 bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-xl">
+                                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                                        <ShieldAlert size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-0.5">
+                                            <h5 className="text-sm font-bold text-white leading-none">Cortex AI Firewall</h5>
+                                            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        </div>
+                                        <p className="text-xs text-slate-500">Núcleo de monitoramento protegido.</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Recent Alerts */}
-                <div className="lg:col-span-2 space-y-4">
-                    <div className="flex justify-between items-center px-1">
-                        <h3 className="text-lg font-bold text-white">Últimos Eventos de Alerta</h3>
-                        <button
-                            onClick={() => setShowAlerts(!showAlerts)}
-                            className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors bg-slate-800/50 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/50"
-                        >
-                            {showAlerts ? (
-                                <><EyeOff size={14} /> Esconder</>
-                            ) : (
-                                <><Eye size={14} /> Mostrar</>
-                            )}
-                        </button>
-                    </div>
+                {/* Recent Alerts List */}
+                <div className="lg:col-span-8 space-y-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-xl h-full flex flex-col">
+                        <div className="p-5 border-b border-slate-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-3">
+                                <ShieldAlert className="text-amber-500" size={20} /> Eventos Recentes de Infraestrutura
+                            </h3>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded text-[10px] text-slate-400 border border-slate-700">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Live Monitoring
+                                </div>
+                                <button
+                                    onClick={() => setShowAlerts(!showAlerts)}
+                                    className="p-1.5 text-slate-400 hover:text-white transition-colors hover:bg-slate-800 rounded-lg"
+                                    title={showAlerts ? "Esconder" : "Mostrar"}
+                                >
+                                    {showAlerts ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                        </div>
 
-                    {showAlerts && (
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl animate-slide-down">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead className="bg-slate-950 text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-800">
+                        <div className="flex-1 overflow-auto max-h-[480px]">
+                            {showAlerts ? (
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="sticky top-0 bg-slate-900 text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-800 z-10">
                                         <tr>
-                                            <th className="px-5 py-3">Timestamp</th>
-                                            <th className="px-5 py-3">Dispositivo</th>
-                                            <th className="px-5 py-3">Mensagem</th>
+                                            <th className="px-6 py-4">🕒 Timestamp</th>
+                                            <th className="px-6 py-4">📡 Dispositivo</th>
+                                            <th className="px-6 py-4">💬 Mensagem</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-800">
+                                    <tbody className="divide-y divide-slate-800/50">
                                         {health?.alerts && health.alerts.length > 0 ? (
                                             health.alerts.map((alert: any) => (
-                                                <tr key={alert.id} className="hover:bg-slate-800/30 transition-colors">
-                                                    <td className="px-5 py-4 text-xs text-slate-400 whitespace-nowrap">
-                                                        {new Date(alert.timestamp).toLocaleString()}
+                                                <tr key={alert.id} className="hover:bg-slate-800/20 transition-colors group">
+                                                    <td className="px-6 py-5 text-xs text-slate-500 whitespace-nowrap">
+                                                        <span className="group-hover:text-slate-300">
+                                                            {new Date(alert.timestamp).toLocaleDateString()}
+                                                        </span>
+                                                        <br />
+                                                        <span className="text-slate-600 group-hover:text-slate-400 font-medium">
+                                                            {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
                                                     </td>
-                                                    <td className="px-5 py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-sm font-bold text-white">{alert.device_name}</span>
-                                                            <span className="text-[10px] text-slate-500">{alert.device_ip}</span>
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-1.5 h-10 rounded-full bg-slate-800 group-hover:bg-blue-500 transition-all duration-300"></div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm font-bold text-slate-100 group-hover:text-white">{alert.device_name}</span>
+                                                                <span className="text-[10px] text-slate-500 font-mono">{alert.device_ip}</span>
+                                                            </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-5 py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            {alert.message.toLowerCase().includes('down') ? (
-                                                                <div className="p-1 rounded bg-rose-500/10 text-rose-500"><XCircle size={14} /></div>
-                                                            ) : alert.message.toLowerCase().includes('up') ? (
-                                                                <div className="p-1 rounded bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={14} /></div>
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex items-center gap-3">
+                                                            {alert.message.toLowerCase().includes('concluí') || alert.message.toLowerCase().includes('restabelecida') || alert.message.toLowerCase().includes('up') ? (
+                                                                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                                                                    <CheckCircle2 size={16} />
+                                                                </div>
+                                                            ) : alert.message.toLowerCase().includes('falha') || alert.message.toLowerCase().includes('down') ? (
+                                                                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+                                                                    <XCircle size={16} />
+                                                                </div>
                                                             ) : (
-                                                                <div className="p-1 rounded bg-amber-500/10 text-amber-500"><AlertTriangle size={14} /></div>
+                                                                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                                                                    <AlertTriangle size={16} />
+                                                                </div>
                                                             )}
-                                                            <span className="text-sm text-slate-300">{alert.message}</span>
+                                                            <span className="text-sm text-slate-300 font-medium group-hover:text-slate-100 transition-colors">
+                                                                {cleanAlertMessage(alert.message)}
+                                                            </span>
                                                         </div>
                                                     </td>
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan={3} className="px-5 py-10 text-center text-slate-500 text-sm">Nenhum alerta recente.</td>
+                                                <td colSpan={3} className="px-6 py-20 text-center">
+                                                    <div className="flex flex-col items-center gap-3 text-slate-600">
+                                                        <Activity size={32} className="opacity-20" />
+                                                        <span className="text-sm">Nenhum evento registrado recentemente.</span>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         )}
                                     </tbody>
                                 </table>
-                            </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-20 text-slate-500 gap-4 opacity-50">
+                                    <EyeOff size={48} strokeWidth={1} />
+                                    <p className="text-sm italic">Oculto por privacidade. Clique no ícone para mostrar.</p>
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>

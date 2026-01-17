@@ -347,6 +347,8 @@ async def main():
                     elif name == "PostgreSQL Watchdog": new_coro = postgres_watchdog()
                     elif name == "Security Audit": new_coro = security_audit_job()
                     elif name == "Capacity Planning": new_coro = capacity_planning_job()
+                    elif name == "Backup Service": new_coro = backup_scheduler_loop()
+                    elif name == "Auto Priority Monitor": new_coro = start_auto_priority_loop()
                     
                     if new_coro:
                          # Launch restart delay as a separate task? 

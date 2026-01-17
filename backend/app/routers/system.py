@@ -127,7 +127,12 @@ async def get_system_health(db: AsyncSession = Depends(get_db)):
     res_alerts = await db.execute(select(Alert).order_by(Alert.timestamp.desc()).limit(10))
     alerts = res_alerts.scalars().all()
     
-    # 5. Resources (Cached)
+    # 5. Backup Status
+    res_backup = await db.execute(select(Parameters).where(Parameters.key == "last_backup_run"))
+    backup_param = res_backup.scalar_one_or_none()
+    last_backup_val = backup_param.value if backup_param else None
+
+    # 6. Resources (Cached)
     resources = get_app_metrics()
     
     return {
@@ -149,5 +154,8 @@ async def get_system_health(db: AsyncSession = Depends(get_db)):
         },
         "resources": resources,
         "alerts": alerts,
-        "version": "2.1.0"
+        "backup": {
+            "last_run": last_backup_val
+        },
+        "version": "4.2.0-turbo"
     }
